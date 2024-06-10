@@ -44,6 +44,7 @@ namespace Tes.Runner.Models
         public TerraRuntimeOptions? Terra { get; set; }
 
         public string? NodeManagedIdentityResourceId { get; set; }
+        public string? AcrPullManagedIdentityResourceId { get; set; }
 
         public StorageTargetLocation? StorageEventSink { get; set; }
 
@@ -62,10 +63,8 @@ namespace Tes.Runner.Models
     {
         public string? WsmApiHost { get; set; }
         public string? LandingZoneApiHost { get; set; }
-        public string? SamApiHost { get; set; }
         public string? SasAllowedIpRange { get; set; }
         public string? DrsHubApiHost { get; set; }
-        public string? BillingProfileId { get; set; }
     }
 
     public class NodeTaskResolverOptions

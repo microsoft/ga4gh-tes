@@ -168,7 +168,7 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="image"></param>
         /// <returns></returns>
@@ -198,12 +198,9 @@ namespace TesApi.Web.Runner
         /// </summary>
         /// <param name="wsmApiHost"></param>
         /// <param name="landingZoneApiHost"></param>
-        /// <param name="samApiHost"></param>
-        /// <param name="billingProfileId"></param>
         /// <param name="sasAllowedIpRange"></param>
         /// <returns></returns>
-        public NodeTaskBuilder WithTerraAsRuntimeEnvironment(string wsmApiHost, string landingZoneApiHost,
-            string samApiHost, string billingProfileId, string sasAllowedIpRange)
+        public NodeTaskBuilder WithTerraAsRuntimeEnvironment(string wsmApiHost, string landingZoneApiHost, string sasAllowedIpRange)
         {
             ArgumentException.ThrowIfNullOrEmpty(wsmApiHost, nameof(wsmApiHost));
             ArgumentException.ThrowIfNullOrEmpty(landingZoneApiHost, nameof(landingZoneApiHost));
@@ -213,8 +210,6 @@ namespace TesApi.Web.Runner
 
             nodeTask.RuntimeOptions.Terra.WsmApiHost = wsmApiHost;
             nodeTask.RuntimeOptions.Terra.LandingZoneApiHost = landingZoneApiHost;
-            nodeTask.RuntimeOptions.Terra.SamApiHost = samApiHost;
-            nodeTask.RuntimeOptions.Terra.BillingProfileId = billingProfileId;
             nodeTask.RuntimeOptions.Terra.SasAllowedIpRange = sasAllowedIpRange;
 
             SetCombinedTerraTransformationStrategyForAllTransformations();
@@ -312,6 +307,28 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
+        /// Sets the managed identity to be used for ACR pulls for the node task. If the resource ID is empty or null, the property won't be set.
+        /// </summary>
+        /// <param name="resourceId">A valid managed identity resource ID</param>
+        /// <returns></returns>
+        public NodeTaskBuilder WithAcrPullResourceIdManagedIdentity(string resourceId)
+        {
+            if (string.IsNullOrEmpty(resourceId))
+            {
+                return this;
+            }
+
+            if (!IsValidManagedIdentityResourceId(resourceId))
+            {
+                throw new ArgumentException("Invalid resource ID. The ID must be a valid Azure resource ID.", nameof(resourceId));
+            }
+
+            nodeTask.RuntimeOptions ??= new RuntimeOptions();
+            nodeTask.RuntimeOptions.AcrPullManagedIdentityResourceId = resourceId;
+            return this;
+        }
+
+        /// <summary>
         /// (Optional) sets the azure authority host for the node task.  If not set, the default Azure Public cloud is used.
         /// </summary>
         /// <param name="azureCloudIdentityConfig">Azure cloud identity config</param>
@@ -329,7 +346,7 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
-        /// Returns true of the value provided is a valid resource id for a managed identity. 
+        /// Returns true of the value provided is a valid resource id for a managed identity.
         /// </summary>
         /// <param name="resourceId"></param>
         /// <returns></returns>
@@ -339,7 +356,7 @@ namespace TesApi.Web.Runner
             {
                 return false;
             }
-            //Ignore the case because constant segments could be lower case, pascal case or camel case. 
+            //Ignore the case because constant segments could be lower case, pascal case or camel case.
             // e.g. /resourcegroup/ or /resourceGroup/
             return Regex.IsMatch(resourceId, ManagedIdentityResourceIdPattern, RegexOptions.IgnoreCase);
         }

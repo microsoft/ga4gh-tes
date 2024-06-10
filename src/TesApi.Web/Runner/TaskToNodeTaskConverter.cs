@@ -97,6 +97,7 @@ namespace TesApi.Web.Runner
                 builder.WithId(task.Id)
                     .WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
                     .WithResourceIdManagedIdentity(GetNodeManagedIdentityResourceId(task, nodeTaskConversionOptions.GlobalManagedIdentity))
+                    .WithAcrPullResourceIdManagedIdentity(nodeTaskConversionOptions.AcrPullIdentity)
                     .WithWorkflowId(task.WorkflowId)
                     .WithContainerCommands(executor.Command)
                     .WithContainerImage(executor.Image)
@@ -108,8 +109,7 @@ namespace TesApi.Web.Runner
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
                 {
                     logger.LogInformation("Setting up Terra as the runtime environment for the runner");
-                    builder.WithTerraAsRuntimeEnvironment(terraOptions.WsmApiHost, terraOptions.LandingZoneApiHost,
-                        terraOptions.SamApiHost, terraOptions.BillingProfileId, terraOptions.SasAllowedIpRange);
+                    builder.WithTerraAsRuntimeEnvironment(terraOptions.WsmApiHost, terraOptions.LandingZoneApiHost, terraOptions.SasAllowedIpRange);
                 }
 
                 await BuildInputsAsync(task, builder, nodeTaskConversionOptions.AdditionalInputs, nodeTaskConversionOptions.DefaultStorageAccountName, cancellationToken);
@@ -277,7 +277,7 @@ namespace TesApi.Web.Runner
 
         /// <summary>
         /// This returns the node managed identity resource id from the task if it is set, otherwise it returns the global managed identity.
-        /// If the value in the workflow identity is not a full resource id, it is assumed to be the name. In this case, the resource id is constructed from the name.    
+        /// If the value in the workflow identity is not a full resource id, it is assumed to be the name. In this case, the resource id is constructed from the name.
         /// </summary>
         /// <param name="task"></param>
         /// <param name="globalManagedIdentity"></param>
@@ -356,7 +356,7 @@ namespace TesApi.Web.Runner
         private TesInput PrepareLocalFileInput(TesInput input, string defaultStorageAccountName)
         {
             //When Cromwell runs in local mode with a Blob FUSE drive, the URL property may contain an absolute path.
-            //The path must be converted to a URL. For Terra this scenario doesn't apply. 
+            //The path must be converted to a URL. For Terra this scenario doesn't apply.
             if (StorageUrlUtils.IsLocalAbsolutePath(input.Url))
             {
                 var convertedUrl = StorageUrlUtils.ConvertLocalPathOrCromwellLocalPathToUrl(input.Url, defaultStorageAccountName);
@@ -463,7 +463,8 @@ namespace TesApi.Web.Runner
     /// <param name="AdditionalInputs"></param>
     /// <param name="DefaultStorageAccountName"></param>
     /// <param name="GlobalManagedIdentity"></param>
+    /// <param name="AcrPullIdentity"></param>
     /// <param name="DrsHubApiHost"></param>
     public record NodeTaskConversionOptions(IList<TesInput> AdditionalInputs = default, string DefaultStorageAccountName = default,
-        string GlobalManagedIdentity = default, string DrsHubApiHost = default);
+        string GlobalManagedIdentity = default, string? AcrPullIdentity = null, string DrsHubApiHost = default);
 }

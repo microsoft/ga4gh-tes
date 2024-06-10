@@ -508,10 +508,10 @@ namespace TesApi.Web
                     identities.Add(tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity));
                 }
 
-                var actionIdentity = await actionIdentityProvider.GetAcrPullActionIdentity(CancellationToken.None);
-                if (actionIdentity is not null)
+                var acrPullIdentity = await actionIdentityProvider.GetAcrPullActionIdentity(CancellationToken.None);
+                if (acrPullIdentity is not null)
                 {
-                    identities.Add(actionIdentity);
+                    identities.Add(acrPullIdentity);
                 }
 
                 var virtualMachineInfo = await GetVmSizeAsync(tesTask, cancellationToken);
@@ -542,7 +542,7 @@ namespace TesApi.Web
                 var jobOrTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
 
                 tesTask.PoolId = poolId;
-                var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(jobOrTaskId, tesTask, cancellationToken);
+                var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(jobOrTaskId, tesTask, acrPullIdentity, cancellationToken);
                 logger.LogInformation($"Creating batch task for TES task {tesTask.Id}. Using VM size {virtualMachineInfo.VmSize}.");
                 await azureProxy.AddBatchTaskAsync(tesTask.Id, cloudTask, poolId, cancellationToken);
 
@@ -902,12 +902,12 @@ namespace TesApi.Web
                 .FirstOrDefault(m => (m.Condition is null || m.Condition(tesTask)) && (m.CurrentBatchTaskState is null || m.CurrentBatchTaskState == combinedBatchTaskInfo.BatchTaskState))
                 ?.ActionAsync(tesTask, combinedBatchTaskInfo, cancellationToken) ?? ValueTask.FromResult(false);
 
-        private async Task<CloudTask> ConvertTesTaskToBatchTaskUsingRunnerAsync(string taskId, TesTask task,
+        private async Task<CloudTask> ConvertTesTaskToBatchTaskUsingRunnerAsync(string taskId, TesTask task, string? acrPullIdentity,
             CancellationToken cancellationToken)
         {
             ValidateTesTask(task);
 
-            var nodeTaskCreationOptions = await GetNodeTaskConversionOptionsAsync(task, cancellationToken);
+            var nodeTaskCreationOptions = await GetNodeTaskConversionOptionsAsync(task, acrPullIdentity, cancellationToken);
 
             var assets = await taskExecutionScriptingManager.PrepareBatchScriptAsync(task, nodeTaskCreationOptions, cancellationToken);
 
@@ -922,12 +922,13 @@ namespace TesApi.Web
             return cloudTask;
         }
 
-        private async Task<NodeTaskConversionOptions> GetNodeTaskConversionOptionsAsync(TesTask task, CancellationToken cancellationToken)
+        private async Task<NodeTaskConversionOptions> GetNodeTaskConversionOptionsAsync(TesTask task, string? acrPullIdentity, CancellationToken cancellationToken)
         {
             var nodeTaskCreationOptions = new NodeTaskConversionOptions(
                 DefaultStorageAccountName: defaultStorageAccountName,
                 AdditionalInputs: await GetAdditionalCromwellInputsAsync(task, cancellationToken),
                 GlobalManagedIdentity: globalManagedIdentity,
+                AcrPullIdentity: acrPullIdentity,
                 DrsHubApiHost: drsHubApiHost
             );
             return nodeTaskCreationOptions;
