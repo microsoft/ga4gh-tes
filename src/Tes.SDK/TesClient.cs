@@ -80,9 +80,20 @@ namespace Tes.SDK
             ArgumentException.ThrowIfNullOrEmpty(password);
         }
 
-        public TesClient(string scheme, TesCredentials tesCredentials)
+        public TesClient(TesCredentials tesCredentials, string scheme = "https")
             : this(new($"{scheme}://{tesCredentials.TesHostname}"), tesCredentials.TesUsername, tesCredentials.TesPassword)
-        { }
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(tesCredentials.TesHostname, nameof(tesCredentials));
+        }
+
+        public TesClient(HttpClient httpClient, TesCredentials tesCredentials, string scheme = "https")
+            : this(httpClient, new($"{scheme}://{tesCredentials.TesHostname}"), tesCredentials.TesUsername, tesCredentials.TesPassword)
+        {
+            ArgumentNullException.ThrowIfNull(tesCredentials);
+            ArgumentException.ThrowIfNullOrWhiteSpace(tesCredentials.TesHostname, nameof(tesCredentials));
+            ArgumentException.ThrowIfNullOrWhiteSpace(tesCredentials.TesUsername, nameof(tesCredentials));
+            ArgumentException.ThrowIfNullOrEmpty(tesCredentials.TesPassword, nameof(tesCredentials));
+        }
 
         private void SetAuthorizationHeader(HttpRequestMessage request)
         {
