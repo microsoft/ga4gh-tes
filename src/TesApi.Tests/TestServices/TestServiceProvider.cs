@@ -87,6 +87,7 @@ namespace TesApi.Tests.TestServices
                 .AddTransient<ILogger<BatchNodeScriptBuilder>>(_ => NullLogger<BatchNodeScriptBuilder>.Instance)
                 .AddTransient<ILogger<CachingWithRetriesAzureProxy>>(_ => NullLogger<CachingWithRetriesAzureProxy>.Instance)
                 .AddSingleton<CachingRetryPolicyBuilder>()
+                .AddTransient<IActionIdentityProvider, DefaultActionIdentityProvider>()
                 .AddSingleton<PriceApiClient>()
                 .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                 .AddTransient<BatchPool>()

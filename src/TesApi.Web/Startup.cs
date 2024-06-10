@@ -107,6 +107,7 @@ namespace TesApi.Web
                     .AddAutoMapper(typeof(MappingProfilePoolToWsmRequest))
                     .AddSingleton<CachingRetryPolicyBuilder>()
                     .AddSingleton<RetryPolicyBuilder>(s => s.GetRequiredService<CachingRetryPolicyBuilder>()) // Return the already declared retry policy builder
+                    .AddSingleton(CreateActionIdentityProvider)
                     .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                     .AddSingleton<IBatchScheduler, BatchScheduler>()
                     .AddSingleton<PriceApiClient>()
@@ -385,6 +386,25 @@ namespace TesApi.Web
                 throw new InvalidOperationException("Terra WSM API Host is not configured.");
             }
 
+            IActionIdentityProvider CreateActionIdentityProvider(IServiceProvider services)
+            {
+                logger.LogInformation("Attempting to create an ActionIdentityProvider");
+
+                if (TerraOptionsAreConfigured(services))
+                {
+                    var options = services.GetRequiredService<IOptions<TerraOptions>>();
+
+                    ValidateRequiredOptionsForTerraActionIdentities(options.Value);
+
+                    var samClient = ActivatorUtilities.CreateInstance<TerraSamApiClient>(services, options.Value.SamApiHost);
+
+                    logger.LogInformation("Creating TerraActionIdentityProvider");
+                    return ActivatorUtilities.CreateInstance<TerraActionIdentityProvider>(services, samClient);
+                }
+
+                return ActivatorUtilities.CreateInstance<DefaultActionIdentityProvider>(services);
+            }
+
             static void ValidateRequiredOptionsForTerraStorageProvider(TerraOptions terraOptions)
             {
                 ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceId, nameof(terraOptions.WorkspaceId));
@@ -392,6 +412,12 @@ namespace TesApi.Web
                 ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageContainerName, nameof(terraOptions.WorkspaceStorageContainerName));
                 ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageContainerResourceId, nameof(terraOptions.WorkspaceStorageContainerResourceId));
                 ArgumentException.ThrowIfNullOrEmpty(terraOptions.WsmApiHost, nameof(terraOptions.WsmApiHost));
+            }
+
+            static void ValidateRequiredOptionsForTerraActionIdentities(TerraOptions terraOptions)
+            {
+                ArgumentException.ThrowIfNullOrEmpty(terraOptions.SamApiHost, nameof(terraOptions.SamApiHost));
+                ArgumentException.ThrowIfNullOrEmpty(terraOptions.SamApiHost, nameof(terraOptions.BillingProfileId));
             }
 
             BatchAccountResourceInformation CreateBatchAccountResourceInformation(IServiceProvider services)
