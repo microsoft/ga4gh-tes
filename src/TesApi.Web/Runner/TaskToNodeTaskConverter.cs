@@ -109,7 +109,8 @@ namespace TesApi.Web.Runner
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
                 {
                     logger.LogInformation("Setting up Terra as the runtime environment for the runner");
-                    builder.WithTerraAsRuntimeEnvironment(terraOptions.WsmApiHost, terraOptions.LandingZoneApiHost, terraOptions.SasAllowedIpRange);
+                    builder.WithTerraAsRuntimeEnvironment(terraOptions.WsmApiHost, terraOptions.LandingZoneApiHost,
+                        terraOptions.SasAllowedIpRange);
                 }
 
                 await BuildInputsAsync(task, builder, nodeTaskConversionOptions.AdditionalInputs, nodeTaskConversionOptions.DefaultStorageAccountName, cancellationToken);

@@ -200,7 +200,8 @@ namespace TesApi.Web.Runner
         /// <param name="landingZoneApiHost"></param>
         /// <param name="sasAllowedIpRange"></param>
         /// <returns></returns>
-        public NodeTaskBuilder WithTerraAsRuntimeEnvironment(string wsmApiHost, string landingZoneApiHost, string sasAllowedIpRange)
+        public NodeTaskBuilder WithTerraAsRuntimeEnvironment(string wsmApiHost, string landingZoneApiHost,
+            string sasAllowedIpRange)
         {
             ArgumentException.ThrowIfNullOrEmpty(wsmApiHost, nameof(wsmApiHost));
             ArgumentException.ThrowIfNullOrEmpty(landingZoneApiHost, nameof(landingZoneApiHost));
