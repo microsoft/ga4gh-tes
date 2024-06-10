@@ -16,6 +16,8 @@ namespace Tes.ApiClients
     public class TerraSamApiClient : TerraApiClient
     {
         private const string SamApiSegments = @"/api/azure/v1";
+
+        // TODO configure cache and turn caching of queries back on
         private static readonly IMemoryCache SharedMemoryCache = new MemoryCache(new MemoryCacheOptions());
 
         /// <summary>
@@ -57,7 +59,7 @@ namespace Tes.ApiClients
 
             try
             {
-                return await HttpGetRequestAsync(url, setAuthorizationHeader: true, cacheResults: true,
+                return await HttpGetRequestAsync(url, setAuthorizationHeader: true, cacheResults: false,
                     SamActionManagedIdentityApiResponseContext.Default.SamActionManagedIdentityApiResponse, cancellationToken);
             }
             catch (HttpRequestException e)
