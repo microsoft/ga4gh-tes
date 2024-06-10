@@ -29,7 +29,7 @@ namespace TesApi.Web
         /// </summary>
         public const string NodeRunnerTaskDefinitionFilename = "runner-task.json";
 
-        private readonly StringBuilder batchScript;
+        private readonly StringBuilder batchScript = new();
         private bool useMetricsFile;
 
         /// <summary>
@@ -37,18 +37,7 @@ namespace TesApi.Web
         /// </summary>
         public BatchNodeScriptBuilder()
         {
-            batchScript = new StringBuilder();
-        }
-
-        /// <summary>
-        /// Adds line that installs wget if running on alpine
-        /// </summary>
-        /// <returns></returns>
-        public BatchNodeScriptBuilder WithAlpineWgetInstallation()
-        {
-            batchScript.AppendLinuxLine($"(grep -q alpine /etc/os-release && apk add bash wget || :) && \\");  // Install bash if running on alpine (will be the case if running inside "docker" image)
-
-            return this;
+            batchScript.AppendLinuxLine("#!/usr/bin/bash");
         }
 
         /// <summary>
@@ -117,7 +106,7 @@ namespace TesApi.Web
         {
             if (useMetricsFile)
             {
-                batchScript.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k {BatchTaskDirEnvVar} | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> {BatchTaskDirEnvVar}/{TaskToNodeTaskConverter.MetricsFileName} && echo DiskUsedInKiB=${{disk[2]}} >> {BatchTaskDirEnvVar}/{TaskToNodeTaskConverter.MetricsFileName}' && \\");
+                batchScript.AppendLinuxLine($"disk=( `df -k {BatchTaskDirEnvVar} | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> {BatchTaskDirEnvVar}/{TaskToNodeTaskConverter.MetricsFileName} && echo DiskUsedInKiB=${{disk[2]}} >> {BatchTaskDirEnvVar}/{TaskToNodeTaskConverter.MetricsFileName} && \\");
                 batchScript.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
             }
 
