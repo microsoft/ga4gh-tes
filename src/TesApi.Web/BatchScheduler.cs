@@ -1022,16 +1022,17 @@ namespace TesApi.Web
 
             static bool VmFamilyMatches(VmFamilySeries startScriptVmFamily, string vmFamily)
             {
-                var matches = _vmFamilyParseData[startScriptVmFamily];
-                return matches.Prefixes.Any(prefix => vmFamily.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) && vmFamily.EndsWith(matches.Suffix, StringComparison.OrdinalIgnoreCase);
+                var (prefixes, suffix) = _vmFamilyParseData[startScriptVmFamily];
+                return prefixes.Any(prefix => vmFamily.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) && vmFamily.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
             }
         }
 
-        private static IReadOnlyDictionary<VmFamilySeries, (IEnumerable<string> Prefixes, string Suffix)> _vmFamilyParseData = new Dictionary<VmFamilySeries, (IEnumerable<string> Prefixes, string Suffix)>()
+        private static readonly IReadOnlyDictionary<VmFamilySeries, (IEnumerable<string> Prefixes, string Suffix)> _vmFamilyParseData = new Dictionary<VmFamilySeries, (IEnumerable<string> Prefixes, string Suffix)>()
         {
             { VmFamilySeries.standardLSFamily, new(["standardLS", "standardLAS"], "Family") },
             { VmFamilySeries.standardNPSFamily, new(["standardNPS"], "Family") },
-            { VmFamilySeries.standardNFamily, new(["standardN"], "Family") },
+            { VmFamilySeries.standardNVADSA10v5Family, new(["StandardNVADSA10v5"], "Family") },
+            { VmFamilySeries.standardN_Families, new(["standardN"], "Family") },
         }.AsReadOnly();
 
         /// <summary>
@@ -1050,9 +1051,14 @@ namespace TesApi.Web
             standardNPSFamily,
 
             /// <summary>
+            /// Standard NVDSA10v5 family
+            /// </summary>
+            standardNVADSA10v5Family,
+
+            /// <summary>
             /// Standard N* families
             /// </summary>
-            standardNFamily,
+            standardN_Families,
         }
 
         NodeOS GetNodeOS(BatchModels.VirtualMachineConfiguration vmConfig)
@@ -1131,7 +1137,7 @@ namespace TesApi.Web
             var vmFamilyStartupScript = vmFamilySeries switch
             {
                 VmFamilySeries.standardLSFamily => @"config-nvme.sh",
-                VmFamilySeries.standardNFamily => nodeOs switch
+                VmFamilySeries.standardN_Families => nodeOs switch
                 {
                     NodeOS.Ubuntu => @"config-n-gpu-apt.sh",
                     NodeOS.Centos => @"config-n-gpu-yum.sh",
@@ -1149,7 +1155,7 @@ namespace TesApi.Web
 
             switch (vmFamilySeries)
             {
-                case VmFamilySeries.standardNFamily:
+                case VmFamilySeries.standardN_Families:
                     // https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/hpccompute-gpu-linux
                     extensions = extensions.Append(new(name: "gpu", publisher: "Microsoft.HpcCompute", type: "NvidiaGpuDriverLinux", autoUpgradeMinorVersion: true) { TypeHandlerVersion = "1.6" });
                     break;

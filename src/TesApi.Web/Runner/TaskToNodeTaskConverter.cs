@@ -105,7 +105,7 @@ namespace TesApi.Web.Runner
                     .WithDrsHubUrl(nodeTaskConversionOptions.DrsHubApiHost)
                     .WithMetricsFile(MetricsFileName);
 
-                if (nodeTaskConversionOptions.VmFamilyGroup == BatchScheduler.VmFamilySeries.standardNFamily)
+                if (nodeTaskConversionOptions.VmFamilyGroup == BatchScheduler.VmFamilySeries.standardN_Families)
                 {
                     builder.WithContainerFlag("gpu");
                 }
