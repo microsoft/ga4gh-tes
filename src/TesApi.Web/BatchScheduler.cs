@@ -14,6 +14,7 @@ using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
+using Tes.ApiClients;
 using Tes.Extensions;
 using Tes.Models;
 using TesApi.Web.Extensions;
@@ -81,6 +82,7 @@ namespace TesApi.Web
         private readonly TaskExecutionScriptingManager taskExecutionScriptingManager;
         private readonly string runnerMD5;
         private readonly string drsHubApiHost;
+        private readonly IActionIdentityProvider actionIdentityProvider;
 
         private HashSet<string> onlyLogBatchTaskStateOnce = [];
 
@@ -115,7 +117,8 @@ namespace TesApi.Web
             IBatchSkuInformationProvider skuInformationProvider,
             IBatchPoolFactory poolFactory,
             IAllowedVmSizesService allowedVmSizesService,
-            TaskExecutionScriptingManager taskExecutionScriptingManager)
+            TaskExecutionScriptingManager taskExecutionScriptingManager,
+            IActionIdentityProvider actionIdentityProvider)
         {
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(azureProxy);
@@ -124,6 +127,7 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(skuInformationProvider);
             ArgumentNullException.ThrowIfNull(poolFactory);
             ArgumentNullException.ThrowIfNull(taskExecutionScriptingManager);
+            ArgumentNullException.ThrowIfNull(actionIdentityProvider);
 
             this.logger = logger;
             this.azureProxy = azureProxy;
@@ -140,6 +144,7 @@ namespace TesApi.Web
             this.globalManagedIdentity = batchNodesOptions.Value.GlobalManagedIdentity;
             this.allowedVmSizesService = allowedVmSizesService;
             this.taskExecutionScriptingManager = taskExecutionScriptingManager;
+            this.actionIdentityProvider = actionIdentityProvider;
             _batchPoolFactory = poolFactory;
             batchPrefix = batchSchedulingOptions.Value.Prefix;
             logger.LogInformation("BatchPrefix: {BatchPrefix}", batchPrefix);
@@ -501,6 +506,12 @@ namespace TesApi.Web
                 if (tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true)
                 {
                     identities.Add(tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity));
+                }
+
+                var actionIdentity = await actionIdentityProvider.GetAcrPullActionIdentity(CancellationToken.None);
+                if (actionIdentity is not null)
+                {
+                    identities.Add(actionIdentity);
                 }
 
                 var virtualMachineInfo = await GetVmSizeAsync(tesTask, cancellationToken);
@@ -1415,7 +1426,7 @@ namespace TesApi.Web
                 .ToDictionary(kv => kv.Key, kv => kv.Value);
 
         /// <summary>
-        /// Class that captures how <see cref="TesTask"/> transitions from current state to the new state, given the current Batch task state and optional condition. 
+        /// Class that captures how <see cref="TesTask"/> transitions from current state to the new state, given the current Batch task state and optional condition.
         /// Transitions typically include an action that needs to run in order for the task to move to the new state.
         /// </summary>
         private class TesTaskStateTransition
