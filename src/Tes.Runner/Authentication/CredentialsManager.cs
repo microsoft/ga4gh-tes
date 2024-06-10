@@ -36,11 +36,16 @@ namespace Tes.Runner.Authentication
             return duration;
         }
 
-        public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions, string? tokenScope = default, string? managedIdentityResourceId = default)
+        public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions, string? tokenScope = default)
+        {
+            return GetTokenCredential(runtimeOptions, r => r.NodeManagedIdentityResourceId, tokenScope);
+        }
+
+        public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions, Func<RuntimeOptions, string?> getManagedIdentityResourceId, string? tokenScope = default)
         {
             try
             {
-                return retryPolicy.Execute(() => GetTokenCredentialImpl(runtimeOptions, tokenScope, managedIdentityResourceId));
+                return retryPolicy.Execute(() => GetTokenCredentialImpl(runtimeOptions, getManagedIdentityResourceId, tokenScope));
             }
             catch
             {
@@ -48,10 +53,10 @@ namespace Tes.Runner.Authentication
             }
         }
 
-        private TokenCredential GetTokenCredentialImpl(RuntimeOptions runtimeOptions, string? tokenScope, string? managedIdentityResourceId)
+        private TokenCredential GetTokenCredentialImpl(RuntimeOptions runtimeOptions, Func<RuntimeOptions, string?> getManagedIdentityResourceId, string? tokenScope)
         {
             tokenScope ??= runtimeOptions.AzureEnvironmentConfig!.TokenScope!;
-            managedIdentityResourceId ??= runtimeOptions.NodeManagedIdentityResourceId;
+            var managedIdentityResourceId = getManagedIdentityResourceId(runtimeOptions);
 
             try
             {

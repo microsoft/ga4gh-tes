@@ -80,12 +80,20 @@ namespace Tes.Runner.Docker
 
         public ContainerRegistryContentClient CreateContainerRegistryContentClientWithAcquireAuthTokenPolicy(Uri endpoint, string repositoryName, RuntimeOptions runtimeOptions, Action<string> onCapture)
         {
+            // Use the ACR pull identity to generate a token if one is defined, otherwise fall back to the node identity.
+            static string? identityGetter(RuntimeOptions r)
+            {
+                if (!string.IsNullOrWhiteSpace(r.AcrPullManagedIdentityResourceId))
+                {
+                    return r.AcrPullManagedIdentityResourceId;
+                }
+                return r.NodeManagedIdentityResourceId;
+            }
+
             // Use a pipeline policy to get access to the ACR access token we will need to pass to Docker.
-            var terraACRIdentity = runtimeOptions.AcrPullManagedIdentityResourceId;
             var clientOptions = new ContainerRegistryClientOptions();
             clientOptions.AddPolicy(new AcquireDockerAuthTokenPipelinePolicy(onCapture), HttpPipelinePosition.PerCall);
-            // TODO maybe update GetTokenCredential to take a function runtimeOptions => resourceId
-            return new ContainerRegistryContentClient(endpoint, repositoryName, tokenCredentialsManager.GetTokenCredential(runtimeOptions, null, terraACRIdentity), clientOptions);
+            return new ContainerRegistryContentClient(endpoint, repositoryName, tokenCredentialsManager.GetTokenCredential(runtimeOptions, identityGetter), clientOptions);
         }
 
         private sealed class AcquireDockerAuthTokenPipelinePolicy : Azure.Core.Pipeline.HttpPipelinePolicy
