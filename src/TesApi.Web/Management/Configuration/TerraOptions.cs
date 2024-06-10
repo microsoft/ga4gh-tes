@@ -20,12 +20,7 @@ public class TerraOptions
     public string LandingZoneId { get; set; }
 
     /// <summary>
-    /// Billing profile id containing the Tes back-end resources
-    /// </summary>
-    public string BillingProfileId { get; set; }
-
-    /// <summary>
-    /// Landing zone api host. 
+    /// Landing zone api host.
     /// </summary>
     public string LandingZoneApiHost { get; set; }
 
@@ -38,6 +33,11 @@ public class TerraOptions
     /// Sam api host.
     /// </summary>
     public string SamApiHost { get; set; }
+
+    /// <summary>
+    /// Id of the Sam resource associated with the ACR pull identity
+    /// </summary>
+    public string SamResourceIdForAcrPull { get; set; }
 
     /// <summary>
     /// Workspace storage container resource id

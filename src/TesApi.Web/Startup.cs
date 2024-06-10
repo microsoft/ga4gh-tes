@@ -417,7 +417,7 @@ namespace TesApi.Web
             static void ValidateRequiredOptionsForTerraActionIdentities(TerraOptions terraOptions)
             {
                 ArgumentException.ThrowIfNullOrEmpty(terraOptions.SamApiHost, nameof(terraOptions.SamApiHost));
-                ArgumentException.ThrowIfNullOrEmpty(terraOptions.SamApiHost, nameof(terraOptions.BillingProfileId));
+                ArgumentException.ThrowIfNullOrEmpty(terraOptions.SamApiHost, nameof(terraOptions.SamResourceIdForAcrPull));
             }
 
             BatchAccountResourceInformation CreateBatchAccountResourceInformation(IServiceProvider services)

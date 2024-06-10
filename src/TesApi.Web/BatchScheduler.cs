@@ -103,6 +103,7 @@ namespace TesApi.Web
         /// <param name="poolFactory">Batch pool factory <see cref="IBatchPoolFactory"/></param>
         /// <param name="allowedVmSizesService">Service to get allowed vm sizes.</param>
         /// <param name="taskExecutionScriptingManager"><see cref="taskExecutionScriptingManager"/></param>
+        /// <param name="actionIdentityProvider"><see cref="IActionIdentityProvider"/></param>
         public BatchScheduler(
             ILogger<BatchScheduler> logger,
             IOptions<Options.BatchImageGeneration1Options> batchGen1Options,

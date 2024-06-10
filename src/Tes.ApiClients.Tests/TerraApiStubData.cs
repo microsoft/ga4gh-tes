@@ -24,7 +24,7 @@ public class TerraApiStubData
     public Guid TenantId { get; } = Guid.NewGuid();
     public Guid LandingZoneId { get; } = Guid.NewGuid();
     public Guid SubscriptionId { get; } = Guid.NewGuid();
-    public Guid BillingProfileId { get; } = Guid.NewGuid();
+    public Guid AcrPullIdentitySamResourceId { get; } = Guid.NewGuid();
     public Guid ContainerResourceId { get; } = Guid.NewGuid();
     public Guid WorkspaceId { get; } = Guid.Parse(WorkspaceIdValue);
 
@@ -292,10 +292,10 @@ public class TerraApiStubData
   ""id"": {{
     ""resourceId"": {{
       ""resourceTypeName"": ""private_azure_container_registry"",
-      ""resourceId"": ""{BillingProfileId}""
+      ""resourceId"": ""{AcrPullIdentitySamResourceId}""
     }},
     ""action"": ""pull_image"",
-    ""billingProfileId"": ""{BillingProfileId}""
+    ""billingProfileId"": ""{AcrPullIdentitySamResourceId}""
   }},
   ""objectId"": ""{ManagedIdentityObjectId}"",
   ""displayName"": ""my nice action identity"",
@@ -303,7 +303,7 @@ public class TerraApiStubData
     ""tenantId"": ""{TenantId}"",
     ""subscriptionId"": ""{SubscriptionId}"",
     ""managedResourceGroupName"": ""{ResourceGroup}""
-  }}       
+  }}
 }}";
     }
 

@@ -44,9 +44,9 @@ namespace Tes.ApiClients
         /// </summary>
         protected TerraSamApiClient() { }
 
-        public virtual async Task<SamActionManagedIdentityApiResponse?> GetActionManagedIdentityForACRPullAsync(Guid billingProfileId, CancellationToken cancellationToken)
+        public virtual async Task<SamActionManagedIdentityApiResponse?> GetActionManagedIdentityForACRPullAsync(Guid resourceId, CancellationToken cancellationToken)
         {
-            return await GetActionManagedIdentityAsync("private_azure_container_registry", billingProfileId, "pull_image", cancellationToken);
+            return await GetActionManagedIdentityAsync("private_azure_container_registry", resourceId, "pull_image", cancellationToken);
         }
 
         private async Task<SamActionManagedIdentityApiResponse?> GetActionManagedIdentityAsync(string resourceType, Guid resourceId, string action, CancellationToken cancellationToken)

@@ -5,6 +5,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Tes.ApiClients;
 using TesApi.Web.Management.Configuration;
 
@@ -15,7 +16,7 @@ namespace TesApi.Web
     /// </summary>
     public class TerraActionIdentityProvider : IActionIdentityProvider
     {
-        private readonly Guid terraBillingProfileId;
+        private readonly Guid samResourceIdForAcrPull;
         private readonly TerraSamApiClient terraSamApiClient;
         private readonly ILogger Logger;
 
@@ -25,29 +26,31 @@ namespace TesApi.Web
         /// <param name="terraSamApiClient"><see cref="TerraSamApiClient"/></param>
         /// <param name="terraOptions"><see cref="TerraOptions"/></param>
         /// <param name="Logger"><see cref="ILogger"/></param>
-        public TerraActionIdentityProvider(TerraSamApiClient terraSamApiClient, TerraOptions terraOptions, ILogger<TerraActionIdentityProvider> Logger)
+        public TerraActionIdentityProvider(TerraSamApiClient terraSamApiClient, IOptions<TerraOptions> terraOptions, ILogger<TerraActionIdentityProvider> Logger)
         {
-            ArgumentNullException.ThrowIfNull(terraOptions.BillingProfileId);
-            this.terraBillingProfileId = Guid.Parse(terraOptions.BillingProfileId);
+            ArgumentNullException.ThrowIfNull(terraOptions);
+            ArgumentNullException.ThrowIfNull(terraOptions.Value.SamResourceIdForAcrPull);
+            this.samResourceIdForAcrPull = Guid.Parse(terraOptions.Value.SamResourceIdForAcrPull);
             this.terraSamApiClient = terraSamApiClient;
+            this.Logger = Logger;
         }
 
 
         /// <summary>
         /// Retrieves the action identity to use for pulling ACR images, if one exists
         /// </summary>
-        /// <param name="id">Id to use to look up the identity, by convention the billing profile id</param>
+        /// <param name="id">Sam resource id to use to look up the identity</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>The resource id of the action identity, if one exists. Otherwise, null.</returns>
         public async Task<string?> GetAcrPullActionIdentity(CancellationToken cancellationToken)
         {
             try
             {
-                var response = await terraSamApiClient.GetActionManagedIdentityForACRPullAsync(terraBillingProfileId, CancellationToken.None);
+                var response = await terraSamApiClient.GetActionManagedIdentityForACRPullAsync(samResourceIdForAcrPull, CancellationToken.None);
                 if (response is null)
                 {
                     // Corresponds to no identity existing in Sam, or the user not having access to it.
-                    Logger.LogInformation(@"Found no ACR Pull action identity in Sam for {id}", terraBillingProfileId);
+                    Logger.LogInformation(@"Found no ACR Pull action identity in Sam for {id}", samResourceIdForAcrPull);
                     return null;
                 }
                 else
