@@ -39,6 +39,6 @@ namespace TesApi.Web.Options
         /// <summary>
         /// The maximum elapsed time that tasks may run, measured from the time the task starts.
         /// </summary>
-        public double TaskMaxWallClockTime { get; set; } = DefaultPoolRotationForcedDays;
+        public double TaskMaxWallClockTimeDays { get; set; } = DefaultPoolRotationForcedDays;
     }
 }
