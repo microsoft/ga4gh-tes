@@ -18,6 +18,7 @@ namespace Tes.ApiClients.Tests
         private Lazy<Mock<CachingRetryHandler.CachingAsyncRetryHandlerPolicy<HttpResponseMessage>>> cacheAndRetryHandler = null!;
         private TerraApiStubData terraApiStubData = null!;
         private AzureEnvironmentConfig azureEnvironmentConfig = null!;
+        private TimeSpan cacheTTL = TimeSpan.FromMinutes(1);
 
         [TestInitialize]
         public void SetUp()
@@ -38,10 +39,16 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetActionManagedIdentityAsync_ValidRequest_ReturnsPayload()
         {
-            cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryAndConversionAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<SamActionManagedIdentityApiResponse>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
+            cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryConversionAndCachingAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(),
+                    It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<SamActionManagedIdentityApiResponse>>>(),
+                    It.IsAny<DateTimeOffset>(),
+                    It.IsAny<CancellationToken>(),
+                    It.IsAny<string>()))
                 .ReturnsAsync(System.Text.Json.JsonSerializer.Deserialize<SamActionManagedIdentityApiResponse>(terraApiStubData.GetSamActionManagedIdentityApiResponseInJson())!);
 
-            var apiResponse = await terraSamApiClient.GetActionManagedIdentityForACRPullAsync(terraApiStubData.AcrPullIdentitySamResourceId, CancellationToken.None);
+            var apiResponse = await terraSamApiClient.GetActionManagedIdentityForACRPullAsync(terraApiStubData.AcrPullIdentitySamResourceId, cacheTTL, CancellationToken.None);
 
             Assert.IsNotNull(apiResponse);
             Assert.IsTrue(!string.IsNullOrEmpty(apiResponse.ObjectId));
@@ -51,10 +58,16 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetActionManagedIdentityAsync_ValidRequest_Returns404()
         {
-            cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryAndConversionAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<SamActionManagedIdentityApiResponse>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
+            cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryConversionAndCachingAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(),
+                    It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<SamActionManagedIdentityApiResponse>>>(),
+                    It.IsAny<DateTimeOffset>(),
+                    It.IsAny<CancellationToken>(),
+                    It.IsAny<string>()))
                 .Throws(new HttpRequestException(null, null, System.Net.HttpStatusCode.NotFound));
 
-            var apiResponse = await terraSamApiClient.GetActionManagedIdentityForACRPullAsync(terraApiStubData.AcrPullIdentitySamResourceId, CancellationToken.None);
+            var apiResponse = await terraSamApiClient.GetActionManagedIdentityForACRPullAsync(terraApiStubData.AcrPullIdentitySamResourceId, cacheTTL, CancellationToken.None);
 
             Assert.IsNull(apiResponse);
         }
@@ -62,10 +75,16 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetActionManagedIdentityAsync_ValidRequest_Returns500()
         {
-            cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryAndConversionAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<SamActionManagedIdentityApiResponse>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
+            cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryConversionAndCachingAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(),
+                    It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<SamActionManagedIdentityApiResponse>>>(),
+                    It.IsAny<DateTimeOffset>(),
+                    It.IsAny<CancellationToken>(),
+                    It.IsAny<string>()))
                 .Throws(new HttpRequestException(null, null, System.Net.HttpStatusCode.BadGateway));
 
-            await Assert.ThrowsExceptionAsync<HttpRequestException>(async () => await terraSamApiClient.GetActionManagedIdentityForACRPullAsync(terraApiStubData.AcrPullIdentitySamResourceId, CancellationToken.None));
+            await Assert.ThrowsExceptionAsync<HttpRequestException>(async () => await terraSamApiClient.GetActionManagedIdentityForACRPullAsync(terraApiStubData.AcrPullIdentitySamResourceId, cacheTTL, CancellationToken.None));
         }
     }
 }

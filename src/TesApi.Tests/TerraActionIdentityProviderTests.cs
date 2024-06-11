@@ -32,13 +32,13 @@ namespace TesApi.Tests
             terraSamApiClientMock = new();
 
             terraSamApiClientMock
-                .Setup(t => t.GetActionManagedIdentityForACRPullAsync(It.Is<Guid>(g => g.Equals(terraApiStubData.AcrPullIdentitySamResourceId)), It.IsAny<System.Threading.CancellationToken>()))
+                .Setup(t => t.GetActionManagedIdentityForACRPullAsync(It.Is<Guid>(g => g.Equals(terraApiStubData.AcrPullIdentitySamResourceId)), It.IsAny<TimeSpan>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync(terraApiStubData.GetSamActionManagedIdentityApiResponse());
             terraSamApiClientMock
-                .Setup(t => t.GetActionManagedIdentityForACRPullAsync(It.Is<Guid>(g => g.Equals(notFoundGuid)), It.IsAny<System.Threading.CancellationToken>()))
+                .Setup(t => t.GetActionManagedIdentityForACRPullAsync(It.Is<Guid>(g => g.Equals(notFoundGuid)), It.IsAny<TimeSpan>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync((SamActionManagedIdentityApiResponse)null);
             terraSamApiClientMock
-                .Setup(t => t.GetActionManagedIdentityForACRPullAsync(It.Is<Guid>(g => g.Equals(errorGuid)), It.IsAny<System.Threading.CancellationToken>()))
+                .Setup(t => t.GetActionManagedIdentityForACRPullAsync(It.Is<Guid>(g => g.Equals(errorGuid)), It.IsAny<TimeSpan>(), It.IsAny<System.Threading.CancellationToken>()))
                 .Throws(new HttpRequestException("Timeout!!", null, HttpStatusCode.GatewayTimeout));
         }
 

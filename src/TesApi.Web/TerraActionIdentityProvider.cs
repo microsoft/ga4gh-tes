@@ -18,6 +18,7 @@ namespace TesApi.Web
     {
         private readonly Guid samResourceIdForAcrPull;
         private readonly TerraSamApiClient terraSamApiClient;
+        private readonly TimeSpan samCacheTTL;
         private readonly ILogger Logger;
 
         /// <summary>
@@ -31,6 +32,7 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(terraOptions);
             ArgumentNullException.ThrowIfNull(terraOptions.Value.SamResourceIdForAcrPull);
             this.samResourceIdForAcrPull = Guid.Parse(terraOptions.Value.SamResourceIdForAcrPull);
+            this.samCacheTTL = TimeSpan.FromMinutes(terraOptions.Value.SamActionIdentityCacheTTLMinutes);
             this.terraSamApiClient = terraSamApiClient;
             this.Logger = Logger;
         }
@@ -39,14 +41,13 @@ namespace TesApi.Web
         /// <summary>
         /// Retrieves the action identity to use for pulling ACR images, if one exists
         /// </summary>
-        /// <param name="id">Sam resource id to use to look up the identity</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>The resource id of the action identity, if one exists. Otherwise, null.</returns>
         public async Task<string?> GetAcrPullActionIdentity(CancellationToken cancellationToken)
         {
             try
             {
-                var response = await terraSamApiClient.GetActionManagedIdentityForACRPullAsync(samResourceIdForAcrPull, CancellationToken.None);
+                var response = await terraSamApiClient.GetActionManagedIdentityForACRPullAsync(samResourceIdForAcrPull, samCacheTTL, CancellationToken.None);
                 if (response is null)
                 {
                     // Corresponds to no identity existing in Sam, or the user not having access to it.

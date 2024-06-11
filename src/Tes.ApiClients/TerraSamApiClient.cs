@@ -17,7 +17,6 @@ namespace Tes.ApiClients
     {
         private const string SamApiSegments = @"/api/azure/v1";
 
-        // TODO configure cache and turn caching of queries back on
         private static readonly IMemoryCache SharedMemoryCache = new MemoryCache(new MemoryCacheOptions());
 
         /// <summary>
@@ -44,12 +43,12 @@ namespace Tes.ApiClients
         /// </summary>
         protected TerraSamApiClient() { }
 
-        public virtual async Task<SamActionManagedIdentityApiResponse?> GetActionManagedIdentityForACRPullAsync(Guid resourceId, CancellationToken cancellationToken)
+        public virtual async Task<SamActionManagedIdentityApiResponse?> GetActionManagedIdentityForACRPullAsync(Guid resourceId, TimeSpan cacheTTL, CancellationToken cancellationToken)
         {
-            return await GetActionManagedIdentityAsync("private_azure_container_registry", resourceId, "pull_image", cancellationToken);
+            return await GetActionManagedIdentityAsync("private_azure_container_registry", resourceId, "pull_image", cacheTTL, cancellationToken);
         }
 
-        private async Task<SamActionManagedIdentityApiResponse?> GetActionManagedIdentityAsync(string resourceType, Guid resourceId, string action, CancellationToken cancellationToken)
+        private async Task<SamActionManagedIdentityApiResponse?> GetActionManagedIdentityAsync(string resourceType, Guid resourceId, string action, TimeSpan cacheTTL, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(resourceId);
 
@@ -59,8 +58,8 @@ namespace Tes.ApiClients
 
             try
             {
-                return await HttpGetRequestAsync(url, setAuthorizationHeader: true, cacheResults: false,
-                    SamActionManagedIdentityApiResponseContext.Default.SamActionManagedIdentityApiResponse, cancellationToken);
+                return await HttpGetRequestWithExpirableCachingAndRetryPolicyAsync(url,
+                    SamActionManagedIdentityApiResponseContext.Default.SamActionManagedIdentityApiResponse, cacheTTL, cancellationToken, setAuthorizationHeader: true);
             }
             catch (HttpRequestException e)
             {
