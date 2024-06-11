@@ -35,5 +35,10 @@ namespace TesApi.Web.Options
         /// Disable scheduling of dedicated compute nodes
         /// </summary>
         public bool UsePreemptibleVmsOnly { get; set; } = false;
+
+        /// <summary>
+        /// The maximum elapsed time that tasks may run, measured from the time the task starts.
+        /// </summary>
+        public double TaskMaxWallClockTime { get; set; } = DefaultPoolRotationForcedDays;
     }
 }
