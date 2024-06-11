@@ -47,5 +47,25 @@ namespace Tes.ApiClients.Tests
             Assert.IsTrue(!string.IsNullOrEmpty(apiResponse.ObjectId));
             Assert.IsTrue(apiResponse.ObjectId.Contains(TerraApiStubData.TerraPetName));
         }
+
+        [TestMethod]
+        public async Task GetActionManagedIdentityAsync_ValidRequest_Returns404()
+        {
+            cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryAndConversionAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<SamActionManagedIdentityApiResponse>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
+                .Throws(new HttpRequestException(null, null, System.Net.HttpStatusCode.NotFound));
+
+            var apiResponse = await terraSamApiClient.GetActionManagedIdentityForACRPullAsync(terraApiStubData.AcrPullIdentitySamResourceId, CancellationToken.None);
+
+            Assert.IsNull(apiResponse);
+        }
+
+        [TestMethod]
+        public async Task GetActionManagedIdentityAsync_ValidRequest_Returns500()
+        {
+            cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryAndConversionAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<SamActionManagedIdentityApiResponse>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
+                .Throws(new HttpRequestException(null, null, System.Net.HttpStatusCode.BadGateway));
+
+            await Assert.ThrowsExceptionAsync<HttpRequestException>(async () => await terraSamApiClient.GetActionManagedIdentityForACRPullAsync(terraApiStubData.AcrPullIdentitySamResourceId, CancellationToken.None));
+        }
     }
 }
