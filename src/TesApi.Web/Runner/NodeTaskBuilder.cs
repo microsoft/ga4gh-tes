@@ -194,17 +194,18 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
-        /// Docker container feature flags.
+        /// Docker container GPU support.
         /// </summary>
-        /// <param name="flag">The flag.</param>
-        public void WithContainerFlag(string flag)
+        public void WithGpuSupport()
         {
-            nodeTask.ContainerFlags ??= [];
-
-            if (!nodeTask.ContainerFlags.Contains(flag))
+            nodeTask.ContainerDeviceRequests ??= [];
+            nodeTask.ContainerDeviceRequests.Add(new()
             {
-                nodeTask.ContainerFlags.Add(flag);
-            }
+                Driver = "nvidia",
+                Count = -1,
+                Capabilities = [["compute", "utility", "gpu"]],
+                //Options = []
+            });
         }
 
         /// <summary>

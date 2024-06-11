@@ -157,7 +157,7 @@ namespace Tes.Runner.Docker
             await ConfigureNetworkAsync();
 
             var createResponse = await CreateContainerAsync(imageWithTag, executionOptions.CommandsToExecute, executionOptions.VolumeBindings, executionOptions.WorkingDir,
-                executionOptions.ContainerFlags?.Contains("gpu", StringComparer.OrdinalIgnoreCase));
+                executionOptions.ContainerDeviceRequests);
             _ = await dockerClient.Containers.InspectContainerAsync(createResponse.ID);
 
             var logs = await StartContainerWithStreamingOutput(createResponse);
@@ -194,7 +194,7 @@ namespace Tes.Runner.Docker
         }
 
         private async Task<CreateContainerResponse> CreateContainerAsync(string imageWithTag,
-            List<string> commandsToExecute, List<string>? volumeBindings, string? workingDir, bool? gpus = default)
+            List<string> commandsToExecute, List<string>? volumeBindings, string? workingDir, List<ContainerDeviceRequest>? deviceRequests = default)
         {
             logger.LogInformation(@"Creating container with image name: {ImageWithTag}", imageWithTag);
 
@@ -210,15 +210,16 @@ namespace Tes.Runner.Docker
                     {
                         AutoRemove = true,
                         Binds = volumeBindings,
-                        DeviceRequests = gpus.GetValueOrDefault()
-                            ? [new()
+                        DeviceRequests = deviceRequests?
+                            .Select(request => new DeviceRequest()
                             {
-                                Driver = "nvidia",
-                                Count = -1,
-                                Capabilities = [["compute", "utility", "gpu"]],
-                                Options = new Dictionary<string, string>()
-                            }]
-                            : []
+                                Driver = request.Driver ?? default,
+                                Count = request.Count ?? default,
+                                DeviceIDs = request.DeviceIDs ?? default,
+                                Capabilities = request.Capabilities ?? default,
+                                Options = request.Options ?? default,
+                            })
+                            .ToList()
                     }
                 });
 
@@ -282,5 +283,5 @@ namespace Tes.Runner.Docker
     }
 
     public record ExecutionOptions(string? ImageName, string? Tag, List<string>? CommandsToExecute,
-        List<string>? VolumeBindings, string? WorkingDir, RuntimeOptions RuntimeOptions, List<string>? ContainerFlags);
+        List<string>? VolumeBindings, string? WorkingDir, RuntimeOptions RuntimeOptions, List<ContainerDeviceRequest>? ContainerDeviceRequests);
 }

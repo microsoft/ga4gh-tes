@@ -107,7 +107,7 @@ namespace TesApi.Web.Runner
 
                 if (nodeTaskConversionOptions.VmFamilyGroup == BatchScheduler.VmFamilySeries.standardN_Families)
                 {
-                    builder.WithContainerFlag("gpu");
+                    builder.WithGpuSupport();
                 }
 
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))

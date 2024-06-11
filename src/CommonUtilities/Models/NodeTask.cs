@@ -12,7 +12,7 @@ namespace Tes.Runner.Models
         public string? WorkflowId { get; set; }
         public string? ImageTag { get; set; }
         public string? ImageName { get; set; }
-        public List<string>? ContainerFlags { get; set; }
+        public List<ContainerDeviceRequest>? ContainerDeviceRequests { get; set; }
         public string? ContainerWorkDir { get; set; }
         public List<string>? CommandsToExecute { get; set; }
         public List<FileInput>? Inputs { get; set; }
@@ -22,6 +22,20 @@ namespace Tes.Runner.Models
         public string? OutputsMetricsFormat { get; set; }
         public RuntimeOptions RuntimeOptions { get; set; } = null!;
     }
+
+    public class ContainerDeviceRequest
+    {
+        public string? Driver { get; set; }
+
+        public long? Count { get; set; }
+
+        public List<string>? DeviceIDs { get; set; }
+
+        public List<IList<string>>? Capabilities { get; set; }
+
+        public Dictionary<string, string>? Options { get; set; }
+    }
+
 
     public class FileOutput
     {

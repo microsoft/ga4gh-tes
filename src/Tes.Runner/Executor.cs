@@ -78,7 +78,7 @@ namespace Tes.Runner
         private ExecutionOptions CreateExecutionOptions(List<string> bindings)
         {
             return new(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute, bindings,
-                tesNodeTask.ContainerWorkDir, tesNodeTask.RuntimeOptions, tesNodeTask.ContainerFlags);
+                tesNodeTask.ContainerWorkDir, tesNodeTask.RuntimeOptions, tesNodeTask.ContainerDeviceRequests);
         }
 
         private static string ToStatusMessage(ContainerExecutionResult result)
