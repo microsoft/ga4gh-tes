@@ -32,6 +32,7 @@ namespace Tes.RunnerCLI.Commands
                 throw new CommandExecutionException(results.ExitCode, $"Failed to execute command: {command}. Exit code returned by sub-process: {results.ExitCode}");
             }
         }
+
         /// <summary>
         /// Executes a transfer command as a sub-process. A transfer command is upload or download.
         /// </summary>
@@ -39,12 +40,12 @@ namespace Tes.RunnerCLI.Commands
         /// <param name="file">Node task definition file</param>
         /// <param name="options">Transfer options</param>
         ///<exception cref = "CommandExecutionException" > Thrown when the process launcher or launcher sub-process fail</exception>
-        public static async Task LaunchTransferCommandAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options)
+        public static async Task LaunchTransferCommandAsSubProcessAsync(string command, Runner.Models.NodeTask nodeTask, FileInfo file, BlobPipelineOptions options)
         {
             ProcessExecutionResult results = null!;
             try
             {
-                var processLauncher = await ProcessLauncher.CreateLauncherAsync(file, logNamePrefix: command);
+                var processLauncher = await ProcessLauncher.CreateLauncherAsync(nodeTask, logNamePrefix: command, apiVersion: options.ApiVersion);
                 results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options));
             }
             catch (Exception ex)
@@ -67,30 +68,32 @@ namespace Tes.RunnerCLI.Commands
             throw new CommandExecutionException(exitCode, $"Failed to launch command: {command}", ex);
         }
 
-
         /// <summary>
         /// Executes the exec (executor) command as a sub-process.
         /// </summary>
+        /// <param name="nodeTask">Node task definition</param>
         /// <param name="file">Node task definition file</param>
-        /// <param name="dockerUri">Docker API URI</param>
+        /// <param name="apiVersion"></param>
         ///<exception cref = "CommandExecutionException" > Thrown when the process launcher or launcher sub-process fail</exception>
-        public static async Task LaunchesExecutorCommandAsSubProcessAsync(FileInfo file, Uri dockerUri)
+        /// <param name="dockerUri">Docker API URI</param>
+        public static async Task LaunchesExecutorCommandAsSubProcessAsync(Runner.Models.NodeTask nodeTask, FileInfo file, string apiVersion, Uri dockerUri)
         {
             ProcessExecutionResult results = null!;
             try
             {
-                var processLauncher = await ProcessLauncher.CreateLauncherAsync(file, logNamePrefix: CommandFactory.ExecutorCommandName);
+                var processLauncher = await ProcessLauncher.CreateLauncherAsync(nodeTask, logNamePrefix: CommandFactory.ExecutorCommandName, apiVersion: apiVersion);
 
                 var args = new List<string>() {
                     CommandFactory.ExecutorCommandName,
+                    $"--{BlobPipelineOptionsConverter.ApiVersionOption} {apiVersion}",
                     $"--{CommandFactory.DockerUriOption} {dockerUri}" };
 
-                if (!string.IsNullOrEmpty(file.FullName))
+                if (!string.IsNullOrEmpty(file?.FullName))
                 {
                     args.Add($"--{BlobPipelineOptionsConverter.FileOption} {file.FullName}");
                 }
 
-                results = await processLauncher.LaunchProcessAndWaitAsync(args.ToArray());
+                results = await processLauncher.LaunchProcessAndWaitAsync([.. args]);
             }
             catch (Exception ex)
             {

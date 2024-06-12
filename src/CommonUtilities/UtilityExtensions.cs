@@ -69,5 +69,37 @@ namespace CommonUtilities
                 .GroupBy(tuple => tuple.Index / groupSize)
                 .OrderBy(tuple => tuple.Key)
                 .Select(groups => groupResultFunc(groups.Select(item => groupItemFunc(item.Value, item.Index % groupSize))));
+
+        /// <summary>
+        /// Performs <paramref name="action"/> on each item in <paramref name="values"/>.
+        /// </summary>
+        /// <typeparam name="T">Type of items in <paramref name="values"/>.</typeparam>
+        /// <param name="values">Enumeration of values on which to perform <paramref name="action"/>.</param>
+        /// <param name="action">Action to perform on each item in <paramref name="values"/>.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        public static async ValueTask ForEachAsync<T>(this IEnumerable<T> values, Func<T, CancellationToken, ValueTask> action, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+            ArgumentNullException.ThrowIfNull(action);
+
+            await Parallel.ForEachAsync(values, cancellationToken, action);
+        }
+
+        /// <summary>
+        /// Performs <paramref name="action"/> on each item in <paramref name="values"/>.
+        /// </summary>
+        /// <typeparam name="T">Type of items in <paramref name="values"/>.</typeparam>
+        /// <param name="values">Enumeration of values on which to perform <paramref name="action"/>.</param>
+        /// <param name="action">Action to perform on each item in <paramref name="values"/>.</param>
+        public static void ForEach<T>(this IEnumerable<T> values, Action<T> action)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+            ArgumentNullException.ThrowIfNull(action);
+
+            foreach (var item in values)
+            {
+                action(item);
+            }
+        }
     }
 }

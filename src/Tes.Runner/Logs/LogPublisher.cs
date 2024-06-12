@@ -9,10 +9,9 @@ namespace Tes.Runner.Logs
 {
     public class LogPublisher
     {
-        const int LogWaitTimeout = 30;
         const BlobSasPermissions LogLocationPermissions = BlobSasPermissions.Read | BlobSasPermissions.Create | BlobSasPermissions.Write | BlobSasPermissions.Add;
 
-        public static async Task<IStreamLogReader> CreateStreamReaderLogPublisherAsync(NodeTask nodeTask, string logNamePrefix)
+        public static async Task<IStreamLogReader> CreateStreamReaderLogPublisherAsync(NodeTask nodeTask, string logNamePrefix, string apiVersion)
         {
             ArgumentNullException.ThrowIfNull(nodeTask);
             ArgumentException.ThrowIfNullOrEmpty(logNamePrefix);
@@ -22,7 +21,8 @@ namespace Tes.Runner.Logs
                 var transformedUrl = await UrlTransformationStrategyFactory.GetTransformedUrlAsync(
                     nodeTask.RuntimeOptions,
                     nodeTask.RuntimeOptions.StreamingLogPublisher,
-                    LogLocationPermissions);
+                    LogLocationPermissions,
+                    apiVersion);
 
                 return new AppendBlobLogPublisher(
                     transformedUrl.ToString()!,

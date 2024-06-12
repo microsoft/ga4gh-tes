@@ -286,9 +286,7 @@ namespace Tes.ApiClients
                     return accessToken.Token;
                 }
 
-                var newAccessToken = await tokenCredential.GetTokenAsync(
-                    new TokenRequestContext(new[] { tokenScope }),
-                    cancellationToken);
+                var newAccessToken = await tokenCredential.GetTokenAsync(new TokenRequestContext([tokenScope]), cancellationToken);
 
                 Logger.LogTrace(@"Returning a new token with an expiration date of: {TokenExpiresOn}", newAccessToken.ExpiresOn);
                 accessToken = newAccessToken;

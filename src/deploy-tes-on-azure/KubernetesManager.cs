@@ -15,7 +15,6 @@ using CommonUtilities.AzureCloud;
 using k8s;
 using k8s.Models;
 using Microsoft.Azure.Management.ContainerService;
-using Microsoft.Azure.Management.ContainerService.Fluent;
 using Microsoft.Azure.Management.Msi.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
@@ -431,6 +430,9 @@ namespace TesDeployer
             deployment["environment"] = GetValueOrDefault(settings, "DeploymentEnvironment");
             deployment["created"] = GetValueOrDefault(settings, "DeploymentCreated");
             deployment["updated"] = GetValueOrDefault(settings, "DeploymentUpdated");
+
+            // ensure entries have values
+            _ = batchScheduling.TryAdd("poolRotationForcedDays", "7");
 
             values.Config["batchAccount"] = batchAccount;
             values.Config["batchNodes"] = batchNodes;

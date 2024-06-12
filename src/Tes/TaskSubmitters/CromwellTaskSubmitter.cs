@@ -17,9 +17,10 @@ namespace Tes.TaskSubmitters
         public const string SubmitterName = "cromwell";
 
         // Parses out the task and shard along with its workflow name & id from the execution path. Note that is expected to be the most deeply nested workflow.
-        [GeneratedRegex("/*?/(.+)/([^/]+)/([0-9A-Fa-f]{8}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{12})/call-([^/]+)(?:/shard-([^/]+))?/execution/rc", RegexOptions.Singleline)]
+        [GeneratedRegex("/*?/(.+)/([^/]+)/([0-9A-Fa-f]{8}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{12})/call-([^/]+)(?:/shard-([^/]+))?(?:/attempt-([^/]+))?/execution/rc", RegexOptions.Singleline)]
         // examples: /cromwell-executions/test/daf1a044-d741-4db9-8eb5-d6fd0519b1f1/call-hello/execution/rc
         // examples: /cromwell-executions/test/daf1a044-d741-4db9-8eb5-d6fd0519b1f1/call-hello/test-subworkflow/b5227f73-f6e8-43be-8b18-520b1fd789b6/call-subworkflow/shard-8/execution/rc
+        // examples: /cromwell-executions/test/daf1a044-d741-4db9-8eb5-d6fd0519b1f1/call-hello/test-subworkflow/b5227f73-f6e8-43be-8b18-520b1fd789b6/call-subworkflow/shard-8/attempt-2/execution/rc
         private static partial Regex CromwellPathRegex();
 
         // Parses the task instance name from the description
@@ -46,7 +47,7 @@ namespace Tes.TaskSubmitters
         /// <param name="inputFile"><see cref="TesInput"/> file</param>
         /// <returns>True if the input represents a Cromwell command script</returns>
         private static bool IsCromwellCommandScript(TesInput inputFile) =>
-            inputFile.Type == TesFileType.FILEEnum &&
+            inputFile.Type == TesFileType.FILE &&
             (inputFile.Name?.Equals("commandScript", StringComparison.Ordinal) ?? false)
             && (inputFile.Description?.EndsWith(".commandScript") ?? false)
             && inputFile.Path.EndsWith($"/script");
@@ -91,7 +92,7 @@ namespace Tes.TaskSubmitters
                 // match.Groups[4] <= task name
                 // match.Groups[5] <= shard, if present
 
-                if (match.Success && match.Captures.Count == 1 && match.Groups.Count == 6)
+                if (match.Success && match.Captures.Count == 1 && match.Groups.Count == 7)
                 {
                     var workflowName = path[2];
                     var workflowId = path[3]; // This is how we set WorkflowId before making this pre-submitter determinable

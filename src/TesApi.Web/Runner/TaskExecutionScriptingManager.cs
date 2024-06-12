@@ -24,25 +24,21 @@ namespace TesApi.Web.Runner
         private readonly IStorageAccessProvider storageAccessProvider;
         private readonly TaskToNodeTaskConverter taskToNodeConverter;
         private readonly ILogger<TaskExecutionScriptingManager> logger;
-        private readonly BatchNodeScriptBuilder batchNodeScriptBuilder;
 
         /// <summary>
         /// Constructor of TaskExecutionScriptingManager
         /// </summary>
         /// <param name="storageAccessProvider"></param>
         /// <param name="taskToNodeConverter"></param>
-        /// <param name="batchNodeScriptBuilder"></param>
         /// <param name="logger"></param>
-        public TaskExecutionScriptingManager(IStorageAccessProvider storageAccessProvider, TaskToNodeTaskConverter taskToNodeConverter, BatchNodeScriptBuilder batchNodeScriptBuilder, ILogger<TaskExecutionScriptingManager> logger)
+        public TaskExecutionScriptingManager(IStorageAccessProvider storageAccessProvider, TaskToNodeTaskConverter taskToNodeConverter, ILogger<TaskExecutionScriptingManager> logger)
         {
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
             ArgumentNullException.ThrowIfNull(taskToNodeConverter);
-            ArgumentNullException.ThrowIfNull(batchNodeScriptBuilder);
             ArgumentNullException.ThrowIfNull(logger);
 
             this.storageAccessProvider = storageAccessProvider;
             this.taskToNodeConverter = taskToNodeConverter;
-            this.batchNodeScriptBuilder = batchNodeScriptBuilder;
             this.logger = logger;
         }
 
@@ -126,8 +122,7 @@ namespace TesApi.Web.Runner
         {
             logger.LogInformation($"Creating and uploading Batch script for Task ID: {tesTask.Id}");
 
-            var batchNodeScript = batchNodeScriptBuilder
-                .WithAlpineWgetInstallation()
+            var batchNodeScript = new BatchNodeScriptBuilder()
                 .WithMetrics()
                 .WithRunnerTaskDownloadUsingWget(nodeTaskUrl)
                 .WithExecuteRunner()

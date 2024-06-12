@@ -5,7 +5,6 @@ using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
 using CommonUtilities;
-using CommonUtilities.AzureCloud;
 using Moq;
 using Tes.Runner.Models;
 using Tes.Runner.Storage;
@@ -25,8 +24,10 @@ namespace Tes.Runner.Test.Storage
         public void SetUp()
         {
             mockBlobServiceClient = new Mock<BlobServiceClient>();
-            var options = new RuntimeOptions();
-            options.AzureEnvironmentConfig = ExpensiveObjectTestUtility.AzureCloudConfig.AzureEnvironmentConfig;
+            RuntimeOptions options = new()
+            {
+                AzureEnvironmentConfig = ExpensiveObjectTestUtility.AzureCloudConfig.AzureEnvironmentConfig
+            };
 
             armUrlTransformationStrategy = new ArmUrlTransformationStrategy(_ => mockBlobServiceClient.Object, options);
             userDelegationKey = BlobsModelFactory.UserDelegationKey(Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), DateTimeOffset.UtcNow,
