@@ -38,14 +38,25 @@ namespace Tes.Runner.Authentication
 
         public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions, string? tokenScope = default)
         {
-            return GetTokenCredential(runtimeOptions, r => r.NodeManagedIdentityResourceId, tokenScope);
+            return GetTokenCredential(runtimeOptions, runtimeOptions.NodeManagedIdentityResourceId, tokenScope);
         }
 
-        public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions, Func<RuntimeOptions, string?> getManagedIdentityResourceId, string? tokenScope = default)
+        public virtual TokenCredential GetAcrPullTokenCredential(RuntimeOptions runtimeOptions, string? tokenScope = default)
         {
+            var managedIdentity = runtimeOptions.NodeManagedIdentityResourceId;
+            if (!string.IsNullOrWhiteSpace(runtimeOptions.AcrPullManagedIdentityResourceId))
+            {
+                managedIdentity = runtimeOptions.AcrPullManagedIdentityResourceId;
+            }
+            return GetTokenCredential(runtimeOptions, managedIdentity, tokenScope);
+        }
+
+        public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions, string? managedIdentityResourceId, string? tokenScope = default)
+        {
+            tokenScope ??= runtimeOptions.AzureEnvironmentConfig!.TokenScope!;
             try
             {
-                return retryPolicy.Execute(() => GetTokenCredentialImpl(runtimeOptions, getManagedIdentityResourceId, tokenScope));
+                return retryPolicy.Execute(() => GetTokenCredentialImpl(managedIdentityResourceId, tokenScope, runtimeOptions.AzureEnvironmentConfig!.AzureAuthorityHostUrl!));
             }
             catch
             {
@@ -53,15 +64,12 @@ namespace Tes.Runner.Authentication
             }
         }
 
-        private TokenCredential GetTokenCredentialImpl(RuntimeOptions runtimeOptions, Func<RuntimeOptions, string?> getManagedIdentityResourceId, string? tokenScope)
+        private TokenCredential GetTokenCredentialImpl(string? managedIdentityResourceId, string tokenScope, string azureAuthorityHost)
         {
-            tokenScope ??= runtimeOptions.AzureEnvironmentConfig!.TokenScope!;
-            var managedIdentityResourceId = getManagedIdentityResourceId(runtimeOptions);
-
             try
             {
                 TokenCredential tokenCredential;
-                Uri authorityHost = new(runtimeOptions.AzureEnvironmentConfig!.AzureAuthorityHostUrl!);
+                Uri authorityHost = new(azureAuthorityHost);
 
                 if (!string.IsNullOrWhiteSpace(managedIdentityResourceId))
                 {
