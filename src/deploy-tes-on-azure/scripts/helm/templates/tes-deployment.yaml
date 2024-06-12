@@ -66,6 +66,8 @@ spec:
               value: {{ .Values.identity.resourceId }}
             - name: BatchScheduling__UsePreemptibleVmsOnly
               value: {{ .Values.config.batchScheduling.usePreemptibleVmsOnly | quote}}
+            - name: BatchScheduling__TaskMaxWallClockTimeDays
+              value: {{ .Values.config.batchScheduling.taskMaxWallClockTimeDays | quote }}
             - name: BatchScheduling__PoolRotationForcedDays
               value: {{ .Values.config.batchScheduling.poolRotationForcedDays | quote }}
             - name: BatchScheduling__Prefix

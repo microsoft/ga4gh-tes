@@ -356,6 +356,14 @@ namespace TesDeployer
                         }
                     }
 
+                    if (installedVersion is null || installedVersion < new Version(5, 3, 3))
+                    {
+                        if (string.IsNullOrWhiteSpace(settings["AzureCloudName"]))
+                        {
+                            settings["AzureCloudName"] = configuration.AzureCloudName;
+                        }
+                    }
+
                     //if (installedVersion is null || installedVersion < new Version(x, y, z))
                     //{
                     //}
