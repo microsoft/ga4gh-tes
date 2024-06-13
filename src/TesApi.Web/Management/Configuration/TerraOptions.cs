@@ -43,7 +43,7 @@ public class TerraOptions
     /// <summary>
     /// Amount of time that cached action identities should live before we ask Sam for them again
     /// </summary>
-    public int SamActionIdentityCacheTTLMinutes {get; set; } = DefaultSamActionIdentityCacheTTLMinutes;
+    public int SamActionIdentityCacheTTLMinutes { get; set; } = DefaultSamActionIdentityCacheTTLMinutes;
 
     /// <summary>
     /// Workspace storage container resource id
