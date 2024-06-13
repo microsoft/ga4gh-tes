@@ -355,6 +355,14 @@ namespace TesDeployer
                         }
                     }
 
+                    if (installedVersion is null || installedVersion < new Version(5, 3, 3))
+                    {
+                        if (string.IsNullOrWhiteSpace(settings["AzureCloudName"]))
+                        {
+                            settings["AzureCloudName"] = configuration.AzureCloudName;
+                        }
+                    }
+
                     //if (installedVersion is null || installedVersion < new Version(x, y, z))
                     //{
                     //}
@@ -804,12 +812,12 @@ namespace TesDeployer
             var completedTask = await tesClient.CreateAndWaitTilDoneAsync(testTesTask, cts.Token);
             ConsoleEx.WriteLine($"TES Task State: {completedTask.State}");
 
-            if (completedTask.State != TesState.COMPLETEEnum)
+            if (completedTask.State != TesState.COMPLETE)
             {
                 ConsoleEx.WriteLine($"Failure reason: {completedTask.FailureReason}");
             }
 
-            return completedTask.State == TesState.COMPLETEEnum;
+            return completedTask.State == TesState.COMPLETE;
         }
 
         private async Task<bool> RunTestTaskAsync(string tesEndpoint, bool isPreemptible)

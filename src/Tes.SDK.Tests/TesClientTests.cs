@@ -17,7 +17,7 @@ namespace Tes.SDK.Tests
         public void Initialize()
         {
             _httpClientMock = new Mock<HttpClient>();
-            _client = new TesClient(_httpClientMock.Object, new("https://example.com"));
+            _client = new TesClient(_httpClientMock.Object, new Uri("https://example.com"));
         }
 
         [TestCleanup]
@@ -78,7 +78,7 @@ namespace Tes.SDK.Tests
                 tasks.Add(CreateTestTask());
             }
 
-            var runningTasksCount = tasks.Count(t => t.State == TesState.RUNNINGEnum);
+            var runningTasksCount = tasks.Count(t => t.State == TesState.RUNNING);
 
             var response = new TesListTasksResponse { Tasks = tasks };
 

@@ -55,7 +55,7 @@ namespace TesApi.Web
         /// Removes and returns the next available start task failure.
         /// </summary>
         /// <returns>The first <see cref="TaskFailureInformation"/> in the list, or null if the list is empty.</returns>
-        TaskFailureInformation PopNextStartTaskFailure();
+        StartTaskFailureInformation PopNextStartTaskFailure();
 
         /// <summary>
         /// Updates this instance based on changes to its environment.
@@ -70,5 +70,12 @@ namespace TesApi.Web
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         ValueTask<DateTime> GetAllocationStateTransitionTime(CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// <see cref="TaskFailureInformation"/> paired with compute node Id.
+        /// </summary>
+        /// <param name="NodeId">Compute node Id</param>
+        /// <param name="TaskFailureInformation"><see cref="TaskFailureInformation"/></param>
+        public record struct StartTaskFailureInformation(string NodeId, TaskFailureInformation TaskFailureInformation);
     }
 }

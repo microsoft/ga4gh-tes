@@ -47,7 +47,7 @@ namespace Tes.TaskSubmitters
         /// <param name="inputFile"><see cref="TesInput"/> file</param>
         /// <returns>True if the input represents a Cromwell command script</returns>
         private static bool IsCromwellCommandScript(TesInput inputFile) =>
-            inputFile.Type == TesFileType.FILEEnum &&
+            inputFile.Type == TesFileType.FILE &&
             (inputFile.Name?.Equals("commandScript", StringComparison.Ordinal) ?? false)
             && (inputFile.Description?.EndsWith(".commandScript") ?? false)
             && inputFile.Path.EndsWith($"/script");

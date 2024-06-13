@@ -21,6 +21,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Serialization;
 using Tes.ApiClients;
@@ -42,7 +43,7 @@ namespace TesApi.Web
     public class Startup
     {
         // TODO centralize in single location
-        internal const string TesVersion = "5.3.1";
+        internal const string TesVersion = "5.3.3";
         private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
@@ -98,6 +99,7 @@ namespace TesApi.Web
                         {
                             opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
                             opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
+                            opts.SerializerSettings.DefaultValueHandling = Newtonsoft.Json.DefaultValueHandling.Ignore;
                         })
                     .Services
                     .AddSingleton(CreateStorageAccessProviderFromConfiguration)

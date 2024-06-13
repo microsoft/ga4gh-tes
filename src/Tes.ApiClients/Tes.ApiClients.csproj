@@ -8,7 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="Azure.Core" Version="1.39.0" />
-    <PackageReference Include="Azure.Identity" Version="1.11.2" />
+    <PackageReference Include="Macross.Json.Extensions" Version="3.0.0" />
     <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />

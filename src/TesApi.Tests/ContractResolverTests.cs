@@ -98,7 +98,7 @@ namespace TesApi.Tests
         {
             // Arrange
             var expectedFullJsonResult = JObject.Parse(File.ReadAllText("expectedFullJsonResult.json"));
-            tesTask.State = TesState.CANCELEDEnum;
+            tesTask.State = TesState.CANCELED;
 
             // Act
             var jsonResult = JsonConvert.SerializeObject(tesTask, new JsonSerializerSettings { ContractResolver = FullTesTaskContractResolver.Instance });

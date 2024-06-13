@@ -40,16 +40,6 @@ namespace TesApi.Tests
 
 
         [TestMethod]
-        public void WithAlpineWgetInstallation_BuildCalled_ScriptContainsWgetInstallation()
-        {
-            var expectedLine = @"(grep -q alpine /etc/os-release && apk add bash wget || :) && \";
-
-            var result = builder.WithAlpineWgetInstallation()
-                .Build();
-            Assert.IsTrue(result.Contains(expectedLine));
-        }
-
-        [TestMethod]
         public void WithRunnerFilesDownloadUsingWget_BuildCalled_WgetCallsAreCreated()
         {
             //var expectedLine1 = BatchScheduler.CreateWgetDownloadCommand(new("https://foo.bar1"), $"${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{BatchNodeScriptBuilder.NodeTaskRunnerFilename}", setExecutable: true);
