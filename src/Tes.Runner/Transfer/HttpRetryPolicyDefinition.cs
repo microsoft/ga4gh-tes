@@ -13,15 +13,17 @@ namespace Tes.Runner.Transfer
         public const int DefaultMaxRetryCount = 14;
         private static readonly ILogger Logger = PipelineLoggerFactory.Create<HttpRetryPolicyDefinition>();
 
-        public static AsyncRetryPolicy DefaultAsyncRetryPolicy(int maxRetryCount = DefaultMaxRetryCount)
+        public static AsyncRetryPolicy DefaultAsyncRetryPolicy(bool useJitter, int maxRetryCount = DefaultMaxRetryCount)
         {
             return Policy
                 .Handle<RetriableException>()
                 .WaitAndRetryAsync(
-                    sleepDurations: Backoff.DecorrelatedJitterBackoffV2(
+                    sleepDurations: useJitter
+                        ? Backoff.DecorrelatedJitterBackoffV2(
                             medianFirstRetryDelay: TimeSpan.FromSeconds(1),
                             retryCount: maxRetryCount)
-                        .Select(s => TimeSpan.FromTicks(Math.Max(s.Ticks, TimeSpan.FromMinutes(9).Ticks))),
+                        .Select(s => TimeSpan.FromTicks(Math.Max(s.Ticks, TimeSpan.FromMinutes(9).Ticks)))
+                        : Backoff.ConstantBackoff(TimeSpan.FromSeconds(1), retryCount: maxRetryCount),
                     onRetryAsync: (exception, _, retryCount, _) =>
                     {
                         Logger.LogError(exception, "Retrying failed request. Retry count: {retryCount}", retryCount);

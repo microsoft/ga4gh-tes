@@ -65,7 +65,7 @@ namespace Tes.Runner.Test.Commands
             Func<RuntimeOptions, string, ResolutionPolicyHandler>? ResolutionPolicyFactory = default)
         {
             nodeTaskResolver = new(
-                () => new BlobApiHttpUtils(new(new MockableHttpMessageHandler(sendAsync)), HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(MaxRetryCount)),
+                () => new BlobApiHttpUtils(new(new MockableHttpMessageHandler(sendAsync)), HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(useJitter: false, MaxRetryCount)),
                 ResolutionPolicyFactory);
         }
 

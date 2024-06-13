@@ -29,7 +29,7 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolic
     public const string RootHashMetadataName = "md5_4mib_hashlist_root_hash";
 
     public BlobApiHttpUtils()
-        : this(new HttpClient(), HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy())
+        : this(new HttpClient(), HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(useJitter: true))
     { }
 
     public static HttpRequestMessage CreatePutBlockRequestAsync(PipelineBuffer buffer, string apiVersion)
