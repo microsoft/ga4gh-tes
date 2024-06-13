@@ -250,12 +250,12 @@ namespace Tes.Runner.Docker
                 () => dockerClient.Images.CreateImageAsync(
                     new ImagesCreateParameters() { FromImage = imageName, Tag = tag },
                     authConfig,
-                    new Progress<JSONMessage>(message => logger.LogDebug(message.Status))));
+                    new Progress<JSONMessage>(message => logger.LogDebug("{ProgressStatus}", message.Status))));
 
             AsyncRetryHandlerPolicy GetPolicy(string imageName)
             {
                 var imageNameParts = imageName.Split('/', 2);
-                return imageNameParts.Length > 1 && imageNameParts[0].EndsWith(".gcr.io")
+                return imageNameParts.Length > 1 && imageNameParts[0].EndsWith(".gcr.io", StringComparison.OrdinalIgnoreCase)
                     ? gcrDockerPullRetryPolicy
                     : dockerPullRetryPolicy;
             }
