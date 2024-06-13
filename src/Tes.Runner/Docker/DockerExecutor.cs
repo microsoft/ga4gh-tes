@@ -30,8 +30,19 @@ namespace Tes.Runner.Docker
         private readonly IStreamLogReader streamLogReader = null!;
         private readonly ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager = null!;
 
+        // Filter to exclude transient HTTP status codes
+        private static readonly Predicate<HttpStatusCode?> IsTransient = status =>
+            status switch
+            {
+                HttpStatusCode.RequestTimeout => true,
+                HttpStatusCode.TooManyRequests => true,
+                HttpStatusCode.InternalServerError => true,
+                var code when code >= HttpStatusCode.BadGateway && code <= HttpStatusCode.GatewayTimeout => true,
+                _ => false,
+            };
+
         // Exception filter to exclude non-retriable errors from the docker daemon when attempting to pull images.
-        private static readonly Func<DockerApiException, bool> IsNotAuthFailure = e =>
+        private static readonly Predicate<DockerApiException> IsNotAuthFailure = e =>
             // Immediately fail calls with either 'Unauthorized' or 'Forbidden' status codes
             !(e.StatusCode == HttpStatusCode.Unauthorized || e.StatusCode == HttpStatusCode.Forbidden ||
                 // Immediately fail calls with a status code of 'InternalServerError' and
@@ -51,7 +62,7 @@ namespace Tes.Runner.Docker
         const int LogStreamingMaxWaitTimeInSeconds = 30;
 
         public DockerExecutor(Uri dockerHost) : this(new DockerClientConfiguration(dockerHost)
-            .CreateClient(), new ConsoleStreamLogPublisher(), new ContainerRegistryAuthorizationManager(new CredentialsManager()), Executor.RunnerHost)
+            .CreateClient(), new ConsoleStreamLogPublisher(), new ContainerRegistryAuthorizationManager(new CredentialsManager()), Executor.RunnerHost, true)
         { }
 
         // Retry for ~91s for ACR 1-minute throttle window
@@ -61,7 +72,7 @@ namespace Tes.Runner.Docker
             ExponentialBackOffExponent = 2
         };
 
-        public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager, Host.IRunnerHost runnerHost)
+        public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager, Host.IRunnerHost runnerHost, bool useJitter)
         {
             ArgumentNullException.ThrowIfNull(dockerClient);
             ArgumentNullException.ThrowIfNull(streamLogReader);
@@ -72,27 +83,24 @@ namespace Tes.Runner.Docker
             this.streamLogReader = streamLogReader;
             this.containerRegistryAuthorizationManager = containerRegistryAuthorizationManager;
             this.runnerHost = runnerHost;
+            RetryPolicyBuilder policyBuilder = new(Options.Create(dockerPullRetryPolicyOptions));
 
-            dockerPullRetryPolicy = new RetryPolicyBuilder(Options.Create(dockerPullRetryPolicyOptions))
-                .PolicyBuilder.OpinionatedRetryPolicy(Polly.Policy
-                    .Handle(IsNotAuthFailure)
-                    .Or<IOException>()
-                    .Or<HttpRequestException>(e => e.InnerException is IOException || e.StatusCode >= HttpStatusCode.InternalServerError || e.StatusCode == HttpStatusCode.RequestTimeout))
-                .WithEnumeratedBackoffWait(Backoff.DecorrelatedJitterBackoffV2(
-                                medianFirstRetryDelay: TimeSpan.FromSeconds(1),
-                                retryCount: dockerPullRetryPolicyOptions.MaxRetryCount)
-                            .Select(s => TimeSpan.FromTicks(Math.Min(s.Ticks, TimeSpan.FromMinutes(9).Ticks))))
+            dockerPullRetryPolicy = Build(policyBuilder.PolicyBuilder.OpinionatedRetryPolicy(GetPolicy()));
+            gcrDockerPullRetryPolicy = Build(policyBuilder.PolicyBuilder.OpinionatedRetryPolicy(GetPolicy(IsGcrNotFound)));
+
+            AsyncRetryHandlerPolicy Build(RetryPolicyBuilder.IPolicyBuilderBase policy) => (useJitter
+                ? policy.WithEnumeratedBackoffWait(Backoff.DecorrelatedJitterBackoffV2(
+                        medianFirstRetryDelay: TimeSpan.FromSeconds(1),
+                        retryCount: dockerPullRetryPolicyOptions.MaxRetryCount)
+                    .Select(s => TimeSpan.FromTicks(Math.Max(s.Ticks, TimeSpan.FromMinutes(9).Ticks))))
+                : policy.WithRetryPolicyOptionsWait())
                 .SetOnRetryBehavior(logger)
                 .AsyncBuild();
 
-            gcrDockerPullRetryPolicy = new RetryPolicyBuilder(Options.Create(dockerPullRetryPolicyOptions))
-                .PolicyBuilder.OpinionatedRetryPolicy(Polly.Policy
-                    .Handle<DockerApiException>(e => IsNotAuthFailure(e) || IsGcrNotFound(e))
-                    .Or<IOException>()
-                    .Or<HttpRequestException>(e => e.InnerException is IOException || e.StatusCode >= HttpStatusCode.InternalServerError || e.StatusCode == HttpStatusCode.RequestTimeout))
-                .WithRetryPolicyOptionsWait()
-                .SetOnRetryBehavior(logger)
-                .AsyncBuild();
+            static Polly.PolicyBuilder GetPolicy(Predicate<DockerApiException>? dockerApiExtendedPredicate = default) => Polly.Policy
+                .Handle<DockerApiException>(e => (IsNotAuthFailure(e) && IsTransient(e.StatusCode)) || (dockerApiExtendedPredicate?.Invoke(e) ?? false))
+                .Or<IOException>()
+                .Or<HttpRequestException>(e => e.InnerException is IOException || IsTransient(e.StatusCode));
         }
 
         /// <summary>

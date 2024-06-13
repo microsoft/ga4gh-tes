@@ -50,7 +50,7 @@ namespace Tes.Runner.Test.Docker
             dockerImageMock.Setup(d => d.CreateImageAsync(It.IsAny<ImagesCreateParameters>(), It.IsAny<AuthConfig>(), It.IsAny<IProgress<JSONMessage>>(), It.IsAny<CancellationToken>()))
                 .Throws(exception);
 
-            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost);
+            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost, false);
             Models.RuntimeOptions runtimeOptions = new();
             try
             {
@@ -66,16 +66,16 @@ namespace Tes.Runner.Test.Docker
         }
 
         [DataTestMethod]
-        [DataRow(System.Net.HttpStatusCode.BadRequest, "")]
-        [DataRow(System.Net.HttpStatusCode.InternalServerError, "{\"message\":\"Something went wrong: badrequest: something else happended.\"}")]
-        public async Task RunOnContainerAsync_DockerClientReturnsOtherError_DoesNotCallContainerRegistryAuthorizationManager(System.Net.HttpStatusCode statusCode, string responseBody)
+        [DataRow(System.Net.HttpStatusCode.BadRequest, "", false)]
+        [DataRow(System.Net.HttpStatusCode.InternalServerError, "{\"message\":\"Something went wrong: badrequest: something else happended.\"}", true)]
+        public async Task RunOnContainerAsync_DockerClientReturnsOtherError_DoesNotCallContainerRegistryAuthorizationManager(System.Net.HttpStatusCode statusCode, string responseBody, bool retries)
         {
             DockerExecutor.dockerPullRetryPolicyOptions.ExponentialBackOffExponent = 1;
             var exception = new DockerApiException(statusCode, responseBody);
             dockerImageMock.Setup(d => d.CreateImageAsync(It.IsAny<ImagesCreateParameters>(), It.IsAny<AuthConfig>(), It.IsAny<IProgress<JSONMessage>>(), It.IsAny<CancellationToken>()))
                 .Throws(exception);
 
-            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost);
+            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost, false);
             Models.RuntimeOptions runtimeOptions = new();
             try
             {
@@ -91,7 +91,7 @@ namespace Tes.Runner.Test.Docker
                 Assert.AreSame(exception, ex);
             }
 
-            Assert.AreEqual(2 + DockerExecutor.dockerPullRetryPolicyOptions.MaxRetryCount, dockerImageMock.Invocations.Count);
+            Assert.AreEqual(2 + (retries ? DockerExecutor.dockerPullRetryPolicyOptions.MaxRetryCount : 0), dockerImageMock.Invocations.Count);
         }
 
         //[DataTestMethod]
@@ -135,7 +135,7 @@ namespace Tes.Runner.Test.Docker
             dockerVolumeMock.Setup(d => d.PruneAsync(It.IsAny<VolumesPruneParameters>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult(new VolumesPruneResponse()));
 
-            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost);
+            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost, false);
             await executor.NodeCleanupAsync(new(image, default, default, default, default, new()));
 
             Assert.AreEqual(1, dockerVolumeMock.Invocations.Count);
