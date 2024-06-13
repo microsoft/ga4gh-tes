@@ -105,9 +105,15 @@ namespace TesApi.Web.Runner
                     .WithDrsHubUrl(nodeTaskConversionOptions.DrsHubApiHost)
                     .WithMetricsFile(MetricsFileName);
 
-                if (nodeTaskConversionOptions.VmFamilyGroup == BatchScheduler.VmFamilySeries.standardN_Families)
+                switch (nodeTaskConversionOptions.VmFamilyGroup)
                 {
-                    builder.WithGpuSupport();
+                    case BatchScheduler.VmFamilySeries.standardNCFamilies:
+                    case BatchScheduler.VmFamilySeries.standardNDFamilies:
+                    case BatchScheduler.VmFamilySeries.standardNVv3Families:
+                    case BatchScheduler.VmFamilySeries.standardNVv4Families:
+                    case BatchScheduler.VmFamilySeries.standardNVv5Families:
+                        builder.WithGpuSupport();
+                        break;
                 }
 
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))

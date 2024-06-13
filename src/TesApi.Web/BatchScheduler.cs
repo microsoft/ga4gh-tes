@@ -1032,9 +1032,12 @@ namespace TesApi.Web
         {
             //{ VmFamilySeries.standardLSFamily, new(["standardLS", "standardLAS"], "Family") },
             { VmFamilySeries.standardNPSFamily, new(["standardNPS"], "Family") },
-            { VmFamilySeries.standardNGADSV620v1Family, new(["standardNGADSV620v1"], "Family") },
-            { VmFamilySeries.standardNVADSA10v5Family, new(["standardNVADSA10v5"], "Family") },
-            { VmFamilySeries.standardN_Families, new(["standardN"], "Family") },
+            { VmFamilySeries.standardNCFamilies, new(["standardNC"], "Family") },
+            { VmFamilySeries.standardNDFamilies, new(["standardND"], "Family") },
+            { VmFamilySeries.standardNVv3Families, new(["standardNV"], "v3Family") },
+            { VmFamilySeries.standardNVv4Families, new(["standardNV"], "v4Family") },
+            { VmFamilySeries.standardNVv5Families, new(["standardNV"], "v5Family") },
+            //{ VmFamilySeries.standardNVADSA10v5Family, new(["standardNVADSA10v5"], "Family") },
         }.AsReadOnly();
 
         /// <summary>
@@ -1048,20 +1051,40 @@ namespace TesApi.Web
             standardNPSFamily,
 
             /// <summary>
-            /// Standard NGADSV620v1 family
+            /// Standard NC families
             /// </summary>
-            /// <remarks>GPU only Windows drivers are available.</remarks>
-            standardNGADSV620v1Family,
+            standardNCFamilies,
 
             /// <summary>
-            /// Standard NVDSA10v5 family
+            /// Standard ND families
             /// </summary>
-            standardNVADSA10v5Family,
+            standardNDFamilies,
+
+            ///// <summary>
+            ///// Standard NGADSV620v1 family
+            ///// </summary>
+            ///// <remarks>GPU only Windows drivers are available.</remarks>
+            //standardNGADSV620v1Family,
+
+            ///// <summary>
+            ///// Standard NVDSA10v5 family
+            ///// </summary>
+            //standardNVADSA10v5Family,
 
             /// <summary>
-            /// Standard N* families
+            /// Standard NV v3 families
             /// </summary>
-            standardN_Families,
+            standardNVv3Families,
+
+            /// <summary>
+            /// Standard NV v4 families
+            /// </summary>
+            standardNVv4Families,
+
+            /// <summary>
+            /// Standard NV v5 families
+            /// </summary>
+            standardNVv5Families,
         }
 
         private static NodeOS GetNodeOS(BatchModels.VirtualMachineConfiguration vmConfig)
@@ -1145,12 +1168,24 @@ namespace TesApi.Web
                 cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new(await ReadScript(script))), $"{BatchNodeTaskWorkingDirEnvVar}/{script}", setExecutable: true)} && {BatchNodeTaskWorkingDirEnvVar}/{script}");
             }
 
-            var vmFamilyStartupScript = vmFamilySeries switch
+            var vmFamilyStartupScript = nodeOs switch
             {
-                VmFamilySeries.standardN_Families => nodeOs switch
+                NodeOS.Ubuntu => vmFamilySeries switch
                 {
-                    NodeOS.Ubuntu => @"config-n-gpu-apt.sh",
-                    NodeOS.Centos => @"config-n-gpu-yum.sh",
+                    VmFamilySeries.standardNCFamilies => @"config-n-gpu-apt.sh",
+                    VmFamilySeries.standardNDFamilies => @"config-n-gpu-apt.sh",
+                    VmFamilySeries.standardNVv3Families => @"config-n-gpu-apt.sh",
+                    VmFamilySeries.standardNVv4Families => @"config-n-gpu-apt.sh",
+                    VmFamilySeries.standardNVv5Families => @"config-n-gpu-apt.sh",
+                    _ => null,
+                },
+                NodeOS.Centos => vmFamilySeries switch
+                {
+                    VmFamilySeries.standardNCFamilies => @"config-n-gpu-yum.sh",
+                    VmFamilySeries.standardNDFamilies => @"config-n-gpu-yum.sh",
+                    VmFamilySeries.standardNVv3Families => @"config-n-gpu-yum.sh",
+                    VmFamilySeries.standardNVv4Families => @"config-n-gpu-yum.sh",
+                    VmFamilySeries.standardNVv5Families => @"config-n-gpu-yum.sh",
                     _ => null,
                 },
                 _ => null
@@ -1165,7 +1200,11 @@ namespace TesApi.Web
 
             switch (vmFamilySeries)
             {
-                case VmFamilySeries.standardN_Families:
+                case VmFamilySeries.standardNCFamilies:
+                case VmFamilySeries.standardNDFamilies:
+                case VmFamilySeries.standardNVv3Families:
+                case VmFamilySeries.standardNVv4Families:
+                case VmFamilySeries.standardNVv5Families:
                     // https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/hpccompute-gpu-linux
                     extensions = extensions.Append(new(name: "gpu", publisher: "Microsoft.HpcCompute", type: "NvidiaGpuDriverLinux", autoUpgradeMinorVersion: true) { TypeHandlerVersion = "1.6" });
                     break;
