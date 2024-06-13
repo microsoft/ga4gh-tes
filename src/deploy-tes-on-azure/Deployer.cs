@@ -68,8 +68,15 @@ namespace TesDeployer
     public class Deployer(Configuration configuration)
     {
         private static readonly AsyncRetryPolicy roleAssignmentHashConflictRetryPolicy = Policy
-            .Handle<Microsoft.Rest.Azure.CloudException>(cloudException => cloudException.Body.Code.Equals("HashConflictOnDifferentRoleAssignmentIds"))
+            .Handle<Microsoft.Rest.Azure.CloudException>(cloudException =>
+                "HashConflictOnDifferentRoleAssignmentIds".Equals(cloudException.Body.Code))
             .RetryAsync();
+
+        private static readonly AsyncRetryPolicy operationNotAllowedConflictRetryPolicy = Policy
+            .Handle<Azure.RequestFailedException>(azureException =>
+                (int)System.Net.HttpStatusCode.Conflict == azureException.Status &&
+                "OperationNotAllowed".Equals(azureException.ErrorCode))
+            .WaitAndRetryAsync(3, retryAttempt => System.TimeSpan.FromSeconds(10));
 
         private static readonly AsyncRetryPolicy generalRetryPolicy = Policy
             .Handle<Exception>()
@@ -343,7 +350,7 @@ namespace TesDeployer
 
                     if (installedVersion is null || installedVersion < new Version(5, 2, 2))
                     {
-                        await EnableWorkloadIdentity(aksCluster, managedIdentity, resourceGroup);
+                        await operationNotAllowedConflictRetryPolicy.ExecuteAsync(() => EnableWorkloadIdentity(aksCluster, managedIdentity, resourceGroup));
                         await kubernetesManager.RemovePodAadChart();
                     }
 
