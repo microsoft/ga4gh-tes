@@ -28,7 +28,7 @@ namespace Tes.Runner.Authentication
                         sleepDurations: Backoff.DecorrelatedJitterBackoffV2(
                                 medianFirstRetryDelay: TimeSpan.FromSeconds(1),
                                 retryCount: MaxRetryCount)
-                            .Select(s => TimeSpan.FromTicks(Math.Min(s.Ticks, TimeSpan.FromMinutes(9).Ticks))),
+                            .Select(s => TimeSpan.FromTicks(Math.Max(s.Ticks, TimeSpan.FromMinutes(9).Ticks))),
                         onRetry: (exception, duration, attempt, _) =>
                         {
                             logger.LogInformation("Attempt {Attempt} to get token credential", attempt);

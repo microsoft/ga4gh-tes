@@ -21,7 +21,7 @@ namespace Tes.Runner.Transfer
                     sleepDurations: Backoff.DecorrelatedJitterBackoffV2(
                             medianFirstRetryDelay: TimeSpan.FromSeconds(1),
                             retryCount: maxRetryCount)
-                        .Select(s => TimeSpan.FromTicks(Math.Min(s.Ticks, TimeSpan.FromMinutes(9).Ticks))),
+                        .Select(s => TimeSpan.FromTicks(Math.Max(s.Ticks, TimeSpan.FromMinutes(9).Ticks))),
                     onRetryAsync: (exception, _, retryCount, _) =>
                     {
                         Logger.LogError(exception, "Retrying failed request. Retry count: {retryCount}", retryCount);
