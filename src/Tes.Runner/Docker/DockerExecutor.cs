@@ -129,7 +129,17 @@ namespace Tes.Runner.Docker
             {
                 if (!IsLastImageSame(ToImageNameWithTag(executionOptions.ImageName, executionOptions.Tag), out var previousImage) && previousImage is not null)
                 {
-                    await DeleteImageAsync(previousImage);
+                    try
+                    {
+                        await DeleteImageAsync(previousImage);
+                    }
+                    catch (DockerApiException ex) when (ex.StatusCode == HttpStatusCode.BadRequest && ex.ResponseBody.Contains("invalid reference format", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // ResponseBody = "{\"message\":\"invalid reference format\"}\n"
+
+                        // TODO: add this to the logging. It may explain reasons for DiskFull.
+                        // The previous image value is invalid. There's nothing else we should do at this point.
+                    }
                 }
             }
         }
