@@ -1023,21 +1023,19 @@ namespace TesApi.Web
 
             static bool VmFamilyMatches(VmFamilySeries startScriptVmFamily, string vmFamily)
             {
-                var (prefixes, suffix) = _vmFamilyParseData[startScriptVmFamily];
-                return prefixes.Any(prefix => vmFamily.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) && vmFamily.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
+                var (prefixes, suffixes) = _vmFamilyParseData[startScriptVmFamily];
+                return prefixes.Any(prefix => vmFamily.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    && suffixes.Any(suffix => vmFamily.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
             }
         }
 
-        private static readonly IReadOnlyDictionary<VmFamilySeries, (IEnumerable<string> Prefixes, string Suffix)> _vmFamilyParseData = new Dictionary<VmFamilySeries, (IEnumerable<string> Prefixes, string Suffix)>()
+        private static readonly IReadOnlyDictionary<VmFamilySeries, (IEnumerable<string> Prefixes, IEnumerable<string> Suffixes)> _vmFamilyParseData = new Dictionary<VmFamilySeries, (IEnumerable<string> Prefixes, IEnumerable<string> Suffixes)>()
         {
-            //{ VmFamilySeries.standardLSFamily, new(["standardLS", "standardLAS"], "Family") },
-            { VmFamilySeries.standardNPSFamily, new(["standardNPS"], "Family") },
-            { VmFamilySeries.standardNCFamilies, new(["standardNC"], "Family") },
-            { VmFamilySeries.standardNDFamilies, new(["standardND"], "Family") },
-            { VmFamilySeries.standardNVv3Families, new(["standardNV"], "v3Family") },
-            //{ VmFamilySeries.standardNVv4Families, new(["standardNV"], "v4Family") },
-            //{ VmFamilySeries.standardNVv5Families, new(["standardNV"], "v5Family") },
-            //{ VmFamilySeries.standardNVADSA10v5Family, new(["standardNVADSA10v5"], "Family") },
+            //{ VmFamilySeries.standardLSFamily, new(["standardLS", "standardLAS"], ["Family"]) },
+            { VmFamilySeries.standardNPSFamily, new(["standardNPS"], ["Family"]) },
+            { VmFamilySeries.standardNCFamilies, new(["standardNC"], ["Family"]) },
+            { VmFamilySeries.standardNDFamilies, new(["standardND"], ["Family"]) },
+            { VmFamilySeries.standardNVFamilies, new(["standardNV"], ["v3Family"/*, "v4Family", "v5Family"*/]) }, // Currently, NVv4 and NVv5 do not work
         }.AsReadOnly();
 
         /// <summary>
@@ -1060,31 +1058,10 @@ namespace TesApi.Web
             /// </summary>
             standardNDFamilies,
 
-            ///// <summary>
-            ///// Standard NGADSV620v1 family
-            ///// </summary>
-            ///// <remarks>GPU only Windows drivers are available.</remarks>
-            //standardNGADSV620v1Family,
-
-            ///// <summary>
-            ///// Standard NVDSA10v5 family
-            ///// </summary>
-            //standardNVADSA10v5Family,
-
             /// <summary>
-            /// Standard NV v3 families
+            /// Standard NV families
             /// </summary>
-            standardNVv3Families,
-
-            ///// <summary>
-            ///// Standard NV v4 families
-            ///// </summary>
-            //standardNVv4Families,
-
-            ///// <summary>
-            ///// Standard NV v5 families
-            ///// </summary>
-            //standardNVv5Families,
+            standardNVFamilies,
         }
 
         private static NodeOS GetNodeOS(BatchModels.VirtualMachineConfiguration vmConfig)
@@ -1174,18 +1151,14 @@ namespace TesApi.Web
                 {
                     VmFamilySeries.standardNCFamilies => @"config-n-gpu-apt.sh",
                     VmFamilySeries.standardNDFamilies => @"config-n-gpu-apt.sh",
-                    VmFamilySeries.standardNVv3Families => @"config-n-gpu-apt.sh",
-                    //VmFamilySeries.standardNVv4Families => @"config-n-gpu-apt.sh",
-                    //VmFamilySeries.standardNVv5Families => @"config-n-gpu-apt.sh",
+                    VmFamilySeries.standardNVFamilies => @"config-n-gpu-apt.sh",
                     _ => null,
                 },
                 NodeOS.Centos => vmFamilySeries switch
                 {
                     VmFamilySeries.standardNCFamilies => @"config-n-gpu-yum.sh",
                     VmFamilySeries.standardNDFamilies => @"config-n-gpu-yum.sh",
-                    VmFamilySeries.standardNVv3Families => @"config-n-gpu-yum.sh",
-                    //VmFamilySeries.standardNVv4Families => @"config-n-gpu-yum.sh",
-                    //VmFamilySeries.standardNVv5Families => @"config-n-gpu-yum.sh",
+                    VmFamilySeries.standardNVFamilies => @"config-n-gpu-yum.sh",
                     _ => null,
                 },
                 _ => null
@@ -1202,9 +1175,7 @@ namespace TesApi.Web
             {
                 case VmFamilySeries.standardNCFamilies:
                 case VmFamilySeries.standardNDFamilies:
-                case VmFamilySeries.standardNVv3Families:
-                //case VmFamilySeries.standardNVv4Families:
-                //case VmFamilySeries.standardNVv5Families:
+                case VmFamilySeries.standardNVFamilies:
                     // https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/hpccompute-gpu-linux
                     extensions = extensions.Append(new(name: "gpu", publisher: "Microsoft.HpcCompute", type: "NvidiaGpuDriverLinux", autoUpgradeMinorVersion: true) { TypeHandlerVersion = "1.6" });
                     break;
@@ -1270,8 +1241,6 @@ namespace TesApi.Web
         /// </remarks>
         private async ValueTask<BatchModels.Pool> GetPoolSpecification(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, string vmSize, string vmFamily, bool useGenV2, bool preemptable, BatchNodeInfo nodeInfo, bool? encryptionAtHostSupported, CancellationToken cancellationToken)
         {
-            // TODO: (perpetually) add new properties we set in the future on <see cref="PoolSpecification"/> and/or its contained objects, if possible. When not, update CreateAutoPoolModePoolInformation().
-
             ValidateString(name, nameof(name), 64);
             ValidateString(displayName, nameof(displayName), 1024);
 

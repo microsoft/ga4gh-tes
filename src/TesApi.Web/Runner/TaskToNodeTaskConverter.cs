@@ -109,9 +109,7 @@ namespace TesApi.Web.Runner
                 {
                     case BatchScheduler.VmFamilySeries.standardNCFamilies:
                     case BatchScheduler.VmFamilySeries.standardNDFamilies:
-                    case BatchScheduler.VmFamilySeries.standardNVv3Families:
-                    //case BatchScheduler.VmFamilySeries.standardNVv4Families:
-                    //case BatchScheduler.VmFamilySeries.standardNVv5Families:
+                    case BatchScheduler.VmFamilySeries.standardNVFamilies:
                         builder.WithGpuSupport();
                         break;
                 }
