@@ -1032,6 +1032,7 @@ namespace TesApi.Web
 
         private static readonly IReadOnlyDictionary<VmFamilySeries, (IEnumerable<string> Prefixes, IEnumerable<string> Suffixes)> _vmFamilyParseData = new Dictionary<VmFamilySeries, (IEnumerable<string> Prefixes, IEnumerable<string> Suffixes)>()
         {
+            // Order is important. Put "families" after specific family entries, as these are matched in order.
             //{ VmFamilySeries.standardLSFamily, new(["standardLS", "standardLAS"], ["Family"]) },
             { VmFamilySeries.standardNPSFamily, new(["standardNPS"], ["Family"]) },
             { VmFamilySeries.standardNCFamilies, new(["standardNC"], ["Family"]) },
@@ -1047,6 +1048,7 @@ namespace TesApi.Web
             /// <summary>
             /// Standard NPS family
             /// </summary>
+            /// <remarks>FPGA, not GPU.</remarks>
             standardNPSFamily,
 
             /// <summary>
@@ -1058,6 +1060,12 @@ namespace TesApi.Web
             /// Standard ND families
             /// </summary>
             standardNDFamilies,
+
+            /// <summary>
+            /// Standard NG families
+            /// </summary>
+            /// <remarks>AMD GPUs, only Windows drivers are available.</remarks>
+            standardNGFamilies,
 
             /// <summary>
             /// Standard NV families
