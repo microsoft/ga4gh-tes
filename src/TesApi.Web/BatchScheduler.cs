@@ -314,7 +314,7 @@ namespace TesApi.Web
                         .Where(blob => blob.BlobName.EndsWith(".txt") && blob.BlobName.StartsWith(blobNameStartsWith))
                         .Select(blob => (blob.BlobUri, BlobNameParts: blob.BlobName.Split('_', 4)))
                         .OrderBy(blob => string.Join('_', blob.BlobNameParts.Take(3)))
-                        .ThenBy(blob => blob.BlobNameParts.Length < 3 ? -1 : int.Parse(blob.BlobNameParts[3][..blob.BlobNameParts[3].IndexOf('.')], System.Globalization.CultureInfo.InvariantCulture))
+                        .ThenBy(blob => blob.BlobNameParts.Length < 4 ? -1 : int.Parse(blob.BlobNameParts[3][..blob.BlobNameParts[3].IndexOf('.')], System.Globalization.CultureInfo.InvariantCulture))
                         .ToList();
 #pragma warning restore IDE0305 // Simplify collection initialization
 
