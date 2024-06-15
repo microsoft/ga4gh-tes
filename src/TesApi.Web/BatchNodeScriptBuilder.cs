@@ -109,7 +109,7 @@ namespace TesApi.Web
                 batchScript.AppendLinuxLine("write_ts ExecuteNodeTesTaskStart && \\");
             }
 
-            batchScript.AppendLinuxLine($"{BatchScheduler.BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename} -i {nodeTask.AbsoluteUri} && \\");
+            batchScript.AppendLinuxLine($"{BatchScheduler.BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename} -i '{(new Azure.Storage.Blobs.BlobUriBuilder(nodeTask) { Sas = null }).ToUri().AbsoluteUri}' && \\");
 
             if (useMetricsFile)
             {
