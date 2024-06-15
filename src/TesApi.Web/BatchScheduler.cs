@@ -50,6 +50,8 @@ namespace TesApi.Web
         /// </summary>
         public const string BatchNodeTaskWorkingDirEnvVar = "$AZ_BATCH_TASK_WORKING_DIR";
 
+        internal const string NodeTaskRunnerFilename = "tes-runner";
+
         private const string AzureSupportUrl = "https://portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/newsupportrequest";
         private const int PoolKeyLength = 55; // 64 max pool name length - 9 chars generating unique pool names
         private const int DefaultCoreCount = 1;
@@ -57,7 +59,6 @@ namespace TesApi.Web
         private const int DefaultDiskGb = 10;
         private const string CromwellScriptFileName = "script";
         private const string StartTaskScriptFilename = "start-task.sh";
-        private const string NodeTaskRunnerFilename = "tes-runner";
         private const string NodeTaskRunnerMD5HashFilename = NodeTaskRunnerFilename + ".md5";
         private readonly ILogger logger;
         private readonly IAzureProxy azureProxy;

@@ -157,7 +157,7 @@ namespace Tes.Runner.Test.Docker
                 return file;
             }
 
-            public override Task NodeCleanupAsync()
+            public override Task NodeCleanupPreviousTasksAsync()
             {
                 throw new NotSupportedException();
             }

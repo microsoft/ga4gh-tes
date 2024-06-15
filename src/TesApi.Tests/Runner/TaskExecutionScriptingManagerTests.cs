@@ -61,12 +61,11 @@ namespace TesApi.Tests.Runner
         [TestMethod]
         public void ParseBatchRunCommand_ReturnsRunCommandWithScriptDownloadAndExecution()
         {
-            var scriptName = "batch_script";
-            var scriptUrl = $"https://foo.bar/{scriptName}";
+            var scriptName = "node_task";
             var nodeTaskUrl = $"https://foo.bar/{scriptName}";
-            var scriptAssets = new BatchScriptAssetsInfo(new(scriptUrl), new(nodeTaskUrl), scriptName, new Dictionary<string, string>().AsReadOnly());
+            var scriptAssets = new BatchScriptAssetsInfo(new(nodeTaskUrl), new Dictionary<string, string>().AsReadOnly());
 
-            var expectedCommand = $"/bin/bash -c \"wget {WgetOptions} -O ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName} '{scriptUrl}' && chmod +x ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName} && ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName}\"";
+            var expectedCommand = $"/bin/bash -c \"{BatchScheduler.BatchNodeSharedEnvVar}/{BatchScheduler.NodeTaskRunnerFilename} -i '{nodeTaskUrl}'\"";
 
             var runCommand = taskExecutionScriptingManager.ParseBatchRunCommand(scriptAssets);
 
@@ -88,8 +87,8 @@ namespace TesApi.Tests.Runner
                     It.IsAny<NodeTaskConversionOptions>(), It.IsAny<CancellationToken>()),
                 Times.Once);
 
-            //it should upload three assets/blobs: server task, node task definition and script
-            storageAccessProviderMock.Verify(p => p.UploadBlobAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(3));
+            //it should upload two assets/blobs: server task and node task definition
+            storageAccessProviderMock.Verify(p => p.UploadBlobAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
         }
 
         private static TesTask GetTestTesTask()
