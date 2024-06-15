@@ -99,6 +99,27 @@ namespace TesApi.Web
         }
 
         /// <summary>
+        /// Adds line that executes the runner
+        /// </summary>
+        /// <returns></returns>
+        public BatchNodeScriptBuilder WithExecuteRunner(Uri nodeTask)
+        {
+            if (useMetricsFile)
+            {
+                batchScript.AppendLinuxLine("write_ts ExecuteNodeTesTaskStart && \\");
+            }
+
+            batchScript.AppendLinuxLine($"{BatchScheduler.BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename} -i {nodeTask.AbsoluteUri} && \\");
+
+            if (useMetricsFile)
+            {
+                batchScript.AppendLinuxLine("write_ts ExecuteNodeTesTaskEnd && \\");
+            }
+
+            return this;
+        }
+
+        /// <summary>
         /// Adds local runtime system information to the metrics file.
         /// </summary>
         /// <returns></returns>

@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -63,7 +64,7 @@ namespace TesApi.Tests.Runner
             var scriptName = "batch_script";
             var scriptUrl = $"https://foo.bar/{scriptName}";
             var nodeTaskUrl = $"https://foo.bar/{scriptName}";
-            var scriptAssets = new BatchScriptAssetsInfo(new(scriptUrl), new(nodeTaskUrl), scriptName);
+            var scriptAssets = new BatchScriptAssetsInfo(new(scriptUrl), new(nodeTaskUrl), scriptName, new Dictionary<string, string>().AsReadOnly());
 
             var expectedCommand = $"/bin/bash -c \"wget {WgetOptions} -O ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName} '{scriptUrl}' && chmod +x ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName} && ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName}\"";
 

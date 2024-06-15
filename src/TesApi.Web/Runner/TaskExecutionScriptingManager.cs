@@ -2,12 +2,15 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Tes.Models;
+using Tes.Runner.Models;
 using TesApi.Web.Storage;
 
 namespace TesApi.Web.Runner
@@ -20,6 +23,19 @@ namespace TesApi.Web.Runner
         private const string NodeTaskFilename = "runner-task.json";
         private const string NodeTaskRunnerFilename = "tes-runner";
         private const string BatchScriptFileName = "batch_script";
+
+        private static readonly JsonSerializerSettings IndentedSerializerSettings = new()
+        {
+            NullValueHandling = NullValueHandling.Ignore,
+            DefaultValueHandling = DefaultValueHandling.Ignore,
+            Formatting = Formatting.Indented,
+        };
+
+        private static readonly JsonSerializerSettings DefaultSerializerSettings = new()
+        {
+            NullValueHandling = NullValueHandling.Ignore,
+            DefaultValueHandling = DefaultValueHandling.Ignore
+        };
 
         private readonly IStorageAccessProvider storageAccessProvider;
         private readonly TaskToNodeTaskConverter taskToNodeConverter;
@@ -59,7 +75,12 @@ namespace TesApi.Web.Runner
 
                 var batchScriptUrl = await CreateAndUploadBatchScriptAsync(tesTask, nodeTaskUrl, cancellationToken);
 
-                return new BatchScriptAssetsInfo(batchScriptUrl, nodeTaskUrl, BatchScriptFileName);
+                List<KeyValuePair<string, string>> environment =
+                    [new(nameof(NodeTaskResolverOptions), JsonConvert.SerializeObject(
+                        taskToNodeConverter.ToNodeTaskResolverOptions(nodeTaskConversionOptions),
+                        DefaultSerializerSettings))];
+
+                return new BatchScriptAssetsInfo(batchScriptUrl, nodeTaskUrl, BatchScriptFileName, environment.ToDictionary().AsReadOnly());
             }
             catch (Exception e)
             {
@@ -73,13 +94,7 @@ namespace TesApi.Web.Runner
         {
             try
             {
-                var severTesTaskContent = JsonConvert.SerializeObject(tesTask,
-                    new JsonSerializerSettings
-                    {
-                        NullValueHandling = NullValueHandling.Ignore,
-                        DefaultValueHandling = DefaultValueHandling.Ignore,
-                        Formatting = Formatting.Indented,
-                    });
+                var severTesTaskContent = JsonConvert.SerializeObject(tesTask, IndentedSerializerSettings);
 
                 await UploadContentAsBlobToInternalTesLocationAsync(tesTask, severTesTaskContent, "server-tes-task.json",
                     cancellationToken);
@@ -113,7 +128,7 @@ namespace TesApi.Web.Runner
         private static string RemoveQueryStringsFromText(string batchRunCommand)
         {
             const string pattern = @"(https?:\/\/[^?\s]+)\?[^?\s]*";
-            const string replacement = "$1?REMOVED";
+            const string replacement = "$1?SUPRESSED";
             string sanitizedLogEntry = Regex.Replace(batchRunCommand, pattern, replacement);
             return sanitizedLogEntry;
         }
@@ -124,8 +139,7 @@ namespace TesApi.Web.Runner
 
             var batchNodeScript = new BatchNodeScriptBuilder()
                 .WithMetrics()
-                .WithRunnerTaskDownloadUsingWget(nodeTaskUrl)
-                .WithExecuteRunner()
+                .WithExecuteRunner(nodeTaskUrl)
                 .WithLocalRuntimeSystemInformation()
                 .Build();
 
@@ -142,12 +156,7 @@ namespace TesApi.Web.Runner
 
             var nodeTask = await taskToNodeConverter.ToNodeTaskAsync(tesTask, nodeTaskConversionOptions, cancellationToken);
 
-            var nodeTaskContent = JsonConvert.SerializeObject(nodeTask,
-                new JsonSerializerSettings
-                {
-                    NullValueHandling = NullValueHandling.Ignore,
-                    DefaultValueHandling = DefaultValueHandling.Ignore
-                });
+            var nodeTaskContent = JsonConvert.SerializeObject(nodeTask, DefaultSerializerSettings);
 
             var nodeTaskUrl = await UploadContentAsBlobToInternalTesLocationAsync(tesTask, nodeTaskContent, NodeTaskFilename, cancellationToken);
 
@@ -173,5 +182,6 @@ namespace TesApi.Web.Runner
     /// <param name="BatchScriptUrl"></param>
     /// <param name="NodeTaskUrl"></param>
     /// <param name="BatchScriptFileName"></param>
-    public record BatchScriptAssetsInfo(Uri BatchScriptUrl, Uri NodeTaskUrl, string BatchScriptFileName);
+    /// <param name="Environment"></param>
+    public record BatchScriptAssetsInfo(Uri BatchScriptUrl, Uri NodeTaskUrl, string BatchScriptFileName, IReadOnlyDictionary<string, string> Environment);
 }
