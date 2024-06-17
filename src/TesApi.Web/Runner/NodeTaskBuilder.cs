@@ -16,7 +16,7 @@ namespace TesApi.Web.Runner
     {
         private const string ManagedIdentityResourceIdPattern = @"^/subscriptions/[^/]+/resourcegroups/[^/]+/providers/Microsoft.ManagedIdentity/userAssignedIdentities/[^/]+$";
 
-        private const string defaultDockerImageTag = "latest";
+        private const string DefaultDockerImageTag = "latest";
         private readonly NodeTask nodeTask;
         const string NodeTaskOutputsMetricsFormat = "FileUploadSizeInBytes={Size}";
         const string NodeTaskInputsMetricsFormat = "FileDownloadSizeInBytes={Size}";
@@ -133,7 +133,7 @@ namespace TesApi.Web.Runner
         {
             ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
             ArgumentException.ThrowIfNullOrEmpty(targetUrl, nameof(targetUrl));
-            nodeTask.Outputs ??= new List<FileOutput>();
+            nodeTask.Outputs ??= [];
             nodeTask.Outputs.Add(
                 new FileOutput()
                 {
@@ -188,7 +188,7 @@ namespace TesApi.Web.Runner
             var splitByTag = image.Split(':', 2);
 
             nodeTask.ImageName = splitByTag[0];
-            nodeTask.ImageTag = splitByTag.Length == 2 ? splitByTag[1] : defaultDockerImageTag;
+            nodeTask.ImageTag = splitByTag.Length == 2 ? splitByTag[1] : DefaultDockerImageTag;
 
             return this;
         }
