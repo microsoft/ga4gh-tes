@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Security.Cryptography;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
@@ -50,9 +51,31 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
     public abstract Task<long> GetSourceLengthAsync(string source);
 
-    public abstract Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash);
+    public abstract Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash, string? contentMd5);
 
     public abstract void ConfigurePipelineBuffer(PipelineBuffer buffer);
+
+    public async Task<string?> CalculateFileMd5HashAsync(string filePath)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(filePath, nameof(filePath));
+
+        if (!PipelineOptions.CalculateFileContentMd5)
+        {
+            return default;
+        }
+
+        Logger.LogInformation("Calculating MD5 hash for file: {filePath}", filePath);
+
+        using var md5 = MD5.Create();
+
+        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+
+        var hash = await md5.ComputeHashAsync(stream);
+
+        Logger.LogInformation("MD5 hash calculated for file: {filePath}.", filePath);
+
+        return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+    }
 
     protected async Task<long> ExecutePipelineAsync(List<BlobOperationInfo> operations)
     {

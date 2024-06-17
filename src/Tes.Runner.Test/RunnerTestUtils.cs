@@ -49,7 +49,7 @@ public class RunnerTestUtils
         using var md5 = MD5.Create();
         using var stream = File.OpenRead(file);
         var hash = md5.ComputeHash(stream);
-        return Convert.ToBase64String(hash);
+        return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
     }
 
     public static void DeleteFileIfExists(string file)
