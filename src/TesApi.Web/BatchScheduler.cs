@@ -43,7 +43,7 @@ namespace TesApi.Web
         /// <summary>
         /// Name of <c>$</c> prefixed environment variable to place resources shared by all tasks on each compute node in a pool.
         /// </summary>
-        public const string BatchNodeSharedEnvVar = "$AZ_BATCH_NODE_SHARED_DIR";
+        public const string BatchNodeSharedEnvVar = "${AZ_BATCH_NODE_SHARED_DIR}";
 
         /// <summary>
         /// Name of <c>$</c> prefixed environment variable of the working directory of the running task.

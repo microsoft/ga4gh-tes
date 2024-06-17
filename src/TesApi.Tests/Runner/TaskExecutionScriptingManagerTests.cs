@@ -65,7 +65,7 @@ namespace TesApi.Tests.Runner
             var nodeTaskUrl = $"https://foo.bar/{scriptName}";
             var scriptAssets = new BatchScriptAssetsInfo(new(nodeTaskUrl), new Dictionary<string, string>().AsReadOnly());
 
-            var expectedCommand = $"/usr/bin/env {BatchScheduler.BatchNodeSharedEnvVar}/{BatchScheduler.NodeTaskRunnerFilename} -i '{nodeTaskUrl}'";
+            var expectedCommand = $"/usr/bin/env -S \"{BatchScheduler.BatchNodeSharedEnvVar}/{BatchScheduler.NodeTaskRunnerFilename} -i '{nodeTaskUrl}'\"";
 
             var runCommand = taskExecutionScriptingManager.ParseBatchRunCommand(scriptAssets);
 

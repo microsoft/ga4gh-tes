@@ -110,7 +110,7 @@ namespace TesApi.Web.Runner
         /// <returns></returns>
         public string ParseBatchRunCommand(BatchScriptAssetsInfo batchScriptAssets)
         {
-            var batchRunCommand = $"/usr/bin/env {BatchScheduler.BatchNodeSharedEnvVar}/{BatchScheduler.NodeTaskRunnerFilename} -i '{(new Azure.Storage.Blobs.BlobUriBuilder(batchScriptAssets.NodeTaskUrl) { Sas = null }).ToUri().AbsoluteUri}'";
+            var batchRunCommand = $"/usr/bin/env -S \"{BatchScheduler.BatchNodeSharedEnvVar}/{BatchScheduler.NodeTaskRunnerFilename} -i '{(new Azure.Storage.Blobs.BlobUriBuilder(batchScriptAssets.NodeTaskUrl) { Sas = null }).ToUri().AbsoluteUri}'\"";
 
             logger.LogInformation("Run command: {RunCommand}", batchRunCommand);
 
