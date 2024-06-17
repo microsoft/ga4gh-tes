@@ -67,6 +67,7 @@ namespace TesApi.Web
         private readonly List<TesTaskStateTransition> tesTaskStateTransitions;
         private readonly bool usePreemptibleVmsOnly;
         private readonly string batchNodesSubnetId;
+        private readonly bool batchNodesSetContentMd5OnUpload;
         private readonly bool disableBatchNodesPublicIpAddress;
         private readonly TimeSpan poolLifetime;
         private readonly TimeSpan taskMaxWallClockTime;
@@ -133,6 +134,7 @@ namespace TesApi.Web
 
             this.usePreemptibleVmsOnly = batchSchedulingOptions.Value.UsePreemptibleVmsOnly;
             this.batchNodesSubnetId = batchNodesOptions.Value.SubnetId;
+            this.batchNodesSetContentMd5OnUpload = batchNodesOptions.Value.ContentMD5;
             this.disableBatchNodesPublicIpAddress = batchNodesOptions.Value.DisablePublicIpAddress;
             this.poolLifetime = TimeSpan.FromDays(batchSchedulingOptions.Value.PoolRotationForcedDays == 0 ? Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays : batchSchedulingOptions.Value.PoolRotationForcedDays);
             this.taskMaxWallClockTime = TimeSpan.FromDays(batchSchedulingOptions.Value.TaskMaxWallClockTimeDays == 0 ? Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays : batchSchedulingOptions.Value.TaskMaxWallClockTimeDays);
@@ -918,8 +920,8 @@ namespace TesApi.Web
                 DefaultStorageAccountName: defaultStorageAccountName,
                 AdditionalInputs: await GetAdditionalCromwellInputsAsync(task, cancellationToken),
                 GlobalManagedIdentity: globalManagedIdentity,
-                DrsHubApiHost: drsHubApiHost
-            );
+                DrsHubApiHost: drsHubApiHost,
+                SetContentMd5OnUpload: batchNodesSetContentMd5OnUpload);
             return nodeTaskCreationOptions;
         }
 
