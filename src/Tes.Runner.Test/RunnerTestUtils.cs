@@ -46,10 +46,9 @@ public class RunnerTestUtils
 
     public static string CalculateMd5(string file)
     {
-        using var md5 = MD5.Create();
         using var stream = File.OpenRead(file);
-        var hash = md5.ComputeHash(stream);
-        return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+        var hash = MD5.HashData(stream);
+        return BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant();
     }
 
     public static void DeleteFileIfExists(string file)

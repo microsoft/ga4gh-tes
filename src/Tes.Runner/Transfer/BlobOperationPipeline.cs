@@ -66,15 +66,13 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
         Logger.LogInformation("Calculating MD5 hash for file: {filePath}", filePath);
 
-        using var md5 = MD5.Create();
-
         await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
 
-        var hash = await md5.ComputeHashAsync(stream);
+        var hash = await MD5.HashDataAsync(stream);
 
         Logger.LogInformation("MD5 hash calculated for file: {filePath}.", filePath);
 
-        return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+        return BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant();
     }
 
     protected async Task<long> ExecutePipelineAsync(List<BlobOperationInfo> operations)
