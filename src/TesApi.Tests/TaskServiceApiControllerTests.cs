@@ -113,6 +113,38 @@ namespace TesApi.Tests
 
         [TestCategory("TES 1.1")]
         [TestMethod]
+        public async Task CreateTaskAsync_AddsUnsupportedBackendParametersToTaskSubmitter_UnsupportedKey()
+        {
+            const string unsupportedKey = "unsupported_key_2021";
+
+            var backendParameters = new Dictionary<string, string>
+            {
+                { unsupportedKey, Guid.NewGuid().ToString() }
+            };
+
+            var tesTask = new TesTask
+            {
+                Executors = [new() { Image = "ubuntu" }],
+                Resources = new() { BackendParameters = backendParameters }
+            };
+
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            var controller = services.GetT();
+
+            var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as ObjectResult;
+
+            Assert.IsNotNull(result);
+            services.TesTaskRepository.Verify(x => x.CreateItemAsync(tesTask, It.IsAny<CancellationToken>()));
+            Assert.AreEqual(32, tesTask.Id.Length);
+            Assert.AreEqual(TesState.QUEUEDEnum, tesTask.State);
+
+            // Unsupported keys should not be persisted
+            Assert.IsTrue(tesTask?.TaskSubmitter?.UnsupportedBackendParameters?.ContainsKey(unsupportedKey));
+            Assert.AreEqual(200, result.StatusCode);
+        }
+
+        [TestCategory("TES 1.1")]
+        [TestMethod]
         public async Task CreateTaskAsync_ReturnsBadRequest_ForBackendParametersStrict_UnsupportedKey()
         {
             const string unsupportedKey = "unsupported_key_2021";
