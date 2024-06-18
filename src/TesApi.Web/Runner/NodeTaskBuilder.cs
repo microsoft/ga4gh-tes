@@ -133,7 +133,7 @@ namespace TesApi.Web.Runner
         {
             ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
             ArgumentException.ThrowIfNullOrEmpty(targetUrl, nameof(targetUrl));
-            nodeTask.Outputs ??= new List<FileOutput>();
+            nodeTask.Outputs ??= [];
             nodeTask.Outputs.Add(
                 new FileOutput()
                 {

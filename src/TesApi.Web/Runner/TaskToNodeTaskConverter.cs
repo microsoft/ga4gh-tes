@@ -117,12 +117,27 @@ namespace TesApi.Web.Runner
 
                 BuildOutputs(task, nodeTaskConversionOptions.DefaultStorageAccountName, builder);
 
+                AddTaskOutputs(task, builder);
+
                 return builder.Build();
             }
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to convert the TES task to a Node Task");
                 throw;
+            }
+        }
+
+        private void AddTaskOutputs(TesTask task, NodeTaskBuilder builder)
+        {
+            foreach (var (path, url) in new List<string>(["stderr.txt", "stdout.txt", MetricsFileName])
+                .Select(file => (Path: $"/{file}", Url: storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, file))))
+            {
+                builder.WithOutputUsingCombinedTransformationStrategy(
+                    AppendParentDirectoryIfSet(path, $"%{BatchNodeScriptBuilder.BatchTaskDirEnvVarName}%"),
+                    url.AbsoluteUri,
+                    fileType: FileType.File,
+                    mountParentDirectory: null);
             }
         }
 
