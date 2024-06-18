@@ -15,9 +15,11 @@ config:
     subnetId: RUNTIME_PARAMETER
     disablePublicIpAddress: RUNTIME_PARAMETER
     globalStartTask: /configuration/start-task.sh
+    contentMD5: "False"
   batchScheduling:
     usePreemptibleVmsOnly: RUNTIME_PARAMETER
     poolRotationForcedDays: "7"
+    taskMaxWallClockTimeDays: "7"
     prefix: RUNTIME_PARAMETER
   deployment:
     organizationName: RUNTIME_PARAMETER

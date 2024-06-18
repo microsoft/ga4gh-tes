@@ -16,7 +16,7 @@ namespace TesApi.Web.Runner
     {
         private const string ManagedIdentityResourceIdPattern = @"^/subscriptions/[^/]+/resourcegroups/[^/]+/providers/Microsoft.ManagedIdentity/userAssignedIdentities/[^/]+$";
 
-        private const string defaultDockerImageTag = "latest";
+        private const string DefaultDockerImageTag = "latest";
         private readonly NodeTask nodeTask;
         const string NodeTaskOutputsMetricsFormat = "FileUploadSizeInBytes={Size}";
         const string NodeTaskInputsMetricsFormat = "FileDownloadSizeInBytes={Size}";
@@ -188,7 +188,7 @@ namespace TesApi.Web.Runner
             var splitByTag = image.Split(':', 2);
 
             nodeTask.ImageName = splitByTag[0];
-            nodeTask.ImageTag = splitByTag.Length == 2 ? splitByTag[1] : defaultDockerImageTag;
+            nodeTask.ImageTag = splitByTag.Length == 2 ? splitByTag[1] : DefaultDockerImageTag;
 
             return this;
         }
@@ -422,7 +422,20 @@ namespace TesApi.Web.Runner
             return this;
         }
 
-        private string GetApiHostFromUrl(string drsHubUrl)
+        /// <summary>
+        /// Switch to enable setting ContentMD5 on uploads.
+        /// </summary>
+        /// <param name="enable">Set to <c>true</c> to have the runner calculate and provide the blob content MD5 to the storage account, <c>false</c> otherwise.</param>
+        /// <returns></returns>
+        public NodeTaskBuilder WithOnUploadSetContentMD5(bool enable)
+        {
+            nodeTask.RuntimeOptions ??= new RuntimeOptions();
+            nodeTask.RuntimeOptions.SetContentMd5OnUpload = enable;
+
+            return this;
+        }
+
+        private static string GetApiHostFromUrl(string drsHubUrl)
         {
             var uri = new Uri(drsHubUrl);
 

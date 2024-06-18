@@ -104,6 +104,7 @@ namespace TesApi.Web.Runner
                     .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath: string.Empty))
                     .WithLogPublisher(storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath: string.Empty))
                     .WithDrsHubUrl(nodeTaskConversionOptions.DrsHubApiHost)
+                    .WithOnUploadSetContentMD5(nodeTaskConversionOptions.SetContentMd5OnUpload)
                     .WithMetricsFile(MetricsFileName);
 
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
@@ -466,6 +467,7 @@ namespace TesApi.Web.Runner
     /// <param name="GlobalManagedIdentity"></param>
     /// <param name="AcrPullIdentity"></param>
     /// <param name="DrsHubApiHost"></param>
+    /// <param name="SetContentMd5OnUpload"></param>
     public record NodeTaskConversionOptions(IList<TesInput> AdditionalInputs = default, string DefaultStorageAccountName = default,
-        string GlobalManagedIdentity = default, string? AcrPullIdentity = null, string DrsHubApiHost = default);
+        string GlobalManagedIdentity = default, string? AcrPullIdentity = null, string DrsHubApiHost = default, bool SetContentMd5OnUpload = false);
 }

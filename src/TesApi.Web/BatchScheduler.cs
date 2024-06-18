@@ -20,7 +20,6 @@ using Tes.Models;
 using TesApi.Web.Extensions;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
-using TesApi.Web.Options;
 using TesApi.Web.Runner;
 using TesApi.Web.Storage;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
@@ -69,8 +68,10 @@ namespace TesApi.Web
         private readonly List<TesTaskStateTransition> tesTaskStateTransitions;
         private readonly bool usePreemptibleVmsOnly;
         private readonly string batchNodesSubnetId;
+        private readonly bool batchNodesSetContentMd5OnUpload;
         private readonly bool disableBatchNodesPublicIpAddress;
         private readonly TimeSpan poolLifetime;
+        private readonly TimeSpan taskMaxWallClockTime;
         private readonly BatchNodeInfo gen2BatchNodeInfo;
         private readonly BatchNodeInfo gen1BatchNodeInfo;
         private readonly string defaultStorageAccountName;
@@ -90,12 +91,12 @@ namespace TesApi.Web
         /// Orchestrates <see cref="Tes.Models.TesTask"/>s on Azure Batch
         /// </summary>
         /// <param name="logger">Logger <see cref="ILogger"/></param>
-        /// <param name="batchGen1Options">Configuration of <see cref="BatchImageGeneration1Options"/></param>
-        /// <param name="batchGen2Options">Configuration of <see cref="BatchImageGeneration2Options"/></param>
-        /// <param name="drsHubOptions">Configuration of <see cref="DrsHubOptions"/></param>
-        /// <param name="storageOptions">Configuration of <see cref="StorageOptions"/></param>
-        /// <param name="batchNodesOptions">Configuration of <see cref="BatchNodesOptions"/></param>
-        /// <param name="batchSchedulingOptions">Configuration of <see cref="BatchSchedulingOptions"/></param>
+        /// <param name="batchGen1Options">Configuration of <see cref="Options.BatchImageGeneration1Options"/></param>
+        /// <param name="batchGen2Options">Configuration of <see cref="Options.BatchImageGeneration2Options"/></param>
+        /// <param name="drsHubOptions">Configuration of <see cref="Options.DrsHubOptions"/></param>
+        /// <param name="storageOptions">Configuration of <see cref="Options.StorageOptions"/></param>
+        /// <param name="batchNodesOptions">Configuration of <see cref="Options.BatchNodesOptions"/></param>
+        /// <param name="batchSchedulingOptions">Configuration of <see cref="Options.BatchSchedulingOptions"/></param>
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
         /// <param name="storageAccessProvider">Storage access provider <see cref="IStorageAccessProvider"/></param>
         /// <param name="quotaVerifier">Quota verifier <see cref="IBatchQuotaVerifier"/>></param>
@@ -138,8 +139,10 @@ namespace TesApi.Web
 
             this.usePreemptibleVmsOnly = batchSchedulingOptions.Value.UsePreemptibleVmsOnly;
             this.batchNodesSubnetId = batchNodesOptions.Value.SubnetId;
+            this.batchNodesSetContentMd5OnUpload = batchNodesOptions.Value.ContentMD5;
             this.disableBatchNodesPublicIpAddress = batchNodesOptions.Value.DisablePublicIpAddress;
             this.poolLifetime = TimeSpan.FromDays(batchSchedulingOptions.Value.PoolRotationForcedDays == 0 ? Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays : batchSchedulingOptions.Value.PoolRotationForcedDays);
+            this.taskMaxWallClockTime = TimeSpan.FromDays(batchSchedulingOptions.Value.TaskMaxWallClockTimeDays == 0 ? Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays : batchSchedulingOptions.Value.TaskMaxWallClockTimeDays);
             this.defaultStorageAccountName = storageOptions.Value.DefaultAccountName;
             this.globalStartTaskPath = StandardizeStartTaskPath(batchNodesOptions.Value.GlobalStartTask, this.defaultStorageAccountName);
             this.globalManagedIdentity = batchNodesOptions.Value.GlobalManagedIdentity;
@@ -319,7 +322,7 @@ namespace TesApi.Web
                         .Where(blob => blob.BlobName.EndsWith(".txt") && blob.BlobName.StartsWith(blobNameStartsWith))
                         .Select(blob => (blob.BlobUri, BlobNameParts: blob.BlobName.Split('_', 4)))
                         .OrderBy(blob => string.Join('_', blob.BlobNameParts.Take(3)))
-                        .ThenBy(blob => blob.BlobNameParts.Length < 3 ? -1 : int.Parse(blob.BlobNameParts[3][..blob.BlobNameParts[3].IndexOf('.')], System.Globalization.CultureInfo.InvariantCulture))
+                        .ThenBy(blob => blob.BlobNameParts.Length < 4 ? -1 : int.Parse(blob.BlobNameParts[3][..blob.BlobNameParts[3].IndexOf('.')], System.Globalization.CultureInfo.InvariantCulture))
                         .ToList();
 #pragma warning restore IDE0305 // Simplify collection initialization
 
@@ -916,7 +919,7 @@ namespace TesApi.Web
 
             var cloudTask = new CloudTask(taskId, batchRunCommand)
             {
-                Constraints = new(maxWallClockTime: poolLifetime, retentionTime: TimeSpan.Zero, maxTaskRetryCount: 0),
+                Constraints = new(maxWallClockTime: taskMaxWallClockTime, retentionTime: TimeSpan.Zero, maxTaskRetryCount: 0),
                 UserIdentity = new(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
             };
 
@@ -930,7 +933,8 @@ namespace TesApi.Web
                 AdditionalInputs: await GetAdditionalCromwellInputsAsync(task, cancellationToken),
                 GlobalManagedIdentity: globalManagedIdentity,
                 AcrPullIdentity: acrPullIdentity,
-                DrsHubApiHost: drsHubApiHost
+                DrsHubApiHost: drsHubApiHost,
+                SetContentMd5OnUpload: batchNodesSetContentMd5OnUpload
             );
             return nodeTaskCreationOptions;
         }

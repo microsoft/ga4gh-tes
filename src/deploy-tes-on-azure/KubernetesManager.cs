@@ -431,6 +431,11 @@ namespace TesDeployer
             deployment["created"] = GetValueOrDefault(settings, "DeploymentCreated");
             deployment["updated"] = GetValueOrDefault(settings, "DeploymentUpdated");
 
+            // ensure entries have values
+            _ = batchNodes.TryAdd("contentMD5", "false");
+            _ = batchScheduling.TryAdd("poolRotationForcedDays", "7");
+            _ = batchScheduling.TryAdd("taskMaxWallClockTimeDays", "7");
+
             values.Config["batchAccount"] = batchAccount;
             values.Config["batchNodes"] = batchNodes;
             values.Config["batchScheduling"] = batchScheduling;
