@@ -171,7 +171,7 @@ namespace TesApi.Web.Runner
                 .Select(file => (Path: $"/{file}", Url: storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, file))))
             {
                 builder.WithOutputUsingCombinedTransformationStrategy(
-                    AppendParentDirectoryIfSet(path, $"%{BatchNodeScriptBuilder.BatchTaskDirEnvVarName}%"),
+                    AppendParentDirectoryIfSet(path, $"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%"),
                     url.AbsoluteUri,
                     fileType: FileType.File,
                     mountParentDirectory: null);
