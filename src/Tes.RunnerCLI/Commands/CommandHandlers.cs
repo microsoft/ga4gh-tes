@@ -54,6 +54,11 @@ namespace Tes.RunnerCLI.Commands
 
                     await ExecuteAllOperationsAsSubProcessesAsync(nodeTask, file, blockSize, writers, readers, bufferCapacity, apiVersion, dockerUri);
 
+                    {
+                        await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
+                        await executor.AppendMetrics();
+                    }
+
                     await eventsPublisher.PublishTaskCompletionEventAsync(nodeTask, duration.Elapsed,
                         EventsPublisher.SuccessStatus, errorMessage: string.Empty);
                 }
@@ -87,7 +92,7 @@ namespace Tes.RunnerCLI.Commands
         private static async Task RootCommandNodeCleanupAsync(Runner.Models.NodeTask nodeTask, Uri dockerUri)
         {
             await new DockerExecutor(dockerUri).NodeCleanupAsync(new(nodeTask.ImageName, nodeTask.ImageTag, default, default, default, new(), default));
-            await Executor.RunnerHost.NodeCleanupAsync();
+            await Executor.RunnerHost.NodeCleanupPreviousTasksAsync();
         }
 
         /// <summary>

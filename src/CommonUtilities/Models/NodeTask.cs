@@ -20,6 +20,8 @@ namespace Tes.Runner.Models
         public string? MetricsFilename { get; set; }
         public string? InputsMetricsFormat { get; set; }
         public string? OutputsMetricsFormat { get; set; }
+        public List<string>? TimestampMetricsFormats { get; set; }
+        public List<string>? BashScriptMetricsFormats { get; set; }
         public RuntimeOptions RuntimeOptions { get; set; } = null!;
     }
 

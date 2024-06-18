@@ -78,6 +78,43 @@ namespace TesApi.Web.Runner
         protected TaskToNodeTaskConverter() { }
 
         /// <summary>
+        /// Generates <see cref="NodeTaskResolverOptions"/>.
+        /// </summary>
+        /// <param name="nodeTaskConversionOptions">The node task conversion options.</param>
+        /// <returns>Environment required for runner to retrieve blobs from storage.</returns>
+        public virtual NodeTaskResolverOptions ToNodeTaskResolverOptions(NodeTaskConversionOptions nodeTaskConversionOptions)
+        {
+            try
+            {
+                var builder = new NodeTaskBuilder();
+                builder.WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
+                    .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath: string.Empty))
+                    .WithResourceIdManagedIdentity(nodeTaskConversionOptions.GlobalManagedIdentity);
+
+                if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
+                {
+                    logger.LogInformation("Setting up Terra as the runtime environment for the runner");
+                    builder.WithTerraAsRuntimeEnvironment(terraOptions.WsmApiHost, terraOptions.LandingZoneApiHost,
+                        terraOptions.SasAllowedIpRange);
+                }
+
+                var runtimeOptions = builder.Build().RuntimeOptions;
+                runtimeOptions.StorageEventSink.TargetUrl = default;
+
+                return new()
+                {
+                    RuntimeOptions = runtimeOptions,
+                    TransformationStrategy = runtimeOptions.StorageEventSink.TransformationStrategy,
+                };
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed to create the node task resolver options.");
+                throw;
+            }
+        }
+
+        /// <summary>
         /// Converts TesTask to a new NodeTask
         /// </summary>
         /// <param name="task">Node task</param>
@@ -143,7 +180,7 @@ namespace TesApi.Web.Runner
                 .Select(file => (Path: $"/{file}", Url: storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, file))))
             {
                 builder.WithOutputUsingCombinedTransformationStrategy(
-                    AppendParentDirectoryIfSet(path, $"%{BatchNodeScriptBuilder.BatchTaskDirEnvVarName}%"),
+                    AppendParentDirectoryIfSet(path, $"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%"),
                     url.AbsoluteUri,
                     fileType: FileType.File,
                     mountParentDirectory: null);
