@@ -76,7 +76,10 @@ public class ProcessedPartsProcessor(IBlobPipeline blobPipeline, ILogger<Process
                 rootHash = GetRootHash(buffer.HashListProvider);
             }
 
-            await blobPipeline.OnCompletionAsync(buffer.FileSize, buffer.BlobUrl, buffer.FileName, rootHash);
+            //calculate the content md5 hash, if the pipeline is configured to perform the operation
+            var contentMd5 = await blobPipeline.CalculateFileMd5HashAsync(buffer.FileName);
+
+            await blobPipeline.OnCompletionAsync(buffer.FileSize, buffer.BlobUrl, buffer.FileName, rootHash, contentMd5);
 
             await CloseFileHandlerPoolAsync(buffer.FileHandlerPool, cancellationTokenSource.Token);
         }

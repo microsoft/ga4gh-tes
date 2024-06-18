@@ -64,8 +64,12 @@ spec:
               value: {{ .Values.config.batchNodes.globalStartTask }}
             - name: BatchNodes__GlobalManagedIdentity
               value: {{ .Values.identity.resourceId }}
+            - name: BatchNodes__ContentMD5
+              value: {{ .Values.config.batchNodes.contentMD5 | quote }}
             - name: BatchScheduling__UsePreemptibleVmsOnly
               value: {{ .Values.config.batchScheduling.usePreemptibleVmsOnly | quote}}
+            - name: BatchScheduling__TaskMaxWallClockTimeDays
+              value: {{ .Values.config.batchScheduling.taskMaxWallClockTimeDays | quote }}
             - name: BatchScheduling__PoolRotationForcedDays
               value: {{ .Values.config.batchScheduling.poolRotationForcedDays | quote }}
             - name: BatchScheduling__Prefix

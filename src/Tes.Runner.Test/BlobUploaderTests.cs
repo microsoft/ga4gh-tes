@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Text;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Blobs.Specialized;
@@ -15,12 +16,10 @@ namespace Tes.Runner.Test
     [Ignore]
     public class BlobUploaderTests
     {
-#pragma warning disable CS8618
-        private BlobContainerClient blobContainerClient;
+        private BlobContainerClient blobContainerClient = null!;
         private Guid containerId;
-        private BlobUploader blobUploader;
-        private readonly BlobPipelineOptions blobPipelineOptions = new();
-#pragma warning restore CS8618
+        private BlobUploader blobUploader = null!;
+        private readonly BlobPipelineOptions blobPipelineOptions = new(CalculateFileContentMd5: true);
 
         [TestInitialize]
         public async Task Init()
@@ -69,6 +68,30 @@ namespace Tes.Runner.Test
             var fileSize = (numberOfMiB * BlobSizeUtils.MiB) + extraBytes;
             Assert.IsNotNull(blobProperties);
             Assert.AreEqual(fileSize, blobProperties.Value.ContentLength);
+        }
+
+        [TestMethod]
+        public async Task UploadFile_ContentMD5IsSet()
+        {
+            var file = await RunnerTestUtils.CreateTempFileWithContentAsync(numberOfMiB: 1, extraBytes: 0);
+            var blobClient = blobContainerClient.GetBlobClient(file);
+
+            // Create a SAS token that's valid for one hour.
+            var url = CreateSasUrl(blobClient, file);
+
+            await blobUploader.UploadAsync([new(file, url)]);
+
+            var blobProperties = await blobClient.GetPropertiesAsync();
+
+            Assert.IsNotNull(blobProperties);
+            Assert.IsNotNull(blobProperties.Value.ContentHash);
+
+            var contentHashBytes = Convert.FromBase64String(Convert.ToBase64String(blobProperties.Value.ContentHash));
+            var contentHash = Encoding.UTF8.GetString(contentHashBytes);
+
+            var fileHash = RunnerTestUtils.CalculateMd5(file);
+
+            Assert.AreEqual(fileHash, contentHash);
         }
 
         private Uri CreateSasUrl(BlobClient blobClient, string file)

@@ -23,9 +23,10 @@ namespace Tes.Runner.Docker
         private readonly ILogger logger;
         private readonly NetworkUtility networkUtility;
         private readonly AsyncRetryHandlerPolicy dockerPullRetryPolicy = null!;
+        private readonly AsyncRetryHandlerPolicy gcrDockerPullRetryPolicy = null!;
         private readonly IStreamLogReader streamLogReader = null!;
         private readonly ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager = null!;
-        private readonly Predicate<DockerApiException> IsAuthFailure = e => !IsNotAuthFailure(e);
+
         // Exception filter to exclude non-retriable errors from the docker daemon when attempting to pull images.
         private static readonly Func<DockerApiException, bool> IsNotAuthFailure = e =>
             // Immediately fail calls with either 'Unauthorized' or 'Forbidden' status codes
@@ -38,6 +39,11 @@ namespace Tes.Runner.Docker
                     (e.ResponseBody?.Contains(": unauthorized:", StringComparison.OrdinalIgnoreCase) ?? false) ||
                     (e.ResponseBody?.Contains(": forbidden:", StringComparison.OrdinalIgnoreCase) ?? false)
         )));
+
+        private static readonly Predicate<DockerApiException> IsAuthFailure = e => !IsNotAuthFailure(e);
+
+        // Workaround for GCR issue where NotFound is returned as a form of traffic control
+        private static readonly Predicate<DockerApiException> IsGcrNotFound = e => e.StatusCode == HttpStatusCode.NotFound;
 
         const int LogStreamingMaxWaitTimeInSeconds = 30;
 
@@ -71,6 +77,15 @@ namespace Tes.Runner.Docker
             dockerPullRetryPolicy = new RetryPolicyBuilder(Options.Create(dockerPullRetryPolicyOptions))
                 .PolicyBuilder.OpinionatedRetryPolicy(Polly.Policy
                     .Handle(IsNotAuthFailure)
+                    .Or<IOException>()
+                    .Or<HttpRequestException>(e => e.InnerException is IOException || e.StatusCode >= HttpStatusCode.InternalServerError || e.StatusCode == HttpStatusCode.RequestTimeout))
+                .WithRetryPolicyOptionsWait()
+                .SetOnRetryBehavior(logger)
+                .AsyncBuild();
+
+            gcrDockerPullRetryPolicy = new RetryPolicyBuilder(Options.Create(dockerPullRetryPolicyOptions))
+                .PolicyBuilder.OpinionatedRetryPolicy(Polly.Policy
+                    .Handle<DockerApiException>(e => IsNotAuthFailure(e) || IsGcrNotFound(e))
                     .Or<IOException>()
                     .Or<HttpRequestException>(e => e.InnerException is IOException || e.StatusCode >= HttpStatusCode.InternalServerError || e.StatusCode == HttpStatusCode.RequestTimeout))
                 .WithRetryPolicyOptionsWait()
@@ -236,11 +251,19 @@ namespace Tes.Runner.Docker
         {
             logger.LogInformation(@"Pulling image name: {ImageName} image tag: {ImageTag}", imageName, tag);
 
-            await dockerPullRetryPolicy.ExecuteWithRetryAsync(
+            await GetPolicy(imageName).ExecuteWithRetryAsync(
                 () => dockerClient.Images.CreateImageAsync(
                     new ImagesCreateParameters() { FromImage = imageName, Tag = tag },
                     authConfig,
                     new Progress<JSONMessage>(message => logger.LogDebug("{Progress_MessageStatus}", message.Status))));
+
+            AsyncRetryHandlerPolicy GetPolicy(string imageName)
+            {
+                var imageNameParts = imageName.Split('/', 2);
+                return imageNameParts.Length > 1 && imageNameParts[0].EndsWith(".gcr.io", StringComparison.OrdinalIgnoreCase)
+                    ? gcrDockerPullRetryPolicy
+                    : dockerPullRetryPolicy;
+            }
         }
 
         private async Task DeleteImageAsync(string imageName)

@@ -90,6 +90,40 @@ namespace Tes.Runner.Test
             await pipeline.ExecuteAsync(blobOps);
         }
 
+        [TestMethod]
+        public async Task CalculateFileMd5HashAsync_PipelineCalculateFileContentMd5IsFalse_ReturnsNull()
+        {
+
+            var pipelineOptions = new BlobPipelineOptions(blockSize, 10, 10, 10, FileHandlerPoolCapacity: 1)
+            {
+                CalculateFileContentMd5 = false
+            };
+
+            var pipeline = new BlobOperationPipelineTestImpl(pipelineOptions, memoryBuffer, sourceSize);
+
+            var result = await pipeline.CalculateFileMd5HashAsync(tempFile1);
+
+            Assert.IsNull(result);
+        }
+
+        [TestMethod]
+        public async Task CalculateFileMd5HashAsync_PipelineCalculateFileContentMd5IsTrue_ReturnsMd5Hash()
+        {
+
+            var pipelineOptions = new BlobPipelineOptions(blockSize, 10, 10, 10, FileHandlerPoolCapacity: 1)
+            {
+                CalculateFileContentMd5 = true
+            };
+
+            var pipeline = new BlobOperationPipelineTestImpl(pipelineOptions, memoryBuffer, sourceSize);
+
+            var result = await pipeline.CalculateFileMd5HashAsync(tempFile1);
+
+            var expectedHash = RunnerTestUtils.CalculateMd5Hash(await File.ReadAllBytesAsync(tempFile1));
+
+            Assert.AreEqual(expectedHash, result);
+        }
+
         private static void AssertReaderWriterAndCompleteMethodsAreCalled(BlobOperationPipelineTestImpl operationPipeline, long numberOfWriterReaderCalls, int numberOfCompleteCalls)
         {
             var executeWriteInfo = operationPipeline.MethodCalls["ExecuteWriteAsync"];
@@ -172,10 +206,10 @@ namespace Tes.Runner.Test
             return Task.FromResult(sourceLength);
         }
 
-        public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash)
+        public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash, string? contentMd5)
         {
             Debug.Assert(blobUrl != null, nameof(blobUrl) + " != null");
-            AddMethodCall(nameof(OnCompletionAsync), length, blobUrl, fileName, rootHash!);
+            AddMethodCall(nameof(OnCompletionAsync), length, blobUrl, fileName, rootHash!, contentMd5!);
             return Task.CompletedTask;
         }
 

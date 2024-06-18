@@ -189,7 +189,8 @@ namespace Tes.RunnerCLI.Commands
             int readers,
             int bufferCapacity)
         {
-            var options = CommandLauncher.CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
+            //TODO: Eventually all the options should come from the node runner task and we should remove the CLI flags as they are not used
+            var options = CommandLauncher.CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion, nodeTask.RuntimeOptions?.SetContentMd5OnUpload ?? false);
 
             Logger.LogDebug("Starting upload operation.");
 
@@ -230,7 +231,7 @@ namespace Tes.RunnerCLI.Commands
             int readers,
             int bufferCapacity)
         {
-            var options = CommandLauncher.CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
+            var options = CommandLauncher.CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion, setContentMd5OnUploads: false);
 
             Logger.LogDebug("Starting download operation.");
 

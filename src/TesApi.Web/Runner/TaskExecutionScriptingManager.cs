@@ -121,7 +121,6 @@ namespace TesApi.Web.Runner
             logger.LogInformation("Creating and uploading Batch script for Task ID: {TesTask}", tesTask.Id);
 
             var batchNodeScript = new BatchNodeScriptBuilder()
-                .WithAlpineWgetInstallation()
                 .WithMetrics()
                 .WithLocalRuntimeSystemInformation()
                 .WithRunnerTaskDownloadUsingWget(nodeTaskUrl)

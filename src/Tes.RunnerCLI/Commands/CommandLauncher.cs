@@ -14,7 +14,7 @@ namespace Tes.RunnerCLI.Commands
         private readonly ProcessLauncherFactory processLauncherFactory = processLauncherFactory ?? throw new ArgumentNullException(nameof(processLauncherFactory));
 
         public static BlobPipelineOptions CreateBlobPipelineOptions(int blockSize, int writers, int readers,
-            int bufferCapacity, string apiVersion)
+            int bufferCapacity, string apiVersion, bool setContentMd5OnUploads)
         {
             var options = new BlobPipelineOptions(
                 BlockSizeBytes: blockSize,
@@ -22,7 +22,8 @@ namespace Tes.RunnerCLI.Commands
                 NumberOfReaders: readers,
                 ReadWriteBuffersCapacity: bufferCapacity,
                 MemoryBufferCapacity: bufferCapacity,
-                ApiVersion: apiVersion);
+                ApiVersion: apiVersion,
+                CalculateFileContentMd5: setContentMd5OnUploads);
 
             return options;
         }

@@ -174,16 +174,14 @@ namespace TesApi.Web
 
             try
             {
-                var pools = (await batchPools.GetAllPools()
-                        .ToAsyncEnumerable()
-                        .WhereAwait(async p => await p.CanBeDeleted(cancellationToken))
-                        .ToListAsync(cancellationToken))
+                await foreach (var pool in batchPools
+                    .GetAllPools()
+                    .ToAsyncEnumerable()
+                    .WhereAwait(async p => await p.CanBeDeleted(cancellationToken))
                     .Where(p => !assignedPools.Contains(p.PoolId))
-                    .OrderBy(p => p.GetAllocationStateTransitionTime(cancellationToken))
+                    .OrderByAwait(async p => await p.GetAllocationStateTransitionTime(cancellationToken))
                     .Take(neededPools.Count)
-                    .ToList();
-
-                foreach (var pool in pools)
+                    .WithCancellation(cancellationToken))
                 {
                     await DeletePoolAsync(pool, cancellationToken);
                     _ = RemovePoolFromList(pool);

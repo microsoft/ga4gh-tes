@@ -37,13 +37,13 @@ namespace Tes.Runner.Test
             {
                 await RunnerTestUtils.AddProcessedBufferAsync(processedBuffer!, $"file{f}", numberOfPartsPerFile,
                     fileSize);
-            };
+            }
 
             await processedPartsProcessor!.StartProcessedPartsProcessorAsync(expectedNumberOfFiles, processedBuffer!, readBuffer!);
 
             processedBuffer!.Writer.Complete();
 
-            pipeline!.Verify(p => p.OnCompletionAsync(It.IsAny<long>(), It.IsAny<Uri?>(), It.IsAny<string>(), It.IsAny<string>()), Times.Exactly(expectedNumberOfFiles));
+            pipeline!.Verify(p => p.OnCompletionAsync(It.IsAny<long>(), It.IsAny<Uri?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Exactly(expectedNumberOfFiles));
 
             var parts = await RunnerTestUtils.ReadAllPipelineBuffersAsync(processedBuffer!.Reader.ReadAllAsync());
 
