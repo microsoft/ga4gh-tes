@@ -121,7 +121,7 @@ namespace Tes.Runner.Docker
             }
         }
 
-        public async Task NodeCleanupAsync(ExecutionOptions executionOptions)
+        public async Task NodeCleanupAsync(ExecutionOptions executionOptions, ILogger? cleanupLogger = default)
         {
             _ = await dockerClient.Volumes.PruneAsync();
 
@@ -135,11 +135,9 @@ namespace Tes.Runner.Docker
                     }
                     catch (DockerApiException ex) when (ex.StatusCode == HttpStatusCode.BadRequest && ex.ResponseBody.Contains("invalid reference format", StringComparison.OrdinalIgnoreCase))
                     {
-                        // ResponseBody = "{\"message\":\"invalid reference format\"}\n"
-
-                        // TODO: add this to the logging. It may explain reasons for DiskFull.
-                        // The previous image value is invalid. There's nothing else we should do at this point.
+                        cleanupLogger?.LogWarning(ex, "Unable to cleanup previous image due to invalid reference format.");
                     }
+                    // Note: all other exceptions are caught and logged by the caller, as they are considered fatal to the effort to cleanup the node.
                 }
             }
         }

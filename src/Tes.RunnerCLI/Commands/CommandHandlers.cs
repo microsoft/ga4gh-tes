@@ -86,15 +86,29 @@ namespace Tes.RunnerCLI.Commands
 
         private static async Task RootCommandNodeCleanupAsync(Runner.Models.NodeTask nodeTask, Uri dockerUri)
         {
+            Task[]? cleanupTasks = [];
             try
             {
-                await Task.WhenAll(
-                    new DockerExecutor(dockerUri).NodeCleanupAsync(new(nodeTask.ImageName, nodeTask.ImageTag, default, default, default, new())),
-                    Executor.RunnerHost.NodeCleanupAsync());
+                cleanupTasks =
+                [
+                    new DockerExecutor(dockerUri).NodeCleanupAsync(new(nodeTask.ImageName, nodeTask.ImageTag, default, default, default, new()), Logger),
+                    Executor.RunnerHost.NodeCleanupAsync()
+                ];
+                await Task.WhenAll(cleanupTasks);
             }
-            catch (Exception e)
+            catch (AggregateException ex)
             {
-                Logger.LogWarning(e, "({ExceptionType}): {ExceptionMessage}\n{ExceptionStackTrace}", e.GetType().FullName, e.Message, e.StackTrace);
+                foreach (var e in ex.InnerExceptions)
+                {
+                    Logger.LogWarning(e, "({ExceptionType}): {ExceptionMessage}\n{ExceptionStackTrace}", e.GetType().FullName, e.Message, e.StackTrace);
+                }
+            }
+            catch (Exception)
+            {
+                foreach (var e in cleanupTasks?.Where(t => t.IsFaulted).Select(t => t.Exception) ?? [])
+                {
+                    Logger.LogWarning(e!, "({ExceptionType}): {ExceptionMessage}\n{ExceptionStackTrace}", e!.GetType().FullName, e!.Message, e!.StackTrace);
+                }
             }
         }
 
