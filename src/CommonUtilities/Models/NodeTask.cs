@@ -65,6 +65,8 @@ namespace Tes.Runner.Models
         public StorageTargetLocation? StreamingLogPublisher { get; set; }
 
         public AzureEnvironmentConfig? AzureEnvironmentConfig { get; set; }
+
+        public bool? SetContentMd5OnUpload { get; set; }
     }
 
     public class StorageTargetLocation
