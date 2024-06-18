@@ -183,7 +183,8 @@ namespace TesApi.Web
 
             try
             {
-                await foreach (var pool in batchPools.GetAllPools()
+                await foreach (var pool in batchPools
+                    .GetAllPools()
                     .ToAsyncEnumerable()
                     .WhereAwait(async p => await p.CanBeDeletedAsync(cancellationToken))
                     .Where(p => !assignedPools.Contains(p.PoolId))

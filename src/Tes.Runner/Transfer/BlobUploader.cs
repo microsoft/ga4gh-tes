@@ -124,8 +124,9 @@ namespace Tes.Runner.Transfer
         /// <param name="blobUrl">Target Blob URL</param>
         /// <param name="fileName">Source file name</param>
         /// <param name="rootHash">Root hash of the file</param>
+        /// <param name="contentMd5">Content MD5 hash</param>
         /// <returns></returns>
-        public override async Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash)
+        public override async Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash, string? contentMd5)
         {
             ArgumentNullException.ThrowIfNull(blobUrl, nameof(blobUrl));
             ArgumentException.ThrowIfNullOrEmpty(fileName, nameof(fileName));
@@ -135,7 +136,7 @@ namespace Tes.Runner.Transfer
             {
                 response = await BlobApiHttpUtils.ExecuteHttpRequestAsync(() =>
                     BlobApiHttpUtils.CreateBlobBlockListRequest(length, blobUrl, PipelineOptions.BlockSizeBytes,
-                        PipelineOptions.ApiVersion, rootHash));
+                        PipelineOptions.ApiVersion, rootHash, contentMd5));
             }
             catch (Exception e)
             {
