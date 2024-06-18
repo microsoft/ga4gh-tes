@@ -125,7 +125,7 @@ namespace Tes.RunnerCLI.Commands
         internal static async Task<long> ExecuteExecCommandAsync(Uri? fileUri, FileInfo? file, string apiVersion, Uri dockerUri)
         {
             var nodeTask = await Services.Create<NodeTaskResolver>(logger => new(logger))
-                .ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
+                .ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: false);
 
             return await Services.BuildAndRunAsync<CommandHandlers, long>(
                 handler => handler.ExecuteExecCommandAsync(dockerUri),
@@ -178,7 +178,7 @@ namespace Tes.RunnerCLI.Commands
             string apiVersion)
         {
             var nodeTask = await Services.Create<NodeTaskResolver>(logger => new(logger))
-                .ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
+                .ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: false);
 
             return await Services.BuildAndRunAsync<CommandHandlers, int>(
                 handler => handler.ExecuteUploadCommandAsync(blockSize, writers, readers, bufferCapacity),
@@ -220,7 +220,7 @@ namespace Tes.RunnerCLI.Commands
             string apiVersion)
         {
             var nodeTask = await Services.Create<NodeTaskResolver>(logger => new(logger))
-                .ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
+                .ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: false);
 
             return await Services.BuildAndRunAsync<CommandHandlers, int>(
                 handler => handler.ExecuteDownloadCommandAsync(blockSize, writers, readers, bufferCapacity),

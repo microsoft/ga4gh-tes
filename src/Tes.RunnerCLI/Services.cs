@@ -49,7 +49,6 @@ namespace Tes.RunnerCLI
             builder.Services
                     .AddSingleton(runtimeOptions)
                     .AddKeyedSingleton(Executor.ApiVersion, apiVersion)
-                    .AddSingleton(runtimeOptions.Terra!)
                     .AddSingleton(runtimeOptions.AzureEnvironmentConfig ?? GetDefaultEnvironmentConfig())
                 ;
 
