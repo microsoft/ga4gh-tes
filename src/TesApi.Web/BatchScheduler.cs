@@ -43,12 +43,14 @@ namespace TesApi.Web
         /// <summary>
         /// Name of <c>$</c> prefixed environment variable to place resources shared by all tasks on each compute node in a pool.
         /// </summary>
-        public const string BatchNodeSharedEnvVar = "$AZ_BATCH_NODE_SHARED_DIR";
+        public const string BatchNodeSharedEnvVar = "${AZ_BATCH_NODE_SHARED_DIR}";
 
         /// <summary>
         /// Name of <c>$</c> prefixed environment variable of the working directory of the running task.
         /// </summary>
         public const string BatchNodeTaskWorkingDirEnvVar = "$AZ_BATCH_TASK_WORKING_DIR";
+
+        internal const string NodeTaskRunnerFilename = "tes-runner";
 
         private const string AzureSupportUrl = "https://portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/newsupportrequest";
         private const int PoolKeyLength = 55; // 64 max pool name length - 9 chars generating unique pool names
@@ -57,7 +59,6 @@ namespace TesApi.Web
         private const int DefaultDiskGb = 10;
         private const string CromwellScriptFileName = "script";
         private const string StartTaskScriptFilename = "start-task.sh";
-        private const string NodeTaskRunnerFilename = "tes-runner";
         private const string NodeTaskRunnerMD5HashFilename = NodeTaskRunnerFilename + ".md5";
         private readonly ILogger logger;
         private readonly IAzureProxy azureProxy;
@@ -67,6 +68,7 @@ namespace TesApi.Web
         private readonly List<TesTaskStateTransition> tesTaskStateTransitions;
         private readonly bool usePreemptibleVmsOnly;
         private readonly string batchNodesSubnetId;
+        private readonly bool batchNodesSetContentMd5OnUpload;
         private readonly bool disableBatchNodesPublicIpAddress;
         private readonly TimeSpan poolLifetime;
         private readonly TimeSpan taskMaxWallClockTime;
@@ -133,6 +135,7 @@ namespace TesApi.Web
 
             this.usePreemptibleVmsOnly = batchSchedulingOptions.Value.UsePreemptibleVmsOnly;
             this.batchNodesSubnetId = batchNodesOptions.Value.SubnetId;
+            this.batchNodesSetContentMd5OnUpload = batchNodesOptions.Value.ContentMD5;
             this.disableBatchNodesPublicIpAddress = batchNodesOptions.Value.DisablePublicIpAddress;
             this.poolLifetime = TimeSpan.FromDays(batchSchedulingOptions.Value.PoolRotationForcedDays == 0 ? Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays : batchSchedulingOptions.Value.PoolRotationForcedDays);
             this.taskMaxWallClockTime = TimeSpan.FromDays(batchSchedulingOptions.Value.TaskMaxWallClockTimeDays == 0 ? Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays : batchSchedulingOptions.Value.TaskMaxWallClockTimeDays);
@@ -314,7 +317,7 @@ namespace TesApi.Web
                         .Where(blob => blob.BlobName.EndsWith(".txt") && blob.BlobName.StartsWith(blobNameStartsWith))
                         .Select(blob => (blob.BlobUri, BlobNameParts: blob.BlobName.Split('_', 4)))
                         .OrderBy(blob => string.Join('_', blob.BlobNameParts.Take(3)))
-                        .ThenBy(blob => blob.BlobNameParts.Length < 3 ? -1 : int.Parse(blob.BlobNameParts[3][..blob.BlobNameParts[3].IndexOf('.')], System.Globalization.CultureInfo.InvariantCulture))
+                        .ThenBy(blob => blob.BlobNameParts.Length < 4 ? -1 : int.Parse(blob.BlobNameParts[3][..blob.BlobNameParts[3].IndexOf('.')], System.Globalization.CultureInfo.InvariantCulture))
                         .ToList();
 #pragma warning restore IDE0305 // Simplify collection initialization
 
@@ -907,6 +910,7 @@ namespace TesApi.Web
             {
                 Constraints = new(maxWallClockTime: taskMaxWallClockTime, retentionTime: TimeSpan.Zero, maxTaskRetryCount: 0),
                 UserIdentity = new(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
+                EnvironmentSettings = assets.Environment?.Select(pair => new EnvironmentSetting(pair.Key, pair.Value)).ToList(),
             };
 
             return cloudTask;
@@ -918,8 +922,8 @@ namespace TesApi.Web
                 DefaultStorageAccountName: defaultStorageAccountName,
                 AdditionalInputs: await GetAdditionalCromwellInputsAsync(task, cancellationToken),
                 GlobalManagedIdentity: globalManagedIdentity,
-                DrsHubApiHost: drsHubApiHost
-            );
+                DrsHubApiHost: drsHubApiHost,
+                SetContentMd5OnUpload: batchNodesSetContentMd5OnUpload);
             return nodeTaskCreationOptions;
         }
 

@@ -3,6 +3,7 @@
 
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using System.Xml;
 using Moq;
 using Moq.Protected;
@@ -132,7 +133,7 @@ namespace Tes.Runner.Test.Transfer
         {
             var request = BlobApiHttpUtils.CreateBlobBlockListRequest(
                  BlobSizeUtils.MiB * 10, new Uri(blobUrlWithSasToken),
-                 BlobSizeUtils.DefaultBlockSizeBytes, BlobPipelineOptions.DefaultApiVersion, stubRootHash);
+                 BlobSizeUtils.DefaultBlockSizeBytes, BlobPipelineOptions.DefaultApiVersion, stubRootHash, default);
 
             var headerName = $"x-ms-meta-{BlobApiHttpUtils.RootHashMetadataName}";
             Assert.IsTrue(request.Headers.Contains(headerName));
@@ -141,11 +142,25 @@ namespace Tes.Runner.Test.Transfer
         }
 
         [TestMethod]
+        public void CreatePutBlockRequestAsyncTest_ContentMd5IsSet_IncludesContentMd5HeaderBase64Encoded()
+        {
+            var contentMd5 = "1234567890";
+            var base64StringContentMd5 = Convert.ToBase64String(Encoding.UTF8.GetBytes(contentMd5));
+            var request = BlobApiHttpUtils.CreateBlobBlockListRequest(
+                BlobSizeUtils.MiB * 10, new Uri(blobUrlWithSasToken),
+                BlobSizeUtils.DefaultBlockSizeBytes, BlobPipelineOptions.DefaultApiVersion, default, contentMd5);
+
+            Assert.IsTrue(request.Headers.Contains("x-ms-blob-content-md5"));
+            Assert.IsTrue(request.Headers.TryGetValues("x-ms-blob-content-md5", out var values));
+            Assert.IsTrue(values.Contains(base64StringContentMd5));
+        }
+
+        [TestMethod]
         public void CreatePutBlockRequestAsyncTest_RootHashIsNull_NoMetadataHeader()
         {
             var request = BlobApiHttpUtils.CreateBlobBlockListRequest(
                 BlobSizeUtils.MiB * 10, new Uri(blobUrlWithSasToken),
-                BlobSizeUtils.DefaultBlockSizeBytes, BlobPipelineOptions.DefaultApiVersion, null);
+                BlobSizeUtils.DefaultBlockSizeBytes, BlobPipelineOptions.DefaultApiVersion, default, default);
 
             var headerName = $"x-ms-meta-{BlobApiHttpUtils.RootHashMetadataName}";
             Assert.IsFalse(request.Headers.Contains(headerName));
@@ -178,7 +193,7 @@ namespace Tes.Runner.Test.Transfer
             var fileSize = BlobSizeUtils.DefaultBlockSizeBytes * 10;
             var blobUrl = new Uri(blobUrlWithSasToken);
             var blockListRequest = BlobApiHttpUtils.CreateBlobBlockListRequest(fileSize, blobUrl, BlobSizeUtils.DefaultBlockSizeBytes,
-                BlobPipelineOptions.DefaultApiVersion, null);
+                BlobPipelineOptions.DefaultApiVersion, default, default);
             var xmlDoc = new XmlDocument();
 
 
@@ -223,7 +238,7 @@ namespace Tes.Runner.Test.Transfer
 
             Assert.AreEqual(HttpMethod.Put, request.Method);
             Assert.AreEqual(expectedUrl.ToString(), request.RequestUri?.ToString());
-            Assert.AreEqual(data, await request?.Content?.ReadAsStringAsync()!);
+            Assert.AreEqual(data, await request.Content?.ReadAsStringAsync()!);
             Assert.IsTrue(request.Headers.Contains("x-ms-version"));
             Assert.IsTrue(request.Headers.Contains("x-ms-date"));
         }
@@ -246,7 +261,7 @@ namespace Tes.Runner.Test.Transfer
             }
             else
             {
-                Assert.AreEqual(expectedContent, await request?.Content?.ReadAsStringAsync()!);
+                Assert.AreEqual(expectedContent, await request.Content?.ReadAsStringAsync()!);
             }
 
 

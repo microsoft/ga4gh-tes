@@ -78,6 +78,43 @@ namespace TesApi.Web.Runner
         protected TaskToNodeTaskConverter() { }
 
         /// <summary>
+        /// Generates <see cref="NodeTaskResolverOptions"/>.
+        /// </summary>
+        /// <param name="nodeTaskConversionOptions">The node task conversion options.</param>
+        /// <returns>Environment required for runner to retrieve blobs from storage.</returns>
+        public virtual NodeTaskResolverOptions ToNodeTaskResolverOptions(NodeTaskConversionOptions nodeTaskConversionOptions)
+        {
+            try
+            {
+                var builder = new NodeTaskBuilder();
+                builder.WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
+                    .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath: string.Empty))
+                    .WithResourceIdManagedIdentity(nodeTaskConversionOptions.GlobalManagedIdentity);
+
+                if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
+                {
+                    logger.LogInformation("Setting up Terra as the runtime environment for the runner");
+                    builder.WithTerraAsRuntimeEnvironment(terraOptions.WsmApiHost, terraOptions.LandingZoneApiHost,
+                        terraOptions.SasAllowedIpRange);
+                }
+
+                var runtimeOptions = builder.Build().RuntimeOptions;
+                runtimeOptions.StorageEventSink.TargetUrl = default;
+
+                return new()
+                {
+                    RuntimeOptions = runtimeOptions,
+                    TransformationStrategy = runtimeOptions.StorageEventSink.TransformationStrategy,
+                };
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed to create the node task resolver options.");
+                throw;
+            }
+        }
+
+        /// <summary>
         /// Converts TesTask to a new NodeTask
         /// </summary>
         /// <param name="task">Node task</param>
@@ -103,6 +140,7 @@ namespace TesApi.Web.Runner
                     .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath: string.Empty))
                     .WithLogPublisher(storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath: string.Empty))
                     .WithDrsHubUrl(nodeTaskConversionOptions.DrsHubApiHost)
+                    .WithOnUploadSetContentMD5(nodeTaskConversionOptions.SetContentMd5OnUpload)
                     .WithMetricsFile(MetricsFileName);
 
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
@@ -116,12 +154,27 @@ namespace TesApi.Web.Runner
 
                 BuildOutputs(task, nodeTaskConversionOptions.DefaultStorageAccountName, builder);
 
+                AddTaskOutputs(task, builder);
+
                 return builder.Build();
             }
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to convert the TES task to a Node Task");
                 throw;
+            }
+        }
+
+        private void AddTaskOutputs(TesTask task, NodeTaskBuilder builder)
+        {
+            foreach (var (path, url) in new List<string>(["stderr.txt", "stdout.txt", MetricsFileName])
+                .Select(file => (Path: $"/{file}", Url: storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, file))))
+            {
+                builder.WithOutputUsingCombinedTransformationStrategy(
+                    AppendParentDirectoryIfSet(path, $"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%"),
+                    url.AbsoluteUri,
+                    fileType: FileType.File,
+                    mountParentDirectory: null);
             }
         }
 
@@ -464,6 +517,7 @@ namespace TesApi.Web.Runner
     /// <param name="DefaultStorageAccountName"></param>
     /// <param name="GlobalManagedIdentity"></param>
     /// <param name="DrsHubApiHost"></param>
+    /// <param name="SetContentMd5OnUpload"></param>
     public record NodeTaskConversionOptions(IList<TesInput> AdditionalInputs = default, string DefaultStorageAccountName = default,
-        string GlobalManagedIdentity = default, string DrsHubApiHost = default);
+        string GlobalManagedIdentity = default, string DrsHubApiHost = default, bool SetContentMd5OnUpload = false);
 }

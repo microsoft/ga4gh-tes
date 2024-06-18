@@ -7,7 +7,6 @@ using System.Net.Sockets;
 using System.Text;
 using Azure.Storage.Blobs;
 using Microsoft.Extensions.Logging;
-using Polly;
 using Polly.Retry;
 
 namespace Tes.Runner.Transfer;
@@ -131,6 +130,15 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolic
         }
         request.Headers.Add($"x-ms-meta-{name}", value);
     }
+    private static void AddContentMd5HeaderIfValueIsSet(HttpRequestMessage request, string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return;
+        }
+
+        request.Headers.Add($"x-ms-blob-content-md5", Convert.ToBase64String(Encoding.UTF8.GetBytes(value)));
+    }
 
     public static void AddBlobServiceHeaders(HttpRequestMessage request, string apiVersion)
     {
@@ -138,7 +146,7 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolic
         request.Headers.Add("x-ms-date", DateTime.UtcNow.ToString("R"));
     }
 
-    public static HttpRequestMessage CreateBlobBlockListRequest(long length, Uri blobUrl, int blockSizeBytes, string apiVersion, string? rootHash)
+    public static HttpRequestMessage CreateBlobBlockListRequest(long length, Uri blobUrl, int blockSizeBytes, string apiVersion, string? rootHash, string? contentMd5)
     {
         var content = CreateBlockListContent(length, blockSizeBytes);
 
@@ -150,6 +158,7 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolic
         };
 
         AddMetadataHeaderIfValueIsSet(request, RootHashMetadataName, rootHash);
+        AddContentMd5HeaderIfValueIsSet(request, contentMd5);
         AddBlobServiceHeaders(request, apiVersion);
         return request;
     }
@@ -168,7 +177,7 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolic
 
         var blobBuilder = new BlobUriBuilder(new Uri(sourceUrl));
 
-        return !string.IsNullOrWhiteSpace(blobBuilder?.Sas?.Signature);
+        return !string.IsNullOrWhiteSpace(blobBuilder.Sas?.Signature);
     }
     private async Task<HttpResponseMessage> ExecuteHttpRequestImplAsync(Func<HttpRequestMessage> request, CancellationToken cancellationToken)
     {

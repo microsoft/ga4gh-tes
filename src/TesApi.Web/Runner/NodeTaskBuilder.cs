@@ -14,9 +14,16 @@ namespace TesApi.Web.Runner
     /// </summary>
     public class NodeTaskBuilder
     {
+        /// <summary>
+        /// Name of the environment variable that contains the path to the task directory
+        /// </summary>
+        public const string BatchTaskDirEnvVarName = "AZ_BATCH_TASK_DIR";
+
+        internal const string BatchTaskDirEnvVar = $"${BatchTaskDirEnvVarName}";
+
         private const string ManagedIdentityResourceIdPattern = @"^/subscriptions/[^/]+/resourcegroups/[^/]+/providers/Microsoft.ManagedIdentity/userAssignedIdentities/[^/]+$";
 
-        private const string defaultDockerImageTag = "latest";
+        private const string DefaultDockerImageTag = "latest";
         private readonly NodeTask nodeTask;
         const string NodeTaskOutputsMetricsFormat = "FileUploadSizeInBytes={Size}";
         const string NodeTaskInputsMetricsFormat = "FileDownloadSizeInBytes={Size}";
@@ -133,7 +140,7 @@ namespace TesApi.Web.Runner
         {
             ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
             ArgumentException.ThrowIfNullOrEmpty(targetUrl, nameof(targetUrl));
-            nodeTask.Outputs ??= new List<FileOutput>();
+            nodeTask.Outputs ??= [];
             nodeTask.Outputs.Add(
                 new FileOutput()
                 {
@@ -188,7 +195,7 @@ namespace TesApi.Web.Runner
             var splitByTag = image.Split(':', 2);
 
             nodeTask.ImageName = splitByTag[0];
-            nodeTask.ImageTag = splitByTag.Length == 2 ? splitByTag[1] : defaultDockerImageTag;
+            nodeTask.ImageTag = splitByTag.Length == 2 ? splitByTag[1] : DefaultDockerImageTag;
 
             return this;
         }
@@ -281,6 +288,19 @@ namespace TesApi.Web.Runner
             nodeTask.OutputsMetricsFormat = NodeTaskOutputsMetricsFormat;
 
             nodeTask.InputsMetricsFormat = NodeTaskInputsMetricsFormat;
+
+            nodeTask.TimestampMetricsFormats =
+            [
+                "ExecuteNodeTesTaskStart={Time}",
+                "ExecuteNodeTesTaskEnd={Time}",
+            ];
+
+            nodeTask.BashScriptMetricsFormats =
+            [
+                $"echo DiskSizeInKiB=$\"$(df -k --output=size {BatchTaskDirEnvVar} | tail -1)\"",
+                $"echo DiskUsedInKiB=$\"$(df -k --output=used {BatchTaskDirEnvVar} | tail -1)\"",
+                "echo VmCpuModelName=$\"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\"",
+            ];
 
             return this;
         }
@@ -400,7 +420,20 @@ namespace TesApi.Web.Runner
             return this;
         }
 
-        private string GetApiHostFromUrl(string drsHubUrl)
+        /// <summary>
+        /// Switch to enable setting ContentMD5 on uploads.
+        /// </summary>
+        /// <param name="enable">Set to <c>true</c> to have the runner calculate and provide the blob content MD5 to the storage account, <c>false</c> otherwise.</param>
+        /// <returns></returns>
+        public NodeTaskBuilder WithOnUploadSetContentMD5(bool enable)
+        {
+            nodeTask.RuntimeOptions ??= new RuntimeOptions();
+            nodeTask.RuntimeOptions.SetContentMd5OnUpload = enable;
+
+            return this;
+        }
+
+        private static string GetApiHostFromUrl(string drsHubUrl)
         {
             var uri = new Uri(drsHubUrl);
 
