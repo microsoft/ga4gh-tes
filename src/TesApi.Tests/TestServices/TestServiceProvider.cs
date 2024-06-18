@@ -84,7 +84,6 @@ namespace TesApi.Tests.TestServices
                 .AddTransient<ILogger<PriceApiBatchSkuInformationProvider>>(_ => NullLogger<PriceApiBatchSkuInformationProvider>.Instance)
                 .AddTransient<ILogger<TaskToNodeTaskConverter>>(_ => NullLogger<TaskToNodeTaskConverter>.Instance)
                 .AddTransient<ILogger<TaskExecutionScriptingManager>>(_ => NullLogger<TaskExecutionScriptingManager>.Instance)
-                .AddTransient<ILogger<BatchNodeScriptBuilder>>(_ => NullLogger<BatchNodeScriptBuilder>.Instance)
                 .AddTransient<ILogger<CachingWithRetriesAzureProxy>>(_ => NullLogger<CachingWithRetriesAzureProxy>.Instance)
                 .AddSingleton<CachingRetryPolicyBuilder>()
                 .AddTransient<IActionIdentityProvider, DefaultActionIdentityProvider>()
@@ -96,7 +95,6 @@ namespace TesApi.Tests.TestServices
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                 .AddSingleton<TaskToNodeTaskConverter>()
                 .AddSingleton<TaskExecutionScriptingManager>()
-                .AddSingleton<BatchNodeScriptBuilder>()
                 .IfThenElse(additionalActions is null, s => { }, s => additionalActions(s))
             .BuildServiceProvider();
 

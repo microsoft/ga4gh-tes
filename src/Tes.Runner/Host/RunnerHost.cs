@@ -8,31 +8,35 @@ namespace Tes.Runner.Host
     public interface IRunnerHost
     {
         /// <summary>
-        /// tbd
+        /// Metadata of shared metadata file.
         /// </summary>
         /// <param name="name"></param>
         /// <returns></returns>
         FileInfo GetSharedFile(string name);
 
         /// <summary>
-        /// tbd
+        /// Saves content of shared metadata file.
         /// </summary>
-        /// <param name="name"></param>
-        /// <param name="content"></param>
+        /// <param name="name">File name.</param>
+        /// <param name="content">File content.</param>
         void WriteSharedFile(string name, ReadOnlySpan<byte> content);
 
         /// <summary>
-        /// tbd
+        /// Loads content of shared metadata file.
         /// </summary>
-        /// <param name="name"></param>
-        /// <returns></returns>
+        /// <param name="name">File name.</param>
+        /// <returns>File content.</returns>
         IMemoryOwner<byte>? ReadSharedFile(string name);
 
         /// <summary>
-        /// tbd
+        /// Ensure previous tasks working and metadata directories are removed.
         /// </summary>
         /// <returns></returns>
-        Task NodeCleanupAsync();
+        Task NodeCleanupPreviousTasksAsync();
+
+        //void WriteMetric(string key);
+
+        //void WriteMetric(string key, string value);
     }
 
     internal abstract class RunnerHost : IRunnerHost
@@ -41,7 +45,14 @@ namespace Tes.Runner.Host
         public abstract FileInfo GetSharedFile(string name);
 
         /// <inheritdoc/>
-        public abstract Task NodeCleanupAsync();
+        public abstract Task NodeCleanupPreviousTasksAsync();
+
+        ///// <inheritdoc/>
+        //public abstract void WriteMetric(string key, string value);
+
+        ///// <inheritdoc/>
+        //public void WriteMetric(string key)
+        //    => WriteMetric(key, DateTimeOffset.UtcNow.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'sszzz", System.Globalization.CultureInfo.InvariantCulture));
 
         /// <inheritdoc/>
         IMemoryOwner<byte>? IRunnerHost.ReadSharedFile(string name)

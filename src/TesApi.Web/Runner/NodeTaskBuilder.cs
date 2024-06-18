@@ -14,6 +14,13 @@ namespace TesApi.Web.Runner
     /// </summary>
     public class NodeTaskBuilder
     {
+        /// <summary>
+        /// Name of the environment variable that contains the path to the task directory
+        /// </summary>
+        public const string BatchTaskDirEnvVarName = "AZ_BATCH_TASK_DIR";
+
+        internal const string BatchTaskDirEnvVar = $"${BatchTaskDirEnvVarName}";
+
         private const string ManagedIdentityResourceIdPattern = @"^/subscriptions/[^/]+/resourcegroups/[^/]+/providers/Microsoft.ManagedIdentity/userAssignedIdentities/[^/]+$";
 
         private const string DefaultDockerImageTag = "latest";
@@ -281,6 +288,19 @@ namespace TesApi.Web.Runner
             nodeTask.OutputsMetricsFormat = NodeTaskOutputsMetricsFormat;
 
             nodeTask.InputsMetricsFormat = NodeTaskInputsMetricsFormat;
+
+            nodeTask.TimestampMetricsFormats =
+            [
+                "ExecuteNodeTesTaskStart={Time}",
+                "ExecuteNodeTesTaskEnd={Time}",
+            ];
+
+            nodeTask.BashScriptMetricsFormats =
+            [
+                $"echo DiskSizeInKiB=$\"$(df -k --output=size {BatchTaskDirEnvVar} | tail -1)\"",
+                $"echo DiskUsedInKiB=$\"$(df -k --output=used {BatchTaskDirEnvVar} | tail -1)\"",
+                "echo VmCpuModelName=$\"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\"",
+            ];
 
             return this;
         }

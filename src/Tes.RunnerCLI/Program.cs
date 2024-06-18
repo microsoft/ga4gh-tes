@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.CommandLine;
+using Tes.RunnerCLI;
 using Tes.RunnerCLI.Commands;
 
 return await StartUpAsync(args);
