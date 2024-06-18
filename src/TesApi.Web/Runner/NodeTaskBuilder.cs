@@ -201,6 +201,23 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
+        /// Docker container GPU support.
+        /// </summary>
+        public void WithGpuSupport()
+        {
+            // https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/docker-specialized.html
+            // https://github.com/docker/cli/blob/v24.0.7/opts/gpus_test.go
+            nodeTask.ContainerDeviceRequests ??= [];
+            nodeTask.ContainerDeviceRequests.Add(new()
+            {
+                Driver = "nvidia",
+                Count = -1,
+                Capabilities = [["compute", "utility", "gpu"]],
+                Options = []
+            });
+        }
+
+        /// <summary>
         /// Sets Terra as runtime environment and enables the Terra transformation strategy for URLs in inputs and outputs.
         /// </summary>
         /// <param name="wsmApiHost"></param>

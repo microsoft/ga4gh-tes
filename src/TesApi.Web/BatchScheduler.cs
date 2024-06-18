@@ -526,6 +526,7 @@ namespace TesApi.Web
                         poolIdentity: GetBatchPoolIdentity(identities.ToArray()),
                         vmSize: virtualMachineInfo.VmSize,
                         vmFamily: virtualMachineInfo.VmFamily,
+                        useGenV2: useGen2.GetValueOrDefault(),
                         preemptable: virtualMachineInfo.LowPriority,
                         nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                         encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
@@ -535,7 +536,7 @@ namespace TesApi.Web
                 var jobOrTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
 
                 tesTask.PoolId = poolId;
-                var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(jobOrTaskId, tesTask, cancellationToken);
+                var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(jobOrTaskId, tesTask, virtualMachineInfo.VmFamily, cancellationToken);
                 logger.LogInformation($"Creating batch task for TES task {tesTask.Id}. Using VM size {virtualMachineInfo.VmSize}.");
                 await azureProxy.AddBatchTaskAsync(tesTask.Id, cloudTask, poolId, cancellationToken);
 
@@ -895,12 +896,12 @@ namespace TesApi.Web
                 .FirstOrDefault(m => (m.Condition is null || m.Condition(tesTask)) && (m.CurrentBatchTaskState is null || m.CurrentBatchTaskState == combinedBatchTaskInfo.BatchTaskState))
                 ?.ActionAsync(tesTask, combinedBatchTaskInfo, cancellationToken) ?? ValueTask.FromResult(false);
 
-        private async Task<CloudTask> ConvertTesTaskToBatchTaskUsingRunnerAsync(string taskId, TesTask task,
+        private async Task<CloudTask> ConvertTesTaskToBatchTaskUsingRunnerAsync(string taskId, TesTask task, string vmFamily,
             CancellationToken cancellationToken)
         {
             ValidateTesTask(task);
 
-            var nodeTaskCreationOptions = await GetNodeTaskConversionOptionsAsync(task, cancellationToken);
+            var nodeTaskCreationOptions = await GetNodeTaskConversionOptionsAsync(task, GetVmFamily(vmFamily), cancellationToken);
 
             var assets = await taskExecutionScriptingManager.PrepareBatchScriptAsync(task, nodeTaskCreationOptions, cancellationToken);
 
@@ -916,15 +917,16 @@ namespace TesApi.Web
             return cloudTask;
         }
 
-        private async Task<NodeTaskConversionOptions> GetNodeTaskConversionOptionsAsync(TesTask task, CancellationToken cancellationToken)
+        private async Task<NodeTaskConversionOptions> GetNodeTaskConversionOptionsAsync(TesTask task, VmFamilySeries vmFamily, CancellationToken cancellationToken)
         {
-            var nodeTaskCreationOptions = new NodeTaskConversionOptions(
+            return new(
                 DefaultStorageAccountName: defaultStorageAccountName,
                 AdditionalInputs: await GetAdditionalCromwellInputsAsync(task, cancellationToken),
                 GlobalManagedIdentity: globalManagedIdentity,
                 DrsHubApiHost: drsHubApiHost,
-                SetContentMd5OnUpload: batchNodesSetContentMd5OnUpload);
-            return nodeTaskCreationOptions;
+                VmFamilyGroup: vmFamily,
+                SetContentMd5OnUpload: batchNodesSetContentMd5OnUpload
+            );
         }
 
         private async Task<List<TesInput>> GetAdditionalCromwellInputsAsync(TesTask task, CancellationToken cancellationToken)
@@ -991,14 +993,14 @@ namespace TesApi.Web
             return additionalInputFiles;
         }
 
-        private void ValidateTesTask(TesTask task)
+        private static void ValidateTesTask(TesTask task)
         {
             ArgumentNullException.ThrowIfNull(task);
 
             task.Inputs?.ForEach(input => ValidateTesTaskInput(input, task));
         }
 
-        private void ValidateTesTaskInput(TesInput inputFile, TesTask tesTask)
+        private static void ValidateTesTaskInput(TesInput inputFile, TesTask tesTask)
         {
             if (string.IsNullOrWhiteSpace(inputFile.Path) || !inputFile.Path.StartsWith("/"))
             {
@@ -1021,12 +1023,73 @@ namespace TesApi.Web
             }
         }
 
-        enum StartScriptVmFamilies
+        internal static VmFamilySeries GetVmFamily(string vmFamily)
         {
-            standardLSFamily,
-            standardLSv2Family,
-            standardLSv3Family,
-            standardLASv3Family,
+            return _vmFamilyParseData.Keys.FirstOrDefault(key => VmFamilyMatches(key, vmFamily.Replace(" ", string.Empty)));
+
+            static bool VmFamilyMatches(VmFamilySeries startScriptVmFamily, string vmFamily)
+            {
+                var (prefixes, suffixes) = _vmFamilyParseData[startScriptVmFamily];
+                return prefixes.Any(prefix => vmFamily.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    && suffixes.Any(suffix => vmFamily.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+            }
+        }
+
+        private static readonly IReadOnlyDictionary<VmFamilySeries, (IEnumerable<string> Prefixes, IEnumerable<string> Suffixes)> _vmFamilyParseData = new Dictionary<VmFamilySeries, (IEnumerable<string> Prefixes, IEnumerable<string> Suffixes)>()
+        {
+            // Order is important. Put "families" after specific family entries, as these are matched in order.
+            //{ VmFamilySeries.standardLSFamily, new(["standardLS", "standardLAS"], ["Family"]) },
+            { VmFamilySeries.standardNPSFamily, new(["standardNPS"], ["Family"]) },
+            { VmFamilySeries.standardNCFamilies, new(["standardNC"], ["Family"]) },
+            { VmFamilySeries.standardNDFamilies, new(["standardND"], ["Family"]) },
+            { VmFamilySeries.standardNVFamilies, new(["standardNV"], ["v3Family"/*, "v4Family", "v5Family"*/]) }, // Currently, NVv4 and NVv5 do not work
+        }.AsReadOnly();
+
+        /// <summary>
+        /// Selected vmfamily groups
+        /// </summary>
+        public enum VmFamilySeries
+        {
+            /// <summary>
+            /// Standard NPS family
+            /// </summary>
+            /// <remarks>FPGA, not GPU.</remarks>
+            standardNPSFamily,
+
+            /// <summary>
+            /// Standard NC families
+            /// </summary>
+            standardNCFamilies,
+
+            /// <summary>
+            /// Standard ND families
+            /// </summary>
+            standardNDFamilies,
+
+            /// <summary>
+            /// Standard NG families
+            /// </summary>
+            /// <remarks>AMD GPUs, only Windows drivers are available.</remarks>
+            standardNGFamilies,
+
+            /// <summary>
+            /// Standard NV families
+            /// </summary>
+            standardNVFamilies,
+        }
+
+        private static NodeOS GetNodeOS(BatchModels.VirtualMachineConfiguration vmConfig)
+            => vmConfig.NodeAgentSkuId switch
+            {
+                var s when s.StartsWith("batch.node.ubuntu ", StringComparison.OrdinalIgnoreCase) => NodeOS.Ubuntu,
+                var s when s.StartsWith("batch.node.centos ", StringComparison.OrdinalIgnoreCase) => NodeOS.Centos,
+                _ => throw new InvalidOperationException($"Unrecognized OS. Please send open an issue @ 'https://github.com/microsoft/ga4gh-tes/issues' with this message ({vmConfig.NodeAgentSkuId})")
+            };
+
+        private enum NodeOS
+        {
+            Ubuntu,
+            Centos,
         }
 
         /// <summary>
@@ -1035,14 +1098,20 @@ namespace TesApi.Web
         /// <param name="poolId">Pool Id</param>
         /// <param name="machineConfiguration">A <see cref="BatchModels.VirtualMachineConfiguration"/> describing the OS of the pool's nodes.</param>
         /// <param name="vmFamily"></param>
+        /// <param name="useGenV2"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         /// <remarks>This method also mitigates errors associated with docker daemons that are not configured to place their filesystem assets on the data drive.</remarks>
-        private async Task<BatchModels.StartTask> GetStartTaskAsync(string poolId, BatchModels.VirtualMachineConfiguration machineConfiguration, string vmFamily, CancellationToken cancellationToken)
+        private async Task<(BatchModels.StartTask StartTask, IEnumerable<BatchModels.VMExtension> VMExtensions)> GetStartTaskAsync(string poolId, BatchModels.VirtualMachineConfiguration machineConfiguration, string vmFamily, bool useGenV2, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
             ArgumentNullException.ThrowIfNull(machineConfiguration);
             ArgumentNullException.ThrowIfNull(vmFamily);
+
+            var extensions = Enumerable.Empty<BatchModels.VMExtension>();
+
+            var nodeOs = GetNodeOS(machineConfiguration);
+            var vmFamilySeries = GetVmFamily(vmFamily);
 
             var globalStartTaskConfigured = !string.IsNullOrWhiteSpace(globalStartTaskPath);
 
@@ -1072,10 +1141,10 @@ namespace TesApi.Web
 
             if (!dockerConfigured)
             {
-                var packageInstallScript = machineConfiguration.NodeAgentSkuId switch
+                var packageInstallScript = nodeOs switch
                 {
-                    var s when s.StartsWith("batch.node.ubuntu ", StringComparison.OrdinalIgnoreCase) => "echo \"Ubuntu OS detected\"",
-                    var s when s.StartsWith("batch.node.centos ", StringComparison.OrdinalIgnoreCase) => "sudo yum install epel-release -y && sudo yum update -y && sudo yum install -y wget",
+                    NodeOS.Ubuntu => "echo \"Ubuntu OS detected\"",
+                    NodeOS.Centos => "sudo yum install epel-release -y && sudo yum update -y && sudo yum install -y wget",
                     _ => throw new InvalidOperationException($"Unrecognized OS. Please send open an issue @ 'https://github.com/microsoft/ga4gh-tes/issues' with this message ({machineConfiguration.NodeAgentSkuId})")
                 };
 
@@ -1083,20 +1152,47 @@ namespace TesApi.Web
                 cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new((await ReadScript("config-docker.sh")).Replace("{PackageInstalls}", packageInstallScript))), $"{BatchNodeTaskWorkingDirEnvVar}/{script}", setExecutable: true)} && {BatchNodeTaskWorkingDirEnvVar}/{script}");
             }
 
-            var vmFamilyStartupScript = (Enum.TryParse(typeof(StartScriptVmFamilies), vmFamily, out var family) ? family : default) switch
+            if (useGenV2)
             {
-                StartScriptVmFamilies.standardLSFamily => @"config-nvme.sh",
-                StartScriptVmFamilies.standardLSv2Family => @"config-nvme.sh",
-                StartScriptVmFamilies.standardLSv3Family => @"config-nvme.sh",
-                StartScriptVmFamilies.standardLASv3Family => @"config-nvme.sh",
+                var script = @"config-nvme.sh";
+                // TODO: optimize this by uploading all non-personalized scripts when uploading runner binary rather then for each individual pool
+                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new(await ReadScript(script))), $"{BatchNodeTaskWorkingDirEnvVar}/{script}", setExecutable: true)} && {BatchNodeTaskWorkingDirEnvVar}/{script}");
+            }
+
+            var vmFamilyStartupScript = nodeOs switch
+            {
+                NodeOS.Ubuntu => vmFamilySeries switch
+                {
+                    VmFamilySeries.standardNCFamilies => @"config-n-gpu-apt.sh",
+                    VmFamilySeries.standardNDFamilies => @"config-n-gpu-apt.sh",
+                    VmFamilySeries.standardNVFamilies => @"config-n-gpu-apt.sh",
+                    _ => null,
+                },
+                NodeOS.Centos => vmFamilySeries switch
+                {
+                    VmFamilySeries.standardNCFamilies => @"config-n-gpu-yum.sh",
+                    VmFamilySeries.standardNDFamilies => @"config-n-gpu-yum.sh",
+                    VmFamilySeries.standardNVFamilies => @"config-n-gpu-yum.sh",
+                    _ => null,
+                },
                 _ => null
             };
 
             if (!string.IsNullOrWhiteSpace(vmFamilyStartupScript))
             {
                 var script = "config-vmfamily.sh";
-                // TODO: optimize this by uploading all vmfamily scripts when uploading runner binary rather then for each individual pool
+                // TODO: optimize this by uploading all non-personalized scripts when uploading runner binary rather then for each individual pool
                 cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new(await ReadScript(vmFamilyStartupScript))), $"{BatchNodeTaskWorkingDirEnvVar}/{script}", setExecutable: true)} && {BatchNodeTaskWorkingDirEnvVar}/{script}");
+            }
+
+            switch (vmFamilySeries)
+            {
+                case VmFamilySeries.standardNCFamilies:
+                case VmFamilySeries.standardNDFamilies:
+                case VmFamilySeries.standardNVFamilies:
+                    // https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/hpccompute-gpu-linux
+                    extensions = extensions.Append(new(name: "gpu", publisher: "Microsoft.HpcCompute", type: "NvidiaGpuDriverLinux", autoUpgradeMinorVersion: true) { TypeHandlerVersion = "1.6" });
+                    break;
             }
 
             if (globalStartTaskConfigured)
@@ -1104,13 +1200,15 @@ namespace TesApi.Web
                 cmd.Append($" && {CreateWgetDownloadCommand(globalStartTaskSasUrl, $"{BatchNodeTaskWorkingDirEnvVar}/global-{StartTaskScriptFilename}", setExecutable: true)} && {BatchNodeTaskWorkingDirEnvVar}/global-{StartTaskScriptFilename}");
             }
 
-            return new()
+            extensions = extensions.ToList();
+
+            return (new()
             {
                 CommandLine = $"/bin/sh -c \"{CreateWgetDownloadCommand(await UploadScriptAsync(StartTaskScriptFilename, cmd), $"{BatchNodeTaskWorkingDirEnvVar}/{StartTaskScriptFilename}", true)} && {BatchNodeTaskWorkingDirEnvVar}/{StartTaskScriptFilename}\"",
                 UserIdentity = new BatchModels.UserIdentity(autoUser: new(elevationLevel: BatchModels.ElevationLevel.Admin, scope: BatchModels.AutoUserScope.Pool)),
                 MaxTaskRetryCount = 1,
                 WaitForSuccess = true
-            };
+            }, extensions.Any() ? extensions : null);
 
             async ValueTask<Uri> UploadScriptAsync(string name, StringBuilder content)
             {
@@ -1146,6 +1244,7 @@ namespace TesApi.Web
         /// <param name="poolIdentity"></param>
         /// <param name="vmSize"></param>
         /// <param name="vmFamily"></param>
+        /// <param name="useGenV2"></param>
         /// <param name="preemptable"></param>
         /// <param name="nodeInfo"></param>
         /// <param name="encryptionAtHostSupported">VM supports encryption at host.</param>
@@ -1154,10 +1253,8 @@ namespace TesApi.Web
         /// <remarks>
         /// Devs: Any changes to any properties set in this method will require corresponding changes to all classes implementing <see cref="Management.Batch.IBatchPoolManager"/> along with possibly any systems they call, with the possible exception of <seealso cref="Management.Batch.ArmBatchPoolManager"/>.
         /// </remarks>
-        private async ValueTask<BatchModels.Pool> GetPoolSpecification(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, string vmSize, string vmFamily, bool preemptable, BatchNodeInfo nodeInfo, bool? encryptionAtHostSupported, CancellationToken cancellationToken)
+        private async ValueTask<BatchModels.Pool> GetPoolSpecification(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, string vmSize, string vmFamily, bool useGenV2, bool preemptable, BatchNodeInfo nodeInfo, bool? encryptionAtHostSupported, CancellationToken cancellationToken)
         {
-            // TODO: (perpetually) add new properties we set in the future on <see cref="PoolSpecification"/> and/or its contained objects, if possible. When not, update CreateAutoPoolModePoolInformation().
-
             ValidateString(name, nameof(name), 64);
             ValidateString(displayName, nameof(displayName), 1024);
 
@@ -1169,10 +1266,13 @@ namespace TesApi.Web
                     version: nodeInfo.BatchImageVersion),
                 nodeAgentSkuId: nodeInfo.BatchNodeAgentSkuId);
 
+            var (startTask, extensions) = await GetStartTaskAsync(name, vmConfig, vmFamily, useGenV2, cancellationToken);
+            vmConfig.Extensions = extensions?.ToList();
+
             if (encryptionAtHostSupported ?? false)
             {
                 vmConfig.DiskEncryptionConfiguration = new(
-                    targets: new List<BatchModels.DiskEncryptionTarget> { BatchModels.DiskEncryptionTarget.OsDisk, BatchModels.DiskEncryptionTarget.TemporaryDisk }
+                    targets: [BatchModels.DiskEncryptionTarget.OsDisk, BatchModels.DiskEncryptionTarget.TemporaryDisk]
                 );
             }
 
@@ -1181,7 +1281,7 @@ namespace TesApi.Web
                 ScaleSettings = new(autoScale: new(BatchPool.AutoPoolFormula(preemptable, 1), BatchPool.AutoScaleEvaluationInterval)),
                 DeploymentConfiguration = new(virtualMachineConfiguration: vmConfig),
                 //ApplicationPackages = ,
-                StartTask = await GetStartTaskAsync(name, vmConfig, vmFamily, cancellationToken),
+                StartTask = startTask,
                 TargetNodeCommunicationMode = BatchModels.NodeCommunicationMode.Simplified,
             };
 

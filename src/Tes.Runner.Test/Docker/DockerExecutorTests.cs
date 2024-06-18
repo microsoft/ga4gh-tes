@@ -54,7 +54,7 @@ namespace Tes.Runner.Test.Docker
             Models.RuntimeOptions runtimeOptions = new();
             try
             {
-                var result = await executor.RunOnContainerAsync(new("msftsc022830.azurecr.io/broadinstitute/gatk", "4.5.0.0-squash", [""], default, default, runtimeOptions));
+                var result = await executor.RunOnContainerAsync(new("msftsc022830.azurecr.io/broadinstitute/gatk", "4.5.0.0-squash", [""], default, default, runtimeOptions, default));
             }
             catch (IdentityUnavailableException) { } // Success
             catch (Exception ex)
@@ -79,7 +79,7 @@ namespace Tes.Runner.Test.Docker
             Models.RuntimeOptions runtimeOptions = new();
             try
             {
-                var result = await executor.RunOnContainerAsync(new("msftsc022830.azurecr.io/broadinstitute/gatk", "4.5.0.0-squash", [""], default, default, runtimeOptions));
+                var result = await executor.RunOnContainerAsync(new("msftsc022830.azurecr.io/broadinstitute/gatk", "4.5.0.0-squash", [""], default, default, runtimeOptions, default));
                 Assert.Fail();
             }
             catch (IdentityUnavailableException)
@@ -136,7 +136,7 @@ namespace Tes.Runner.Test.Docker
                 .Returns(Task.FromResult(new VolumesPruneResponse()));
 
             DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost);
-            await executor.NodeCleanupAsync(new(image, default, default, default, default, new()));
+            await executor.NodeCleanupAsync(new(image, default, default, default, default, new(), default));
 
             Assert.AreEqual(1, dockerVolumeMock.Invocations.Count);
             Assert.AreEqual(string.IsNullOrEmpty(image) ? 0 : 1, dockerImageMock.Invocations.Count);

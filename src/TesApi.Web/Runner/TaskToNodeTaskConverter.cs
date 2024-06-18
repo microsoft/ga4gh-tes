@@ -143,6 +143,15 @@ namespace TesApi.Web.Runner
                     .WithOnUploadSetContentMD5(nodeTaskConversionOptions.SetContentMd5OnUpload)
                     .WithMetricsFile(MetricsFileName);
 
+                switch (nodeTaskConversionOptions.VmFamilyGroup)
+                {
+                    case BatchScheduler.VmFamilySeries.standardNCFamilies:
+                    case BatchScheduler.VmFamilySeries.standardNDFamilies:
+                    case BatchScheduler.VmFamilySeries.standardNVFamilies:
+                        builder.WithGpuSupport();
+                        break;
+                }
+
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
                 {
                     logger.LogInformation("Setting up Terra as the runtime environment for the runner");
@@ -518,6 +527,8 @@ namespace TesApi.Web.Runner
     /// <param name="GlobalManagedIdentity"></param>
     /// <param name="DrsHubApiHost"></param>
     /// <param name="SetContentMd5OnUpload"></param>
+    /// <param name="VmFamilyGroup"></param>
     public record NodeTaskConversionOptions(IList<TesInput> AdditionalInputs = default, string DefaultStorageAccountName = default,
-        string GlobalManagedIdentity = default, string DrsHubApiHost = default, bool SetContentMd5OnUpload = false);
+        string GlobalManagedIdentity = default, string DrsHubApiHost = default, bool SetContentMd5OnUpload = false,
+        BatchScheduler.VmFamilySeries VmFamilyGroup = default);
 }
