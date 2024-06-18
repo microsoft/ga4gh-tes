@@ -91,7 +91,18 @@ namespace Tes.Runner
         {
             if (!string.IsNullOrWhiteSpace(tesNodeTask.MetricsFilename) && !string.IsNullOrWhiteSpace(metricsFormat))
             {
-                await new MetricsFormatter(tesNodeTask.MetricsFilename, metricsFormat).Write(bytesTransferred);
+                await new MetricsFormatter(tesNodeTask.MetricsFilename, metricsFormat).WriteSize(bytesTransferred);
+            }
+        }
+
+        public async ValueTask AppendMetrics()
+        {
+            foreach (var bashMetric in tesNodeTask.BashScriptMetricsFormats ?? [])
+            {
+                if (!string.IsNullOrWhiteSpace(tesNodeTask.MetricsFilename) && !string.IsNullOrWhiteSpace(bashMetric))
+                {
+                    await new MetricsFormatter(tesNodeTask.MetricsFilename, bashMetric).WriteWithBash();
+                }
             }
         }
 
