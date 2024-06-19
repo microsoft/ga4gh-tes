@@ -38,9 +38,25 @@ namespace Tes.Runner.Authentication
 
         public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions, string? tokenScope = default)
         {
+            return GetTokenCredential(runtimeOptions, runtimeOptions.NodeManagedIdentityResourceId, tokenScope);
+        }
+
+        public virtual TokenCredential GetAcrPullTokenCredential(RuntimeOptions runtimeOptions, string? tokenScope = default)
+        {
+            var managedIdentity = runtimeOptions.NodeManagedIdentityResourceId;
+            if (!string.IsNullOrWhiteSpace(runtimeOptions.AcrPullManagedIdentityResourceId))
+            {
+                managedIdentity = runtimeOptions.AcrPullManagedIdentityResourceId;
+            }
+            return GetTokenCredential(runtimeOptions, managedIdentity, tokenScope);
+        }
+
+        public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions, string? managedIdentityResourceId, string? tokenScope = default)
+        {
+            tokenScope ??= runtimeOptions.AzureEnvironmentConfig!.TokenScope!;
             try
             {
-                return retryPolicy.Execute(() => GetTokenCredentialImpl(runtimeOptions, tokenScope));
+                return retryPolicy.Execute(() => GetTokenCredentialImpl(managedIdentityResourceId, tokenScope, runtimeOptions.AzureEnvironmentConfig!.AzureAuthorityHostUrl!));
             }
             catch
             {
@@ -48,22 +64,20 @@ namespace Tes.Runner.Authentication
             }
         }
 
-        private TokenCredential GetTokenCredentialImpl(RuntimeOptions runtimeOptions, string? tokenScope)
+        private TokenCredential GetTokenCredentialImpl(string? managedIdentityResourceId, string tokenScope, string azureAuthorityHost)
         {
-            tokenScope ??= runtimeOptions.AzureEnvironmentConfig!.TokenScope!;
-
             try
             {
                 TokenCredential tokenCredential;
-                Uri authorityHost = new(runtimeOptions.AzureEnvironmentConfig!.AzureAuthorityHostUrl!);
+                Uri authorityHost = new(azureAuthorityHost);
 
-                if (!string.IsNullOrWhiteSpace(runtimeOptions.NodeManagedIdentityResourceId))
+                if (!string.IsNullOrWhiteSpace(managedIdentityResourceId))
                 {
-                    logger.LogInformation("Token credentials with Managed Identity and resource ID: {NodeManagedIdentityResourceId}", runtimeOptions.NodeManagedIdentityResourceId);
+                    logger.LogInformation("Token credentials with Managed Identity and resource ID: {NodeManagedIdentityResourceId}", managedIdentityResourceId);
                     var tokenCredentialOptions = new TokenCredentialOptions { AuthorityHost = authorityHost };
 
                     tokenCredential = new ManagedIdentityCredential(
-                        new ResourceIdentifier(runtimeOptions.NodeManagedIdentityResourceId),
+                        new ResourceIdentifier(managedIdentityResourceId),
                         tokenCredentialOptions);
                 }
                 else

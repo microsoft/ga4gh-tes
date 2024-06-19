@@ -35,7 +35,7 @@ namespace Tes.Runner.Test.Docker
             dockerClientMock.Setup(d => d.Volumes).Returns(dockerVolumeMock.Object);
             dockerClient = dockerClientMock.Object;
             var credentialsManager = new Mock<CredentialsManager>();
-            credentialsManager.Setup(m => m.GetTokenCredential(It.IsAny<RuntimeOptions>(), It.IsAny<string>()))
+            credentialsManager.Setup(m => m.GetAcrPullTokenCredential(It.IsAny<RuntimeOptions>(), It.IsAny<string>()))
                 .Throws(new IdentityUnavailableException());
             containerRegistryAuthorizationManager = new(credentialsManager.Object);
         }
