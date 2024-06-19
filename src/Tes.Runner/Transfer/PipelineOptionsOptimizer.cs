@@ -15,11 +15,6 @@ namespace Tes.Runner.Transfer
         private const int MaxWorkingThreadsCount = 90;
         private const int WorkersPerCpuCore = 10;
 
-        public PipelineOptionsOptimizer(ISystemInfoProvider systemInfoProvider) : this(systemInfoProvider, new DefaultFileInfoProvider())
-        {
-
-        }
-
         public PipelineOptionsOptimizer(ISystemInfoProvider systemInfoProvider, IFileInfoProvider fileInfoProvider)
         {
             ArgumentNullException.ThrowIfNull(systemInfoProvider, nameof(systemInfoProvider));
@@ -53,7 +48,7 @@ namespace Tes.Runner.Transfer
             return options;
         }
 
-        public static BlobPipelineOptions OptimizeOptionsIfApplicable(BlobPipelineOptions blobPipelineOptions, List<UploadInfo>? outputs)
+        public static BlobPipelineOptions OptimizeOptionsIfApplicable(Lazy<PipelineOptionsOptimizer> pipelineOptionsOptimizer, BlobPipelineOptions blobPipelineOptions, List<UploadInfo>? outputs)
         {
             //optimization is only available for Linux
             //Windows supports an implementation of ISystemInfoProvider is required.
@@ -62,9 +57,7 @@ namespace Tes.Runner.Transfer
                 return blobPipelineOptions;
             }
 
-            var optimizer = new PipelineOptionsOptimizer(new LinuxSystemInfoProvider());
-
-            return optimizer.Optimize(blobPipelineOptions, outputs);
+            return pipelineOptionsOptimizer.Value.Optimize(blobPipelineOptions, outputs);
         }
 
         private int GetAdjustedBlockSizeInBytesForUploads(int currentBlockSizeInBytes, List<UploadInfo> outputs)

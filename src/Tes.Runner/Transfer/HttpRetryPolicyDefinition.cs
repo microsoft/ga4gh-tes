@@ -11,9 +11,8 @@ namespace Tes.Runner.Transfer
     {
         public const int DefaultMaxRetryCount = 9;
         public const int RetryExponent = 2;
-        private static readonly ILogger Logger = PipelineLoggerFactory.Create<HttpRetryPolicyDefinition>();
 
-        public static AsyncRetryPolicy DefaultAsyncRetryPolicy(int maxRetryCount = DefaultMaxRetryCount)
+        public static AsyncRetryPolicy DefaultAsyncRetryPolicy(ILogger logger, int maxRetryCount = DefaultMaxRetryCount)
         {
             return Policy
                 .Handle<RetriableException>()
@@ -24,7 +23,7 @@ namespace Tes.Runner.Transfer
                     onRetryAsync:
                     (exception, _, retryCount, _) =>
                     {
-                        Logger.LogError(exception, "Retrying failed request. Retry count: {retryCount}", retryCount);
+                        logger.LogError(exception, "Retrying failed request. Retry count: {retryCount}", retryCount);
                         return Task.CompletedTask;
                     });
         }

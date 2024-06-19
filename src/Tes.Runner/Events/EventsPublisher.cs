@@ -5,7 +5,6 @@ using Azure.Storage.Sas;
 using Microsoft.Extensions.Logging;
 using Tes.Runner.Models;
 using Tes.Runner.Storage;
-using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Events;
 
@@ -24,15 +23,16 @@ public class EventsPublisher : IAsyncDisposable
     public const string TaskCompletionEvent = "taskCompleted";
 
     private readonly IList<IEventSink> sinks;
-    private readonly ILogger logger = PipelineLoggerFactory.Create<EventsPublisher>();
+    private readonly ILogger logger;
 
     public const string SuccessStatus = "Success";
     public const string FailedStatus = "Failed";
     public const string StartedStatus = "Started";
 
-    public EventsPublisher(IList<IEventSink> sinks)
+    public EventsPublisher(IList<IEventSink> sinks, ILogger<EventsPublisher> logger)
     {
         this.sinks = sinks;
+        this.logger = logger;
     }
 
     /// <summary>
@@ -41,51 +41,9 @@ public class EventsPublisher : IAsyncDisposable
     protected EventsPublisher()
     {
         this.sinks = [];
+        this.logger = Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
     }
 
-    public static async Task<EventsPublisher> CreateEventsPublisherAsync(NodeTask nodeTask, string apiVersion)
-    {
-        var storageSink = await CreateAndStartStorageEventSinkFromTaskIfRequestedAsync(nodeTask, apiVersion);
-
-        List<IEventSink> sinkList = [];
-        if (storageSink != null)
-        {
-            sinkList.Add(storageSink);
-        }
-
-        return new EventsPublisher(sinkList);
-    }
-
-    private static async Task<IEventSink?> CreateAndStartStorageEventSinkFromTaskIfRequestedAsync(NodeTask nodeTask, string apiVersion)
-    {
-        ArgumentNullException.ThrowIfNull(nodeTask);
-
-        if (nodeTask.RuntimeOptions.StorageEventSink is null)
-        {
-            return default;
-        }
-
-        if (string.IsNullOrWhiteSpace(nodeTask.RuntimeOptions.StorageEventSink.TargetUrl))
-        {
-            return default;
-        }
-
-        var transformationStrategy = UrlTransformationStrategyFactory.CreateStrategy(
-            nodeTask.RuntimeOptions.StorageEventSink.TransformationStrategy,
-            nodeTask.RuntimeOptions,
-            apiVersion);
-
-
-        var transformedUrl = await transformationStrategy.TransformUrlWithStrategyAsync(
-            nodeTask.RuntimeOptions.StorageEventSink.TargetUrl,
-             BlobSasPermissions.Write | BlobSasPermissions.Create | BlobSasPermissions.Tag);
-
-        var sink = new BlobStorageEventSink(transformedUrl);
-
-        sink.Start();
-
-        return sink;
-    }
 
     public virtual async Task PublishUploadStartEventAsync(NodeTask nodeTask)
     {

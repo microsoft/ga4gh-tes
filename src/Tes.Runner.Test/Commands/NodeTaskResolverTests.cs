@@ -6,6 +6,9 @@ using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Azure.Storage.Sas;
 using CommonUtilities;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
+using Tes.Runner.Events;
 using Tes.Runner.Models;
 using Tes.Runner.Storage;
 using Tes.Runner.Transfer;
@@ -62,12 +65,35 @@ namespace Tes.Runner.Test.Commands
 
         private void ConfigureBlobApiHttpUtils(
             Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> sendAsync,
-            Func<RuntimeOptions, string, ResolutionPolicyHandler>? ResolutionPolicyFactory = default)
+            Func<RuntimeOptions, string, ResolutionPolicyHandler>? resolutionPolicyFactory = default)
         {
-            nodeTaskResolver = new(
-                () => new BlobApiHttpUtils(new(new MockableHttpMessageHandler(sendAsync)), HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(MaxRetryCount)),
-                ResolutionPolicyFactory);
+            resolutionPolicyFactory ??= new(GetResolutionPolicyHandler);
+
+            Mock<NodeTaskResolver> resolver = new();
+
+            RuntimeOptions runtimeOptions = null!;
+            string apiVersion = null!;
+            resolver.SetupGet(x => x.ConfigureServicesParameters).Returns((options, version) => new Action<Microsoft.Extensions.Hosting.IHostApplicationBuilder>(_ => { runtimeOptions = options; apiVersion = version; }));
+
+            resolver.SetupGet(x => x.GetNodeTaskDownloader).Returns((Func<Func<Microsoft.Extensions.Logging.ILogger, NodeTaskResolver.NodeTaskDownloader>, Task<NodeTask>> task, Action<Microsoft.Extensions.Hosting.IHostApplicationBuilder>? configure) =>
+            {
+                configure?.Invoke(new Mock<Microsoft.Extensions.Hosting.IHostApplicationBuilder>().Object);
+
+                return task(new(logger => new NodeTaskResolver.NodeTaskDownloader(
+                resolver.Object,
+                resolutionPolicyFactory(runtimeOptions, apiVersion),
+                new(() => new BlobApiHttpUtils(new(new MockableHttpMessageHandler(sendAsync)), logger => HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(logger), logger)),
+                logger)));
+            });
+
+            nodeTaskResolver = resolver.Object;
         }
+
+        private static ResolutionPolicyHandler GetResolutionPolicyHandler(RuntimeOptions options, string apiVersion) => new(
+            new(options, apiVersion, new(() => new PassThroughUrlTransformationStrategy()),
+                new(() => new Mock<IUrlTransformationStrategy>().Object), new(() => new Mock<IUrlTransformationStrategy>().Object),
+                new(() => new Mock<IUrlTransformationStrategy>().Object), new(() => new Mock<IUrlTransformationStrategy>().Object)),
+            sinks => new(sinks, NullLogger<EventsPublisher>.Instance));
 
         private static void AssertFail(ref ExceptionDispatchInfo? exceptionDispatchInfo, string? message, params object?[]? parameters)
         {
@@ -164,7 +190,7 @@ namespace Tes.Runner.Test.Commands
             var sendHeadCalled = false;
             var sendGetCalled = false;
 
-            ConfigureBlobApiHttpUtils((request, _) => Task.FromResult(Send(request)), (options, apiVersion) => new MockableResolutionPolicyHandler(ApplySasResolutionToUrl, options, apiVersion));
+            ConfigureBlobApiHttpUtils((request, _) => Task.FromResult(Send(request)), (options, apiVersion) => new MockableResolutionPolicyHandler(options, ApplySasResolutionToUrl));
             SetEnvironment(new() { RuntimeOptions = new() { Terra = new() }, TransformationStrategy = TransformationStrategy.CombinedTerra });
             taskFile = new(Path.Combine(Environment.CurrentDirectory, CommandFactory.DefaultTaskDefinitionFile));
 
@@ -258,15 +284,19 @@ namespace Tes.Runner.Test.Commands
         private class MockableResolutionPolicyHandler : ResolutionPolicyHandler
         {
             private readonly Func<string?, TransformationStrategy?, BlobSasPermissions, RuntimeOptions, Uri> applySasResolutionToUrl;
+            private readonly RuntimeOptions runtimeOptions;
 
-            public MockableResolutionPolicyHandler(Func<string?, TransformationStrategy?, BlobSasPermissions, RuntimeOptions, Uri> applySasResolutionToUrl, RuntimeOptions runtimeOptions, string apiVersion)
-                : base(runtimeOptions, apiVersion)
+            public MockableResolutionPolicyHandler(RuntimeOptions runtimeOptions, Func<string?, TransformationStrategy?, BlobSasPermissions, RuntimeOptions, Uri> applySasResolutionToUrl)
+                : base(new Mock<UrlTransformationStrategyFactory>().Object, sinks => new Mock<EventsPublisher>().Object)
             {
+                ArgumentNullException.ThrowIfNull(runtimeOptions);
                 ArgumentNullException.ThrowIfNull(applySasResolutionToUrl);
+
+                this.runtimeOptions = runtimeOptions;
                 this.applySasResolutionToUrl = applySasResolutionToUrl;
             }
 
-            protected override Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, TransformationStrategy? strategy, BlobSasPermissions blobSasPermissions, RuntimeOptions runtimeOptions, string apiVersion)
+            protected override Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, TransformationStrategy? strategy, BlobSasPermissions blobSasPermissions)
             {
                 return Task.FromResult(applySasResolutionToUrl(sourceUrl, strategy, blobSasPermissions, runtimeOptions));
             }

@@ -106,7 +106,7 @@ namespace CommonUtilities.AzureCloud
                     throw new ArgumentException($"Invalid Azure cloud name: {azureCloudName}");
             }
 
-            string azureCloudMetadataUrl = $"https://management.{domain}/metadata/endpoints?api-version={azureCloudMetadataUrlApiVersion}";
+            var azureCloudMetadataUrl = $"https://management.{domain}/metadata/endpoints?api-version={azureCloudMetadataUrlApiVersion}";
 
             var retryPolicy = Policy
                 .Handle<Exception>()

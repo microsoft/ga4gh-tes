@@ -7,7 +7,6 @@ using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
 using Tes.Runner.Authentication;
 using Tes.Runner.Models;
-using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Docker
 {
@@ -16,14 +15,15 @@ namespace Tes.Runner.Docker
         const string AzureContainerRegistryHostSuffix = ".azurecr.io";
         public static readonly string NullGuid = Guid.Empty.ToString("D");
 
-        private readonly ILogger logger = PipelineLoggerFactory.Create<ContainerRegistryAuthorizationManager>();
+        private readonly ILogger logger;
         private readonly CredentialsManager tokenCredentialsManager;
 
-        public ContainerRegistryAuthorizationManager(CredentialsManager tokenCredentialsManager)
+        public ContainerRegistryAuthorizationManager(CredentialsManager tokenCredentialsManager, ILogger<ContainerRegistryAuthorizationManager> logger)
         {
             ArgumentNullException.ThrowIfNull(tokenCredentialsManager);
 
             this.tokenCredentialsManager = tokenCredentialsManager;
+            this.logger = logger;
         }
 
         public async Task<AuthConfig?> TryGetAuthConfigForAzureContainerRegistryAsync(string imageName, string? imageTag, RuntimeOptions runtimeOptions)
@@ -60,7 +60,7 @@ namespace Tes.Runner.Docker
 
         public static bool TryParseAzureContainerRegisteryParts(string imageName, out string[] imageParts)
         {
-            imageParts = Array.Empty<string>();
+            imageParts = [];
 
             if (string.IsNullOrWhiteSpace(imageName))
             {

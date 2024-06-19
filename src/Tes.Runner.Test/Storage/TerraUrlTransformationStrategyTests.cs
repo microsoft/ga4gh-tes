@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using Azure.Storage.Sas;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Tes.ApiClients;
 using Tes.ApiClients.Models.Terra;
@@ -37,8 +38,8 @@ namespace Tes.Runner.Test.Storage
             mockTerraWsmApiClient = new Mock<TerraWsmApiClient>();
             capturedSasTokenApiParameters = new SasTokenApiParameters("", 0, "", "");
             SetupWsmClientWithAssumingSuccess();
-            transformationStrategy = new TerraUrlTransformationStrategy(runtimeOptions.Terra, mockTerraWsmApiClient.Object, SasExpirationInSeconds);
-            secondTransformationStrategy = new TerraUrlTransformationStrategy(runtimeOptions.Terra, mockTerraWsmApiClient.Object, SasExpirationInSeconds);
+            transformationStrategy = new TerraUrlTransformationStrategy(runtimeOptions.Terra, mockTerraWsmApiClient.Object, NullLogger.Instance, SasExpirationInSeconds);
+            secondTransformationStrategy = new TerraUrlTransformationStrategy(runtimeOptions.Terra, mockTerraWsmApiClient.Object, NullLogger.Instance, SasExpirationInSeconds);
             TerraUrlTransformationStrategy.ClearCache(); // Clear cache to avoid test interference, since cache is static in the class level scope.
 
         }

@@ -193,12 +193,8 @@ namespace TesApi.Web.Runner
         private static List<TesOutput> PrepareLocalOutputsForMapping(TesTask task, string defaultStorageAccount)
         {
             var outputs = new List<TesOutput>();
-            if (task.Outputs is null)
-            {
-                return outputs;
-            }
 
-            foreach (var output in task.Outputs)
+            foreach (var output in (task.Outputs ?? []))
             {
                 var preparedOutput = PrepareLocalOrLocalCromwellFileOutput(output, defaultStorageAccount);
 
@@ -271,7 +267,7 @@ namespace TesApi.Web.Runner
 
             if (tesTask.Inputs is null)
             {
-                return new List<TesInput>();
+                return [];
             }
 
             foreach (var input in tesTask.Inputs)
@@ -325,7 +321,7 @@ namespace TesApi.Web.Runner
                 inputs.Add(key, input);
             }
 
-            return inputs.Values.ToList();
+            return [.. inputs.Values];
         }
 
         /// <summary>

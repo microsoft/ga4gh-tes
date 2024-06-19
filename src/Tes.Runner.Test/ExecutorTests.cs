@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Tes.Runner.Docker;
 using Tes.Runner.Events;
@@ -56,7 +57,11 @@ namespace Tes.Runner.Test
                     }
                 ]
             };
-            executor = new Executor(nodeTask, fileOperationResolverMock.Object, eventsPublisherMock.Object, transferOperationFactoryMock.Object);
+
+            DefaultFileInfoProvider fileInfoProvider = new(NullLogger<DefaultFileInfoProvider>.Instance);
+            executor = new Executor(nodeTask, fileOperationResolverMock.Object, new(Task.FromResult(eventsPublisherMock.Object)), transferOperationFactoryMock.Object,
+                new VolumeBindingsGenerator(fileInfoProvider, NullLogger<VolumeBindingsGenerator>.Instance),
+                new(() => new PipelineOptionsOptimizer(new LinuxSystemInfoProvider(), fileInfoProvider)), NullLogger<Executor>.Instance);
         }
 
         [TestMethod]

@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Collections.Concurrent;
+using System.Text.Json.Serialization;
 using Azure.Core;
 using Azure.Identity;
 using Microsoft.Extensions.Logging;
@@ -8,25 +10,34 @@ using Polly;
 using Polly.Retry;
 using Tes.Runner.Exceptions;
 using Tes.Runner.Models;
-using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Authentication
 {
-    public class CredentialsManager
+    public partial class CredentialsManager
     {
-        private readonly ILogger logger = PipelineLoggerFactory.Create<CredentialsManager>();
-
+        private readonly ILogger logger;
         private readonly RetryPolicy retryPolicy;
+        private readonly ConcurrentDictionary<byte[], TokenCredential> cachedCredentals = new();
+
         private const int MaxRetryCount = 7;
         private const int ExponentialBackOffExponent = 2;
 
-        public CredentialsManager()
+        public CredentialsManager(ILogger<CredentialsManager> logger)
         {
+            ArgumentNullException.ThrowIfNull(logger);
+
+            this.logger = logger;
             retryPolicy = Policy
                     .Handle<Exception>()
                     .WaitAndRetry(MaxRetryCount,
                     SleepDurationHandler);
         }
+
+        /// <summary>
+        /// Parameter-less constructor for mocking
+        /// </summary>
+        protected CredentialsManager() : this(Microsoft.Extensions.Logging.Abstractions.NullLogger<CredentialsManager>.Instance)
+        { }
 
         private TimeSpan SleepDurationHandler(int attempt)
         {
@@ -51,10 +62,15 @@ namespace Tes.Runner.Authentication
         private TokenCredential GetTokenCredentialImpl(RuntimeOptions runtimeOptions, string? tokenScope)
         {
             tokenScope ??= runtimeOptions.AzureEnvironmentConfig!.TokenScope!;
+            var key = MakeKey(new(runtimeOptions, tokenScope));
+
+            if (cachedCredentals.TryGetValue(key, out var tokenCredential))
+            {
+                return tokenCredential;
+            }
 
             try
             {
-                TokenCredential tokenCredential;
                 Uri authorityHost = new(runtimeOptions.AzureEnvironmentConfig!.AzureAuthorityHostUrl!);
 
                 if (!string.IsNullOrWhiteSpace(runtimeOptions.NodeManagedIdentityResourceId))
@@ -76,7 +92,7 @@ namespace Tes.Runner.Authentication
                 //Get token to verify that credentials are valid
                 _ = tokenCredential.GetToken(new TokenRequestContext([tokenScope]), CancellationToken.None);
 
-                return tokenCredential;
+                return cachedCredentals.AddOrUpdate(key, tokenCredential, (_, _) => tokenCredential);
             }
             catch (Exception e)
             {
@@ -84,5 +100,15 @@ namespace Tes.Runner.Authentication
                 throw;
             }
         }
+
+        private byte[] MakeKey(CredentialsManagerKeyType key)
+        {
+            return System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(key, KeyTypeContext.Default.CredentialsManagerKeyType));
+        }
+
+        private record struct CredentialsManagerKeyType(RuntimeOptions runtimeOptions, string tokenScope);
+
+        [JsonSerializable(typeof(CredentialsManagerKeyType))]
+        private partial class KeyTypeContext : JsonSerializerContext { }
     }
 }

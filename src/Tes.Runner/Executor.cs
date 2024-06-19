@@ -13,47 +13,43 @@ namespace Tes.Runner
 {
     public class Executor : IAsyncDisposable
     {
+        public const string ApiVersion = "api-version";
         public const long ZeroBytesTransferred = 0;
         public const long DefaultErrorExitCode = 1;
-        private readonly ILogger logger = PipelineLoggerFactory.Create<Executor>();
+        private readonly ILogger logger;
         private readonly NodeTask tesNodeTask;
         private readonly FileOperationResolver operationResolver;
-        private readonly VolumeBindingsGenerator volumeBindingsGenerator = new();
-        private readonly EventsPublisher eventsPublisher;
+        private readonly VolumeBindingsGenerator volumeBindingsGenerator;
+        private readonly Lazy<Task<EventsPublisher>> eventsPublisherGetter;
+        private readonly Lazy<PipelineOptionsOptimizer> pipelineOptionsOptimizer;
+        private Task<EventsPublisher> eventsPublisher => eventsPublisherGetter.Value;
         private readonly ITransferOperationFactory transferOperationFactory;
-
-        public Executor(NodeTask tesNodeTask, EventsPublisher eventsPublisher, string apiVersion)
-            : this(tesNodeTask, new(tesNodeTask, apiVersion), eventsPublisher, new TransferOperationFactory())
-        { }
 
         public static Host.IRunnerHost RunnerHost { get; internal set; } = new Host.AzureBatchRunnerHost();
 
-        public static async Task<Executor> CreateExecutorAsync(NodeTask nodeTask, string apiVersion)
-        {
-            var publisher = await EventsPublisher.CreateEventsPublisherAsync(nodeTask, apiVersion);
-
-            return new Executor(nodeTask, publisher, apiVersion);
-        }
-
-        public Executor(NodeTask tesNodeTask, FileOperationResolver operationResolver, EventsPublisher eventsPublisher, ITransferOperationFactory transferOperationFactory)
+        public Executor(NodeTask tesNodeTask, FileOperationResolver operationResolver, Lazy<Task<EventsPublisher>> eventsPublisher, ITransferOperationFactory transferOperationFactory, VolumeBindingsGenerator volumeBindingsGenerator, Lazy<PipelineOptionsOptimizer> pipelineOptionsOptimizer, ILogger<Executor> logger)
         {
             ArgumentNullException.ThrowIfNull(transferOperationFactory);
             ArgumentNullException.ThrowIfNull(tesNodeTask);
             ArgumentNullException.ThrowIfNull(operationResolver);
             ArgumentNullException.ThrowIfNull(eventsPublisher);
+            ArgumentNullException.ThrowIfNull(volumeBindingsGenerator);
+            ArgumentNullException.ThrowIfNull(pipelineOptionsOptimizer);
 
             this.tesNodeTask = tesNodeTask;
             this.operationResolver = operationResolver;
-            this.eventsPublisher = eventsPublisher;
+            eventsPublisherGetter = eventsPublisher;
+            this.volumeBindingsGenerator = volumeBindingsGenerator;
             this.transferOperationFactory = transferOperationFactory;
-
+            this.pipelineOptionsOptimizer = pipelineOptionsOptimizer;
+            this.logger = logger;
         }
 
         public async Task<NodeTaskResult> ExecuteNodeContainerTaskAsync(DockerExecutor dockerExecutor)
         {
             try
             {
-                await eventsPublisher.PublishExecutorStartEventAsync(tesNodeTask);
+                await (await eventsPublisher).PublishExecutorStartEventAsync(tesNodeTask);
 
                 var bindings = volumeBindingsGenerator.GenerateVolumeBindings(tesNodeTask.Inputs, tesNodeTask.Outputs);
 
@@ -61,7 +57,7 @@ namespace Tes.Runner
 
                 var result = await dockerExecutor.RunOnContainerAsync(executionOptions);
 
-                await eventsPublisher.PublishExecutorEndEventAsync(tesNodeTask, result.ExitCode, ToStatusMessage(result), result.Error);
+                await (await eventsPublisher).PublishExecutorEndEventAsync(tesNodeTask, result.ExitCode, ToStatusMessage(result), result.Error);
 
                 return new NodeTaskResult(result);
             }
@@ -69,7 +65,7 @@ namespace Tes.Runner
             {
                 logger.LogError(e, "Failed to execute container");
 
-                await eventsPublisher.PublishExecutorEndEventAsync(tesNodeTask, DefaultErrorExitCode, EventsPublisher.FailedStatus, e.Message);
+                await (await eventsPublisher).PublishExecutorEndEventAsync(tesNodeTask, DefaultErrorExitCode, EventsPublisher.FailedStatus, e.Message);
 
                 throw;
             }
@@ -118,7 +114,7 @@ namespace Tes.Runner
             var errorMessage = string.Empty;
             try
             {
-                await eventsPublisher.PublishUploadStartEventAsync(tesNodeTask);
+                await (await eventsPublisher).PublishUploadStartEventAsync(tesNodeTask);
 
                 ArgumentNullException.ThrowIfNull(blobPipelineOptions, nameof(blobPipelineOptions));
 
@@ -154,7 +150,7 @@ namespace Tes.Runner
             }
             finally
             {
-                await eventsPublisher.PublishUploadEndEventAsync(tesNodeTask, numberOfOutputs, bytesTransferred, statusMessage, errorMessage);
+                await (await eventsPublisher).PublishUploadEndEventAsync(tesNodeTask, numberOfOutputs, bytesTransferred, statusMessage, errorMessage);
             }
         }
 
@@ -185,7 +181,7 @@ namespace Tes.Runner
         private BlobPipelineOptions OptimizeBlobPipelineOptionsForUpload(BlobPipelineOptions blobPipelineOptions, List<UploadInfo> outputs)
         {
             var optimizedOptions =
-                PipelineOptionsOptimizer.OptimizeOptionsIfApplicable(blobPipelineOptions, outputs);
+                PipelineOptionsOptimizer.OptimizeOptionsIfApplicable(pipelineOptionsOptimizer, blobPipelineOptions, outputs);
 
             ValidateBlockSize(optimizedOptions.BlockSizeBytes);
 
@@ -198,7 +194,7 @@ namespace Tes.Runner
         private BlobPipelineOptions OptimizeBlobPipelineOptionsForDownload(BlobPipelineOptions blobPipelineOptions)
         {
             var optimizedOptions =
-                PipelineOptionsOptimizer.OptimizeOptionsIfApplicable(blobPipelineOptions, default);
+                PipelineOptionsOptimizer.OptimizeOptionsIfApplicable(pipelineOptionsOptimizer, blobPipelineOptions, default);
 
             LogStartConfig(optimizedOptions);
 
@@ -215,7 +211,7 @@ namespace Tes.Runner
 
             try
             {
-                await eventsPublisher.PublishDownloadStartEventAsync(tesNodeTask);
+                await (await eventsPublisher).PublishDownloadStartEventAsync(tesNodeTask);
 
                 ArgumentNullException.ThrowIfNull(blobPipelineOptions, nameof(blobPipelineOptions));
 
@@ -245,7 +241,7 @@ namespace Tes.Runner
             }
             finally
             {
-                await eventsPublisher.PublishDownloadEndEventAsync(tesNodeTask, numberOfInputs, bytesTransferred, statusMessage, errorMessage);
+                await (await eventsPublisher).PublishDownloadEndEventAsync(tesNodeTask, numberOfInputs, bytesTransferred, statusMessage, errorMessage);
             }
         }
 
@@ -302,7 +298,7 @@ namespace Tes.Runner
 
         public async ValueTask DisposeAsync()
         {
-            await eventsPublisher.FlushPublishersAsync();
+            await (await eventsPublisher).FlushPublishersAsync();
             GC.SuppressFinalize(this);
         }
     }

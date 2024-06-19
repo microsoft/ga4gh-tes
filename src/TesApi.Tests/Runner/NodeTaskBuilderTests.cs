@@ -157,7 +157,7 @@ namespace TesApi.Tests.Runner
             nodeTaskBuilder.WithMetricsFile("metrics.txt");
             var metricsFile = nodeTaskBuilder.Build().MetricsFilename;
 
-            Assert.AreEqual("metrics.txt", metricsFile);
+            Assert.AreEqual("../metrics.txt", metricsFile);
         }
 
         [DataTestMethod]

@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Tes.Runner.Models;
 using Tes.Runner.Storage;
@@ -22,7 +23,10 @@ namespace Tes.Runner.Test.Storage
         [TestInitialize]
         public void SetUp()
         {
-            resolutionPolicyHandler = new(new(), BlobPipelineOptions.DefaultApiVersion);
+            resolutionPolicyHandler = new(new(new(), BlobPipelineOptions.DefaultApiVersion, new(() => new PassThroughUrlTransformationStrategy()),
+                new(() => new Mock<IUrlTransformationStrategy>().Object), new(() => new Mock<IUrlTransformationStrategy>().Object),
+                new(() => new Mock<IUrlTransformationStrategy>().Object), new(() => new Mock<IUrlTransformationStrategy>().Object)),
+                _ => new Mock<Runner.Events.EventsPublisher>().Object);
 
             singleFileInput = new()
             {
@@ -80,7 +84,7 @@ namespace Tes.Runner.Test.Storage
             fileInfoProvider.Setup(x => x.FileExists(singleFileOutput.Path!)).Returns(true);  // single file output exists
 
             var fileOperationInfoResolver =
-                new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
+                new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object, NullLogger<FileOperationResolver>.Instance);
             var resolvedOutputs = await fileOperationInfoResolver.ResolveOutputsAsync();
 
             Assert.AreEqual(1, resolvedOutputs?.Count);
@@ -109,7 +113,7 @@ namespace Tes.Runner.Test.Storage
                 ]);
 
             var fileOperationInfoResolver =
-                new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
+                new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object, NullLogger<FileOperationResolver>.Instance);
             var resolvedOutputs = await fileOperationInfoResolver.ResolveOutputsAsync();
 
             Assert.AreEqual(2, resolvedOutputs?.Count);
@@ -140,7 +144,7 @@ namespace Tes.Runner.Test.Storage
                     new($"{rootDir}{file2}", $"{file2.TrimStart('/')}", $"{rootDir}")
                 ]);
 
-            var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
+            var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object, NullLogger<FileOperationResolver>.Instance);
             var resolvedOutputs = await fileOperationInfoResolver.ResolveOutputsAsync();
 
 
@@ -176,7 +180,7 @@ namespace Tes.Runner.Test.Storage
                 ]);
             fileInfoProvider.Setup(x => x.FileExists(singleFileOutput.Path!)).Returns(true);  // single file output exists
 
-            var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
+            var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object, NullLogger<FileOperationResolver>.Instance);
             var resolvedOutputs = await fileOperationInfoResolver.ResolveOutputsAsync();
 
             Assert.AreEqual(3, resolvedOutputs?.Count);
@@ -213,7 +217,7 @@ namespace Tes.Runner.Test.Storage
                 ]);
             fileInfoProvider.Setup(x => x.FileExists(singleFileOutput.Path!)).Returns(false);  // single file output does NOT exist
 
-            var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
+            var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object, NullLogger<FileOperationResolver>.Instance);
             var resolvedOutputs = await fileOperationInfoResolver.ResolveOutputsAsync();
 
             Assert.AreEqual(2, resolvedOutputs?.Count);
@@ -234,7 +238,7 @@ namespace Tes.Runner.Test.Storage
                 ]
             };
 
-            var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
+            var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object, NullLogger<FileOperationResolver>.Instance);
 
             var resolvedInputs = await fileOperationInfoResolver.ResolveInputsAsync();
 
