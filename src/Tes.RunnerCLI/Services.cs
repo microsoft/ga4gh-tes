@@ -196,6 +196,11 @@ namespace Tes.RunnerCLI
                     LazyThreadSafetyMode.PublicationOnly))
                 .AddTransient<PipelineOptionsOptimizer>()
 
+                .AddSingleton(LazyFactory(provider =>
+                    provider.GetRequiredService<BlobApiHttpUtils>(),
+                    LazyThreadSafetyMode.PublicationOnly))
+                .AddTransient<BlobApiHttpUtils>()
+
                 // Keyed services
                 .AddKeyedSingleton(UrlTransformationStrategyFactory.CloudProvider, LazyKeyedFactory(provider =>
                     (IUrlTransformationStrategy)provider.GetRequiredService<CloudProviderSchemeConverter>(),
@@ -238,8 +243,6 @@ namespace Tes.RunnerCLI
                 .AddSingleton<ITransferOperationFactory, TransferOperationFactory>()
                 .AddSingleton<UrlTransformationStrategyFactory>()
                 .AddSingleton<VolumeBindingsGenerator>()
-
-                .AddTransient<BlobApiHttpUtils>()
                 ;
         }
     }
