@@ -126,7 +126,7 @@ namespace Tes.Runner.Docker
             }
         }
 
-        public async Task NodeCleanupAsync(ExecutionOptions executionOptions)
+        public async Task NodeCleanupAsync(ExecutionOptions executionOptions, ILogger? cleanupLogger = default)
         {
             _ = await dockerClient.Volumes.PruneAsync();
 
@@ -134,7 +134,15 @@ namespace Tes.Runner.Docker
             {
                 if (!IsLastImageSame(ToImageNameWithTag(executionOptions.ImageName, executionOptions.Tag), out var previousImage) && previousImage is not null)
                 {
-                    await DeleteImageAsync(previousImage);
+                    try
+                    {
+                        await DeleteImageAsync(previousImage);
+                    }
+                    catch (DockerApiException ex) when (ex.StatusCode == HttpStatusCode.BadRequest && ex.ResponseBody.Contains("invalid reference format", StringComparison.OrdinalIgnoreCase))
+                    {
+                        cleanupLogger?.LogWarning(ex, "Unable to cleanup previous image due to invalid reference format.");
+                    }
+                    // Note: all other exceptions are caught and logged by the caller, as they are considered fatal to the effort to cleanup the node.
                 }
             }
         }
