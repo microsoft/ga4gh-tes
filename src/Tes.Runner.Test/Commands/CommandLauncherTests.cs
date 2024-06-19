@@ -3,6 +3,7 @@
 
 using Moq;
 using Tes.Runner.Exceptions;
+using Tes.RunnerCLI;
 using Tes.RunnerCLI.Commands;
 
 namespace Tes.Runner.Test.Commands
