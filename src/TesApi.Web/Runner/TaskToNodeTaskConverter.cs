@@ -165,18 +165,6 @@ namespace TesApi.Web.Runner
             }
         }
 
-        private void BuildOutputs(TesTask task, string defaultStorageAccount, NodeTaskBuilder builder)
-        {
-            if (task.Outputs is not null)
-            {
-                logger.LogInformation(@"Mapping {TaskOutputsCount} outputs", task.Outputs.Count);
-
-                var outputs = PrepareLocalOutputsForMapping(task, defaultStorageAccount);
-
-                MapOutputs(outputs, pathParentDirectory, containerMountParentDirectory, builder);
-            }
-        }
-
         private void AddTaskOutputs(TesTask task, NodeTaskBuilder builder)
         {
             foreach (var (path, url) in new List<string>(["stderr.txt", "stdout.txt", MetricsFileName])
@@ -187,6 +175,18 @@ namespace TesApi.Web.Runner
                     url.AbsoluteUri,
                     fileType: FileType.File,
                     mountParentDirectory: null);
+            }
+        }
+
+        private void BuildOutputs(TesTask task, string defaultStorageAccount, NodeTaskBuilder builder)
+        {
+            if (task.Outputs is not null)
+            {
+                logger.LogInformation(@"Mapping {TaskOutputsCount} outputs", task.Outputs.Count);
+
+                var outputs = PrepareLocalOutputsForMapping(task, defaultStorageAccount);
+
+                MapOutputs(outputs, pathParentDirectory, containerMountParentDirectory, builder);
             }
         }
 
