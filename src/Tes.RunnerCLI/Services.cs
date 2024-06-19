@@ -161,6 +161,7 @@ namespace Tes.RunnerCLI
                 .AddSingleton(GetFactory<NodeTaskResolver.NodeTaskDownloader, ILogger>())
                 .AddSingleton(GetFactory<PartsProducer, IBlobPipeline, BlobPipelineOptions>())
                 .AddSingleton(GetFactory<PartsWriter, IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy>())
+                .AddSingleton(GetFactory<PartsReader, IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy>())
                 .AddSingleton(GetFactory<ProcessedPartsProcessor, IBlobPipeline>())
                 .AddSingleton(GetFactory<ProcessLauncher, IStreamLogReader>())
 
