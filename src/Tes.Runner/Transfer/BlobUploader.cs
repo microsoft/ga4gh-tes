@@ -12,17 +12,17 @@ namespace Tes.Runner.Transfer
     /// </summary>
     public class BlobUploader : BlobOperationPipeline
     {
-        private readonly ConcurrentDictionary<string, Md5HashListProvider> hashListProviders = new();
+        private readonly ConcurrentDictionary<string, Md5HashListProvider> hashListProviders = [];
 
         public BlobUploader(
             BlobPipelineOptions pipelineOptions,
+            BlobApiHttpUtils blobApiHttpUtils,
             Channel<byte[]> memoryBufferPool,
             Func<IBlobPipeline, ProcessedPartsProcessor> processedPartsProcessorFactory,
             Func<IBlobPipeline, BlobPipelineOptions, PartsProducer> partsProducerFactory,
             Func<IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy, PartsWriter> partsWriterFactory,
-            Func<IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy, PartsReader> partsReaderFactory,
-            ILogger<BlobUploader> logger)
-            : base(pipelineOptions, memoryBufferPool, processedPartsProcessorFactory, partsProducerFactory, partsWriterFactory, partsReaderFactory, logger)
+            Func<IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy, PartsReader> partsReaderFactory, ILogger<BlobUploader> logger)
+            : base(pipelineOptions, blobApiHttpUtils, memoryBufferPool, processedPartsProcessorFactory, partsProducerFactory, partsWriterFactory, partsReaderFactory, logger)
         { }
 
         /// <summary>
@@ -31,6 +31,7 @@ namespace Tes.Runner.Transfer
         protected BlobUploader()
             : base(
                 new BlobPipelineOptions(),
+                new(new(), logger => HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(logger), Microsoft.Extensions.Logging.Abstractions.NullLogger<BlobApiHttpUtils>.Instance),
                 Channel.CreateUnbounded<byte[]>(),
                 pipeLine => new ProcessedPartsProcessor(pipeLine, Microsoft.Extensions.Logging.Abstractions.NullLogger<ProcessedPartsProcessor>.Instance),
                 (pipeLine, pipelineOptions) => new PartsProducer(pipeLine, pipelineOptions, Microsoft.Extensions.Logging.Abstractions.NullLogger<PartsProducer>.Instance),

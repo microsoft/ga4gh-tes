@@ -146,8 +146,8 @@ namespace Tes.Runner.Test
     /// Since there is no way to mock the base class, we have to create a test implementation and capture the execution of methods directly.
     /// </summary>
     class BlobOperationPipelineTestImpl(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBuffer, long sourceLength)
-        : BlobOperationPipeline(pipelineOptions, memoryBuffer,
-            pipeline => new(pipeline, NullLogger<ProcessedPartsProcessor>.Instance), (pipeline, options) => new(pipeline, options, NullLogger.Instance),
+        : BlobOperationPipeline(pipelineOptions, new(new(), logger => HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(logger), NullLogger<BlobApiHttpUtils>.Instance), memoryBuffer,
+            pipeline => new(pipeline, NullLogger<ProcessedPartsProcessor>.Instance), (pipeline, options) => new(pipeline, options, NullLogger<PartsProducer>.Instance),
             (pipeline, options, Channel, strategy) => new(pipeline, options, Channel, strategy, NullLogger<PartsWriter>.Instance),
             (pipeline, options, Channel, strategy) => new(pipeline, options, Channel, strategy, NullLogger<PartsReader>.Instance),
             NullLogger<BlobPipelineOptions>.Instance)

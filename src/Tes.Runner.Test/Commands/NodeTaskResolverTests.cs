@@ -82,8 +82,8 @@ namespace Tes.Runner.Test.Commands
                 return task(new(logger => new NodeTaskResolver.NodeTaskDownloader(
                 resolver.Object,
                 resolutionPolicyFactory(runtimeOptions, apiVersion),
-                logger,
-                () => new BlobApiHttpUtils(new(new MockableHttpMessageHandler(sendAsync)), logger => HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(logger), logger))));
+                new(() => new BlobApiHttpUtils(new(new MockableHttpMessageHandler(sendAsync)), logger => HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(logger), logger)),
+                logger)));
             });
 
             nodeTaskResolver = resolver.Object;

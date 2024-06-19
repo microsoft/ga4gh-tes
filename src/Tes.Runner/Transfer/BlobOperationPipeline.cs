@@ -28,17 +28,17 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
     protected BlobOperationPipeline(
         BlobPipelineOptions pipelineOptions,
+        BlobApiHttpUtils blobApiHttpUtils,
         Channel<byte[]> memoryBuffer,
         Func<IBlobPipeline, ProcessedPartsProcessor> processedPartsProcessorFactory,
         Func<IBlobPipeline, BlobPipelineOptions, PartsProducer> partsProducerFactory,
         Func<IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy, PartsWriter> partsWriterFactory,
-        Func<IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy, PartsReader> partsReaderFactory,
-        ILogger logger)
+        Func<IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy, PartsReader> partsReaderFactory, ILogger logger)
     {
         ArgumentNullException.ThrowIfNull(pipelineOptions);
 
         this.Logger = logger;
-        this.BlobApiHttpUtils = new(logger);
+        this.BlobApiHttpUtils = blobApiHttpUtils;
         PipelineOptions = pipelineOptions;
 
         ReadBufferChannel = Channel.CreateBounded<PipelineBuffer>(pipelineOptions.ReadWriteBuffersCapacity);

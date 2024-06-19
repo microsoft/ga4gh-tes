@@ -24,7 +24,7 @@ namespace Tes.Runner.Logs
         private string currentStdErrBlobName = string.Empty;
 
 
-        public AppendBlobLogPublisher(Uri targetUrl, string logNamePrefix, ILogger<AppendBlobLogPublisher> logger)
+        public AppendBlobLogPublisher(Uri targetUrl, BlobApiHttpUtils blobApiHttpUtils, string logNamePrefix, ILogger<AppendBlobLogPublisher> logger)
             : base(logger)
         {
             ArgumentNullException.ThrowIfNull(targetUrl);
@@ -32,9 +32,9 @@ namespace Tes.Runner.Logs
 
             this.targetUrl = targetUrl;
             var prefixTimeStamp = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
-            stdOutLogNamePrefix = $"{logNamePrefix}_stdout_{prefixTimeStamp}";
-            stdErrLogNamePrefix = $"{logNamePrefix}_stderr_{prefixTimeStamp}";
-            blobApiHttpUtils = new(logger);
+            this.stdOutLogNamePrefix = $"{logNamePrefix}_stdout_{prefixTimeStamp}";
+            this.stdErrLogNamePrefix = $"{logNamePrefix}_stderr_{prefixTimeStamp}";
+            this.blobApiHttpUtils = blobApiHttpUtils;
         }
 
         private static string GetBlobNameConsideringBlockCountCurrentState(int blockCount, string logName)

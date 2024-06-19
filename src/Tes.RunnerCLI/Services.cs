@@ -223,6 +223,7 @@ namespace Tes.RunnerCLI
                 .AddTransient<DrsUriTransformationStrategy>()
 
                 // Other services
+                .AddHttpClient()
                 .AddSingleton<CommandLauncher>()
                 .AddSingleton<CommandHandlers>()
                 .AddSingleton<ContainerRegistryAuthorizationManager>()
@@ -237,6 +238,8 @@ namespace Tes.RunnerCLI
                 .AddSingleton<ITransferOperationFactory, TransferOperationFactory>()
                 .AddSingleton<UrlTransformationStrategyFactory>()
                 .AddSingleton<VolumeBindingsGenerator>()
+
+                .AddTransient<BlobApiHttpUtils>()
                 ;
         }
     }

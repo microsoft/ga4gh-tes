@@ -33,9 +33,10 @@ namespace Tes.Runner.Test
             await blobContainerClient.CreateAsync();
 
             blobDownloader = new BlobDownloader(blobPipelineOptions,
+                new(new(), logger => HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(logger), NullLogger<BlobApiHttpUtils>.Instance),
                 await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(10, blobPipelineOptions.BlockSizeBytes),
                 pipeline => new(pipeline, NullLogger<ProcessedPartsProcessor>.Instance),
-                (pipeline, options) => new(pipeline, options, NullLogger.Instance),
+                (pipeline, options) => new(pipeline, options, NullLogger<PartsProducer>.Instance),
                 (pipeline, options, channel, strategy) => new(pipeline, options, channel, strategy, NullLogger<PartsWriter>.Instance),
                 (pipeline, options, channel, strategy) => new(pipeline, options, channel, strategy, NullLogger<PartsReader>.Instance),
                 NullLogger<BlobDownloader>.Instance);

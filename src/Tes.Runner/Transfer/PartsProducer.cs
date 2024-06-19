@@ -16,8 +16,7 @@ public class PartsProducer
     private readonly BlobPipelineOptions blobPipelineOptions;
     private readonly List<Channel<FileStream>> fileHandlersPools = [];
 
-
-    public PartsProducer(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions, ILogger logger)
+    public PartsProducer(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions, ILogger<PartsProducer> logger)
     {
         ArgumentNullException.ThrowIfNull(blobPipelineOptions);
         ArgumentNullException.ThrowIfNull(blobPipeline);

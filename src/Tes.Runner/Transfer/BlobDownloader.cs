@@ -13,13 +13,13 @@ public class BlobDownloader : BlobOperationPipeline
 {
     public BlobDownloader(
         BlobPipelineOptions pipelineOptions,
+        BlobApiHttpUtils blobApiHttpUtils,
         Channel<byte[]> memoryBufferPool,
         Func<IBlobPipeline, ProcessedPartsProcessor> processedPartsProcessorFactory,
         Func<IBlobPipeline, BlobPipelineOptions, PartsProducer> partsProducerFactory,
         Func<IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy, PartsWriter> partsWriterFactory,
-        Func<IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy, PartsReader> partsReaderFactory,
-        ILogger<BlobDownloader> logger)
-        : base(pipelineOptions, memoryBufferPool, processedPartsProcessorFactory, partsProducerFactory, partsWriterFactory, partsReaderFactory, logger)
+        Func<IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy, PartsReader> partsReaderFactory, ILogger<BlobDownloader> logger)
+        : base(pipelineOptions, blobApiHttpUtils, memoryBufferPool, processedPartsProcessorFactory, partsProducerFactory, partsWriterFactory, partsReaderFactory, logger)
     { }
 
     /// <summary>
@@ -28,6 +28,7 @@ public class BlobDownloader : BlobOperationPipeline
     protected BlobDownloader()
         : base(
             new BlobPipelineOptions(),
+            new BlobApiHttpUtils(new(), logger => HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(logger), Microsoft.Extensions.Logging.Abstractions.NullLogger<BlobApiHttpUtils>.Instance),
             Channel.CreateUnbounded<byte[]>(),
             pipeLine => new ProcessedPartsProcessor(pipeLine, Microsoft.Extensions.Logging.Abstractions.NullLogger<ProcessedPartsProcessor>.Instance),
             (pipeLine, pipelineOptions) => new PartsProducer(pipeLine, pipelineOptions, Microsoft.Extensions.Logging.Abstractions.NullLogger<PartsProducer>.Instance),

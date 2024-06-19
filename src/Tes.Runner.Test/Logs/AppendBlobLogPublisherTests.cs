@@ -21,7 +21,7 @@ namespace Tes.Runner.Test.Logs
         public void GetUriAndBlobNameFromCurrentState_InitialState_ReturnsExpectedUrl(int currentBlockCount, string baseLogName, string expectedBlobName)
         {
             Uri targetUrl = new("https://test.blob.core.windows.net/cont?sig=signature");
-            publisher = new AppendBlobLogPublisher(targetUrl, logNamePrefix, NullLogger<AppendBlobLogPublisher>.Instance);
+            publisher = new AppendBlobLogPublisher(targetUrl, new(new(), logger => HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(logger), NullLogger<BlobApiHttpUtils>.Instance), logNamePrefix, NullLogger<AppendBlobLogPublisher>.Instance);
 
             var blobBuilder = new BlobUriBuilder(targetUrl) { BlobName = expectedBlobName };
 
@@ -34,7 +34,7 @@ namespace Tes.Runner.Test.Logs
         public void GetUriAndBlobNameFromCurrentState_TargetUrlWithSegments_ReturnsUrlWithSegmentsAndBlobName()
         {
             Uri targetUrlWithSegments = new("https://test.blob.core.windows.net/cont/seg1/seg2?sig=signature");
-            publisher = new AppendBlobLogPublisher(targetUrlWithSegments, logNamePrefix, NullLogger<AppendBlobLogPublisher>.Instance);
+            publisher = new AppendBlobLogPublisher(targetUrlWithSegments, new(new(), logger => HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(logger), NullLogger<BlobApiHttpUtils>.Instance), logNamePrefix, NullLogger<AppendBlobLogPublisher>.Instance);
 
             var blobBuilder = new BlobUriBuilder(targetUrlWithSegments);
             blobBuilder.BlobName += "/prefix_stdout.txt";

@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Net;
+using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Text;
@@ -29,8 +30,8 @@ public class BlobApiHttpUtils(HttpClient httpClient, Func<ILogger, AsyncRetryPol
     public const string RootHashMetadataName = "md5_4mib_hashlist_root_hash";
 
     [Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor]
-    public BlobApiHttpUtils(ILogger logger)
-        : this(new HttpClient(), logger => HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(logger), logger)
+    public BlobApiHttpUtils(IHttpClientFactory httpClientFactory, ILogger<BlobApiHttpUtils> logger)
+        : this(httpClientFactory.CreateClient(), logger => HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(logger), logger)
     { }
 
     public static HttpRequestMessage CreatePutBlockRequestAsync(PipelineBuffer buffer, string apiVersion)

@@ -98,12 +98,12 @@ public class NodeTaskResolver(ILogger<NodeTaskResolver> logger)
     public virtual Func<Func<Func<ILogger, NodeTaskDownloader>, Task<NodeTask>>, Action<Microsoft.Extensions.Hosting.IHostApplicationBuilder>?, Task<NodeTask>> GetNodeTaskDownloader => Services.BuildAndRunAsync;
     public virtual Func<RuntimeOptions, string, Action<Microsoft.Extensions.Hosting.IHostApplicationBuilder>> ConfigureServicesParameters => Services.ConfigureParameters;
 
-    public class NodeTaskDownloader(NodeTaskResolver parent, ResolutionPolicyHandler resolutionPolicy, ILogger logger, Func<BlobApiHttpUtils>? blobApiHttpUtilsFactory = default)
+    public class NodeTaskDownloader(NodeTaskResolver parent, ResolutionPolicyHandler resolutionPolicy, Lazy<BlobApiHttpUtils> blobApiHttpUtilsFactory, ILogger logger)
     {
         private readonly NodeTaskResolver parent = parent ?? throw new ArgumentNullException(nameof(parent));
         private readonly ILogger logger = logger ?? throw new ArgumentNullException(nameof(logger));
         private readonly ResolutionPolicyHandler resolutionPolicy = resolutionPolicy ?? throw new ArgumentNullException(nameof(resolutionPolicy));
-        private readonly Lazy<BlobApiHttpUtils> blobApiHttpUtils = new(blobApiHttpUtilsFactory ?? (() => new(logger ?? throw new ArgumentNullException(nameof(logger)))));
+        private readonly Lazy<BlobApiHttpUtils> blobApiHttpUtils = blobApiHttpUtilsFactory;
 
         internal async Task<NodeTask> ResolveNodeTaskAsync(FileInfo? file, Uri? uri, string apiVersion, bool saveDownload, Lazy<NodeTaskResolverOptions> options)
         {
