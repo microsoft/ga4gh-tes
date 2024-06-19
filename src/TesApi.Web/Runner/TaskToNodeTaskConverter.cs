@@ -152,8 +152,7 @@ namespace TesApi.Web.Runner
 
                 await BuildInputsAsync(task, builder, nodeTaskConversionOptions.AdditionalInputs, nodeTaskConversionOptions.DefaultStorageAccountName, cancellationToken);
 
-                BuildOutputs(task, nodeTaskConversionOptions.DefaultStorageAccountName, builder,
-                    [GetBatchTaskOutput(MetricsFileName), GetBatchTaskOutput("stdout.txt"), GetBatchTaskOutput("stderr.txt")]);
+                BuildOutputs(task, nodeTaskConversionOptions.DefaultStorageAccountName, builder);
 
                 AddTaskOutputs(task, builder);
 
@@ -164,23 +163,15 @@ namespace TesApi.Web.Runner
                 logger.LogError(e, "Failed to convert the TES task to a Node Task");
                 throw;
             }
-
-            TesOutput GetBatchTaskOutput(string name)
-                => new()
-                {
-                    Path = $"../{name}",
-                    Url = storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, name).AbsoluteUri,
-                    Name = $"Batch task {name}",
-                };
         }
 
-        private void BuildOutputs(TesTask task, string defaultStorageAccount, NodeTaskBuilder builder, IList<TesOutput> additionalOutputs)
+        private void BuildOutputs(TesTask task, string defaultStorageAccount, NodeTaskBuilder builder)
         {
             if (task.Outputs is not null)
             {
                 logger.LogInformation(@"Mapping {TaskOutputsCount} outputs", task.Outputs.Count);
 
-                var outputs = PrepareLocalOutputsForMapping(task, defaultStorageAccount, additionalOutputs);
+                var outputs = PrepareLocalOutputsForMapping(task, defaultStorageAccount);
 
                 MapOutputs(outputs, pathParentDirectory, containerMountParentDirectory, builder);
             }
@@ -199,11 +190,11 @@ namespace TesApi.Web.Runner
             }
         }
 
-        private static List<TesOutput> PrepareLocalOutputsForMapping(TesTask task, string defaultStorageAccount, IList<TesOutput> additionalOutputs)
+        private static List<TesOutput> PrepareLocalOutputsForMapping(TesTask task, string defaultStorageAccount)
         {
             var outputs = new List<TesOutput>();
 
-            foreach (var output in (task.Outputs ?? []).Concat(additionalOutputs ?? []))
+            foreach (var output in (task.Outputs ?? []))
             {
                 var preparedOutput = PrepareLocalOrLocalCromwellFileOutput(output, defaultStorageAccount);
 
