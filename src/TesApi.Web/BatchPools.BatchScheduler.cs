@@ -11,10 +11,8 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonUtilities;
-using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
-using Tes.Models;
 using static TesApi.Web.BatchScheduler.BatchPools;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 
@@ -27,7 +25,7 @@ namespace TesApi.Web
 
         internal delegate ValueTask<BatchModels.Pool> ModelPoolFactory(string poolId, CancellationToken cancellationToken);
 
-        private (string PoolKey, string DisplayName) GetPoolKey(Tes.Models.TesTask tesTask, Tes.Models.VirtualMachineInformation virtualMachineInformation, List<string> identities, CancellationToken cancellationToken)
+        private (string PoolKey, string DisplayName) GetPoolKey(Tes.Models.TesTask tesTask, Tes.Models.VirtualMachineInformation virtualMachineInformation, List<string> identities)
         {
             var identityResourceIds = identities is not null && identities.Count > 0
                 ? string.Join(";", identities)
@@ -92,8 +90,8 @@ namespace TesApi.Web
             }
         }
 
-        private readonly BatchPools batchPools = new();
-        private readonly HashSet<string> neededPools = new();
+        private readonly BatchPools batchPools = [];
+        private readonly HashSet<string> neededPools = [];
 
         /// <inheritdoc/>
         public bool NeedPoolFlush
@@ -148,7 +146,7 @@ namespace TesApi.Web
                 var modelPool = await modelPoolFactory(poolId, cancellationToken);
                 modelPool.Metadata ??= [];
                 modelPool.Metadata.Add(new(PoolMetadata, new IBatchScheduler.PoolMetadata(this.batchPrefix, !isPreemptable, this.runnerMD5).ToString()));
-                var batchPool = _batchPoolFactory.CreateNew();
+                var batchPool = batchPoolFactory();
                 await batchPool.CreatePoolAndJobAsync(modelPool, isPreemptable, cancellationToken);
                 pool = batchPool;
             }
@@ -165,7 +163,18 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public bool RemovePoolFromList(IBatchPool pool)
-            => batchPools.Remove(pool);
+        {
+            pool.MarkRemovedFromService();
+
+            try
+            {
+                return batchPools.Remove(pool);
+            }
+            catch (InvalidOperationException)
+            {
+                return true;
+            }
+        }
 
         /// <inheritdoc/>
         public async ValueTask FlushPoolsAsync(IEnumerable<string> assignedPools, CancellationToken cancellationToken)
@@ -177,13 +186,13 @@ namespace TesApi.Web
                 await foreach (var pool in batchPools
                     .GetAllPools()
                     .ToAsyncEnumerable()
-                    .WhereAwait(async p => await p.CanBeDeleted(cancellationToken))
+                    .WhereAwait(async p => await p.CanBeDeletedAsync(cancellationToken))
                     .Where(p => !assignedPools.Contains(p.PoolId))
-                    .OrderByAwait(async p => await p.GetAllocationStateTransitionTime(cancellationToken))
+                    .OrderByAwait(p => p.GetAllocationStateTransitionTimeAsync(cancellationToken))
                     .Take(neededPools.Count)
                     .WithCancellation(cancellationToken))
                 {
-                    await DeletePoolAsync(pool, cancellationToken);
+                    await DeletePoolAndJobAsync(pool, cancellationToken);
                     _ = RemovePoolFromList(pool);
                 }
             }
@@ -194,8 +203,9 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public Task DeletePoolAsync(IBatchPool pool, CancellationToken cancellationToken)
+        public Task DeletePoolAndJobAsync(IBatchPool pool, CancellationToken cancellationToken)
         {
+            // TODO: Consider moving any remaining tasks to another pool, or failing tasks explicitly
             logger.LogDebug(@"Deleting pool and job {PoolId}", pool.PoolId);
 
             return Task.WhenAll(

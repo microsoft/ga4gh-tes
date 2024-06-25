@@ -330,7 +330,7 @@ namespace TesApi.Web.Runner
 
         /// <summary>
         /// This returns the node managed identity resource id from the task if it is set, otherwise it returns the global managed identity.
-        /// If the value in the workflow identity is not a full resource id, it is assumed to be the name. In this case, the resource id is constructed from the name.    
+        /// If the value in the workflow identity is not a full resource id, it is assumed to be the name. In this case, the resource id is constructed from the name.
         /// </summary>
         /// <param name="task"></param>
         /// <param name="globalManagedIdentity"></param>
@@ -435,7 +435,7 @@ namespace TesApi.Web.Runner
         {
             var inputFileUrl =
                 await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, Guid.NewGuid().ToString(),
-                    cancellationToken);
+                    storageAccessProvider.BlobPermissionsWithWrite, cancellationToken);
 
             //return the URL without the SAS token, the runner will add it using the transformation strategy
             await storageAccessProvider.UploadBlobAsync(inputFileUrl, content, cancellationToken);

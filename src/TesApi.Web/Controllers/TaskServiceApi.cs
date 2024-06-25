@@ -79,21 +79,22 @@ namespace TesApi.Controllers
             {
                 if (tesTask.State == TesState.COMPLETE ||
                     tesTask.State == TesState.EXECUTOR_ERROR ||
-                    tesTask.State == TesState.SYSTEM_ERROR)
+                    tesTask.State == TesState.SYSTEM_ERROR ||
+                    tesTask.State == TesState.PREEMPTED ||
+                    tesTask.State == TesState.CANCELING)
                 {
                     logger.LogInformation("Task {TesTask} cannot be canceled because it is in {TesTaskState} state.", id, tesTask.State);
                 }
                 else if (tesTask.State != TesState.CANCELED)
                 {
                     logger.LogInformation("Canceling task");
-                    tesTask.IsCancelRequested = true;
-                    tesTask.State = TesState.CANCELED;
+                    tesTask.State = TesState.CANCELING;
 
                     try
                     {
                         await repository.UpdateItemAsync(tesTask, cancellationToken);
                     }
-                    catch (RepositoryCollisionException exc)
+                    catch (RepositoryCollisionException<TesTask> exc)
                     {
                         logger.LogError(exc, "RepositoryCollisionException in CancelTask for {TesTask}", id);
                         return Conflict(new { message = "The task could not be updated due to a conflict with the current state; please retry." });

@@ -200,6 +200,7 @@ namespace TesDeployer
                     {
                         storageAccount = await GetExistingStorageAccountAsync(configuration.StorageAccountName)
                             ?? throw new ValidationException($"Storage account {configuration.StorageAccountName} does not exist in region {configuration.RegionName} or is not accessible to the current user.", displayExample: false);
+
                     }
 
                     if (string.IsNullOrWhiteSpace(configuration.AksClusterName))
@@ -510,7 +511,7 @@ namespace TesDeployer
                                 configuration.VmSubnetName = string.IsNullOrEmpty(configuration.VmSubnetName) ? configuration.DefaultVmSubnetName : configuration.VmSubnetName;
                                 vnetAndSubnet = await CreateVnetAndSubnetsAsync(resourceGroup);
 
-                                if (string.IsNullOrWhiteSpace(configuration.LogAnalyticsArmId))
+                                if (string.IsNullOrWhiteSpace(configuration.BatchNodesSubnetId))
                                 {
                                     configuration.BatchNodesSubnetId = vnetAndSubnet.Value.batchSubnet.Inner.Id;
                                 }
@@ -669,7 +670,7 @@ namespace TesDeployer
                                 kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 8088:80", token, appendKubeconfig: true));
 
                             var portForwardTask = startPortForward(tokenSource.Token);
-                            await Task.Delay(longRetryWaitTime * 2, tokenSource.Token); // Give enough time for kubectl to standup the port forwarding.
+                            await Task.Delay(TimeSpan.FromMinutes(3.5), tokenSource.Token); // Give enough time for kubectl to standup the port forwarding, as well as enough time for TES to accept connections.
                             var runTestTask = RunTestTaskAsync("localhost:8088", batchAccount.LowPriorityCoreQuota > 0);
 
                             for (var task = await Task.WhenAny(portForwardTask, runTestTask);

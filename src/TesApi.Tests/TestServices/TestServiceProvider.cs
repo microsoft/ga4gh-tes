@@ -20,6 +20,7 @@ using Tes.ApiClients;
 using Tes.Models;
 using Tes.Repository;
 using TesApi.Web;
+using TesApi.Web.Events;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Options;
@@ -87,15 +88,16 @@ namespace TesApi.Tests.TestServices
                 .AddTransient<ILogger<CachingWithRetriesAzureProxy>>(_ => NullLogger<CachingWithRetriesAzureProxy>.Instance)
                 .AddSingleton<CachingRetryPolicyBuilder>()
                 .AddSingleton<PriceApiClient>()
-                .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
+                .AddSingleton<Func<IBatchPool>>(s => () => s.GetService<BatchPool>())
                 .AddTransient<BatchPool>()
+                .AddSingleton<RunnerEventsProcessor>()
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
                 .AddSingleton(s => GetArmBatchQuotaProvider(s, armBatchQuotaProvider)) //added so config utils gets the arm implementation, to be removed once config utils is refactored.
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                 .AddSingleton<TaskToNodeTaskConverter>()
                 .AddSingleton<TaskExecutionScriptingManager>()
                 .IfThenElse(additionalActions is null, s => { }, s => additionalActions(s))
-            .BuildServiceProvider();
+                .BuildServiceProvider();
 
             IOptions<TOption> BindHelper<TOption>(string key) where TOption : class, new()
                 => Options.Create<TOption>(Configuration.GetSection(key).Get<TOption>() ?? new TOption());

@@ -98,7 +98,7 @@ public class ResolutionPolicyHandler
     {
         var uri = await ApplySasResolutionToUrlAsync(output.TargetUrl, output.TransformationStrategy, uploadBlobSasPermissions, runtimeOptions, apiVersion);
 
-        return new UploadInfo(output.Path!, uri);
+        return new UploadInfo(output.Path!, uri, output.MountParentDirectory);
     }
 
     protected virtual async Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, TransformationStrategy? strategy,

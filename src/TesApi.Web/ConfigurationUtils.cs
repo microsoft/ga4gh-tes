@@ -41,7 +41,6 @@ namespace TesApi.Web
             BatchAccountResourceInformation batchAccountResourceInformation,
             ILogger<ConfigurationUtils> logger)
         {
-            ArgumentNullException.ThrowIfNull(storageAccessProvider);
             ArgumentNullException.ThrowIfNull(quotaProvider);
             ArgumentNullException.ThrowIfNull(batchAccountResourceInformation);
 
@@ -69,8 +68,8 @@ namespace TesApi.Web
         /// <returns></returns>
         public async Task<List<string>> ProcessAllowedVmSizesConfigurationFileAsync(CancellationToken cancellationToken)
         {
-            var supportedVmSizesUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync("/configuration/supported-vm-sizes", cancellationToken);
-            var allowedVmSizesUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync("/configuration/allowed-vm-sizes", cancellationToken);
+            var supportedVmSizesUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync("/configuration/supported-vm-sizes", storageAccessProvider.BlobPermissionsWithWrite, cancellationToken);
+            var allowedVmSizesUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync("/configuration/allowed-vm-sizes", storageAccessProvider.BlobPermissionsWithWrite, cancellationToken);
 
             var supportedVmSizes = (await skuInformationProvider.GetVmSizesAndPricesAsync(batchAccountResourceInformation.Region, cancellationToken)).ToList();
             var batchAccountQuotas = await quotaProvider.GetVmCoreQuotaAsync(lowPriority: false, cancellationToken: cancellationToken);

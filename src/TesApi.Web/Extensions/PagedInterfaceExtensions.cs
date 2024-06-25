@@ -27,24 +27,24 @@ namespace TesApi.Web.Extensions
         #region Implementation classes
         private readonly struct AsyncEnumerable<T> : IAsyncEnumerable<T>
         {
-            private readonly Func<CancellationToken, IAsyncEnumerator<T>> _getEnumerator;
+            private readonly Func<CancellationToken, IAsyncEnumerator<T>> GetEnumerator;
 
             public AsyncEnumerable(IPagedEnumerable<T> source)
             {
                 ArgumentNullException.ThrowIfNull(source);
 
-                _getEnumerator = c => new PagedEnumerableEnumerator<T>(source, c);
+                GetEnumerator = c => new PagedEnumerableEnumerator<T>(source, c);
             }
 
             /// <inheritdoc/>
             IAsyncEnumerator<T> IAsyncEnumerable<T>.GetAsyncEnumerator(CancellationToken cancellationToken)
-                => _getEnumerator(cancellationToken);
+                => GetEnumerator(cancellationToken);
         }
 
         private sealed class PagedEnumerableEnumerator<T> : CommonUtilities.PagedInterfaceExtensions.AbstractEnumerator<T, IPagedEnumerator<T>>
         {
             public PagedEnumerableEnumerator(IPagedEnumerable<T> source, CancellationToken cancellationToken)
-                : base(source?.GetPagedEnumerator(), e => e.Current, cancellationToken)
+                : base(source.GetPagedEnumerator(), e => e.Current, cancellationToken)
             { }
 
             /// <inheritdoc/>
