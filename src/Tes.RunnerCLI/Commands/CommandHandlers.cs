@@ -54,6 +54,11 @@ namespace Tes.RunnerCLI.Commands
 
                     await ExecuteAllOperationsAsSubProcessesAsync(nodeTask, file, blockSize, writers, readers, bufferCapacity, apiVersion, dockerUri);
 
+                    {
+                        await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
+                        await executor.AppendMetrics();
+                    }
+
                     await eventsPublisher.PublishTaskCompletionEventAsync(nodeTask, duration.Elapsed,
                         EventsPublisher.SuccessStatus, errorMessage: string.Empty);
                 }
@@ -86,8 +91,30 @@ namespace Tes.RunnerCLI.Commands
 
         private static async Task RootCommandNodeCleanupAsync(Runner.Models.NodeTask nodeTask, Uri dockerUri)
         {
-            await new DockerExecutor(dockerUri).NodeCleanupAsync(new(nodeTask.ImageName, nodeTask.ImageTag, default, default, default, new()));
-            await Executor.RunnerHost.NodeCleanupAsync();
+            Task[]? cleanupTasks = [];
+            try
+            {
+                cleanupTasks =
+                [
+                    new DockerExecutor(dockerUri).NodeCleanupAsync(new(nodeTask.ImageName, nodeTask.ImageTag, default, default, default, new()), Logger),
+                    Executor.RunnerHost.NodeCleanupPreviousTasksAsync()
+                ];
+                await Task.WhenAll(cleanupTasks);
+            }
+            catch (AggregateException ex)
+            {
+                foreach (var e in ex.InnerExceptions)
+                {
+                    Logger.LogWarning(e, "({ExceptionType}): {ExceptionMessage}\n{ExceptionStackTrace}", e.GetType().FullName, e.Message, e.StackTrace);
+                }
+            }
+            catch (Exception)
+            {
+                foreach (var e in cleanupTasks?.Where(t => t.IsFaulted).Select(t => t.Exception) ?? [])
+                {
+                    Logger.LogWarning(e!, "({ExceptionType}): {ExceptionMessage}\n{ExceptionStackTrace}", e!.GetType().FullName, e!.Message, e!.StackTrace);
+                }
+            }
         }
 
         /// <summary>
@@ -145,11 +172,13 @@ namespace Tes.RunnerCLI.Commands
             int bufferCapacity,
             string apiVersion)
         {
-            var options = CommandLauncher.CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
             Logger.LogDebug("Starting upload operation.");
 
             var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri, apiVersion);
+
+            //TODO: Eventually all the options should come from the node runner task and we should remove the CLI flags as they are not used            
+            var options = CommandLauncher.CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion, nodeTask.RuntimeOptions?.SetContentMd5OnUpload ?? false);
 
             return await ExecuteTransferTaskAsync(nodeTask, exec => exec.UploadOutputsAsync(options), apiVersion);
         }
@@ -174,7 +203,7 @@ namespace Tes.RunnerCLI.Commands
             int bufferCapacity,
             string apiVersion)
         {
-            var options = CommandLauncher.CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
+            var options = CommandLauncher.CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion, setContentMd5OnUploads: false);
 
             Logger.LogDebug("Starting download operation.");
 

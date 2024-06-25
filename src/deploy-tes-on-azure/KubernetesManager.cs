@@ -231,6 +231,7 @@ namespace TesDeployer
                 workingDirectory: workingDirectoryTemp);
             await WaitForWorkloadAsync(kubernetesClient, "tes", configuration.AksCoANamespace, cancellationToken);
         }
+
         public async Task RemovePodAadChart()
         {
             await ExecHelmProcessAsync($"uninstall aad-pod-identity", throwOnNonZeroExitCode: false);
@@ -298,6 +299,27 @@ namespace TesDeployer
             var valuesString = KubernetesYaml.Serialize(values);
             await File.WriteAllTextAsync(TempHelmValuesYamlPath, valuesString, cancellationToken);
             await Deployer.UploadTextToStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", valuesString, cancellationToken);
+        }
+
+        public async Task<FileInfo> ConfigureAltLocalValuesYamlAsync(string altName, Action<HelmValues> configure)
+        {
+            FileInfo altValues = new(Path.Combine(Path.GetDirectoryName(TempHelmValuesYamlPath), altName));
+            var values = KubernetesYaml.Deserialize<HelmValues>(await File.ReadAllTextAsync(TempHelmValuesYamlPath, cancellationToken));
+            configure(values);
+            await File.WriteAllTextAsync(altValues.FullName, KubernetesYaml.Serialize(values), cancellationToken);
+            return altValues;
+        }
+
+        public FileInfo SwapLocalValuesYaml(FileInfo file)
+        {
+            FileInfo backup = new(Path.Combine(file.DirectoryName, "backup.bak"));
+            File.Replace(file.FullName, TempHelmValuesYamlPath, backup.FullName);
+            return backup;
+        }
+
+        public void RestoreLocalValuesYaml(FileInfo backup)
+        {
+            File.Replace(backup.FullName, TempHelmValuesYamlPath, default);
         }
 
         public async Task<Dictionary<string, string>> GetAKSSettingsAsync(IStorageAccount storageAccount)
@@ -430,6 +452,11 @@ namespace TesDeployer
             deployment["environment"] = GetValueOrDefault(settings, "DeploymentEnvironment");
             deployment["created"] = GetValueOrDefault(settings, "DeploymentCreated");
             deployment["updated"] = GetValueOrDefault(settings, "DeploymentUpdated");
+
+            // ensure entries have values
+            _ = batchNodes.TryAdd("contentMD5", "false");
+            _ = batchScheduling.TryAdd("poolRotationForcedDays", "7");
+            _ = batchScheduling.TryAdd("taskMaxWallClockTimeDays", "7");
 
             values.Config["batchAccount"] = batchAccount;
             values.Config["batchNodes"] = batchNodes;

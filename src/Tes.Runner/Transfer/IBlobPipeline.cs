@@ -37,13 +37,16 @@ public interface IBlobPipeline
     /// <param name="length">Blob length in bytes</param>
     /// <param name="blobUrl">Url to the blob in azure storage</param>
     /// <param name="fileName">Path to the file</param>
-    /// <param name="rootHash"></param>
+    /// <param name="rootHash">Root hash</param>
+    /// <param name="contentMd5">File content MD5 hash</param>
     /// <returns></returns>
-    Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash);
+    Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash, string? contentMd5);
 
     /// <summary>
     /// Called when a buffer is created. This is used to configure the buffer with additional information.
     /// </summary>
     /// <param name="buffer"><see cref="PipelineBuffer"/></param>
     void ConfigurePipelineBuffer(PipelineBuffer buffer);
+
+    Task<string?> CalculateFileMd5HashAsync(string filePath);
 }

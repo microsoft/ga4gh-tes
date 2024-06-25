@@ -17,7 +17,7 @@ namespace Tes.SDK.Tests
         public void Initialize()
         {
             _httpClientMock = new Mock<HttpClient>();
-            _client = new TesClient(_httpClientMock.Object, new("https://example.com"));
+            _client = new TesClient(_httpClientMock.Object, new Uri("https://example.com"));
         }
 
         [TestCleanup]

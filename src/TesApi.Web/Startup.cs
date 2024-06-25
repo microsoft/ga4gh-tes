@@ -98,6 +98,7 @@ namespace TesApi.Web
                         {
                             opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
                             opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
+                            opts.SerializerSettings.DefaultValueHandling = Newtonsoft.Json.DefaultValueHandling.Ignore;
                         })
                     .Services
                     .AddSingleton(CreateStorageAccessProviderFromConfiguration)
@@ -123,7 +124,6 @@ namespace TesApi.Web
                     })
                     .AddSingleton<TaskToNodeTaskConverter>()
                     .AddSingleton<TaskExecutionScriptingManager>()
-                    .AddTransient<BatchNodeScriptBuilder>()
 
                     .AddSingleton(c =>
                     {

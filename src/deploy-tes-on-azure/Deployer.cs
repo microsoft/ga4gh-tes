@@ -68,8 +68,15 @@ namespace TesDeployer
     public class Deployer(Configuration configuration)
     {
         private static readonly AsyncRetryPolicy roleAssignmentHashConflictRetryPolicy = Policy
-            .Handle<Microsoft.Rest.Azure.CloudException>(cloudException => cloudException.Body.Code.Equals("HashConflictOnDifferentRoleAssignmentIds"))
+            .Handle<Microsoft.Rest.Azure.CloudException>(cloudException =>
+                "HashConflictOnDifferentRoleAssignmentIds".Equals(cloudException.Body.Code))
             .RetryAsync();
+
+        private static readonly AsyncRetryPolicy operationNotAllowedConflictRetryPolicy = Policy
+            .Handle<Azure.RequestFailedException>(azureException =>
+                (int)System.Net.HttpStatusCode.Conflict == azureException.Status &&
+                "OperationNotAllowed".Equals(azureException.ErrorCode))
+            .WaitAndRetryAsync(30, retryAttempt => System.TimeSpan.FromSeconds(10));
 
         private static readonly AsyncRetryPolicy generalRetryPolicy = Policy
             .Handle<Exception>()
@@ -343,7 +350,7 @@ namespace TesDeployer
 
                     if (installedVersion is null || installedVersion < new Version(5, 2, 2))
                     {
-                        await EnableWorkloadIdentity(aksCluster, managedIdentity, resourceGroup);
+                        await operationNotAllowedConflictRetryPolicy.ExecuteAsync(() => EnableWorkloadIdentity(aksCluster, managedIdentity, resourceGroup));
                         await kubernetesManager.RemovePodAadChart();
                     }
 
@@ -352,6 +359,14 @@ namespace TesDeployer
                         if (string.IsNullOrWhiteSpace(settings["DeploymentCreated"]))
                         {
                             settings["DeploymentCreated"] = settings["DeploymentUpdated"];
+                        }
+                    }
+
+                    if (installedVersion is null || installedVersion < new Version(5, 3, 3))
+                    {
+                        if (string.IsNullOrWhiteSpace(settings["AzureCloudName"]))
+                        {
+                            settings["AzureCloudName"] = configuration.AzureCloudName;
                         }
                     }
 
@@ -582,9 +597,13 @@ namespace TesDeployer
                             await ExecuteQueriesOnAzurePostgreSQLDbFromK8(kubernetesClient, deploymentName, deploymentNamespace);
                             await kubernetesClient.AppsV1.DeleteNamespacedDeploymentAsync(deploymentName, deploymentNamespace, cancellationToken: cts.Token);
 
-
                             if (configuration.EnableIngress.GetValueOrDefault())
                             {
+                                var tmpValues = await kubernetesManager.ConfigureAltLocalValuesYamlAsync("no-ingress.yml", values => values.Service["enableIngress"] = $"{false}");
+                                var backupValues = kubernetesManager.SwapLocalValuesYaml(tmpValues);
+                                await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient);
+                                kubernetesManager.RestoreLocalValuesYaml(backupValues);
+
                                 await Execute(
                                     $"Enabling Ingress {kubernetesManager.TesHostname}",
                                     async () =>
