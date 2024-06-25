@@ -28,8 +28,9 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="pool"></param>
         /// <param name="isPreemptible"></param>
+        /// <param name="expiry"></param>
         /// <param name="cancellationToken"></param>
-        ValueTask CreatePoolAndJobAsync(Microsoft.Azure.Management.Batch.Models.Pool pool, bool isPreemptible, CancellationToken cancellationToken);
+        ValueTask CreatePoolAndJobAsync(Microsoft.Azure.Management.Batch.Models.Pool pool, bool isPreemptible, DateTimeOffset expiry, CancellationToken cancellationToken);
 
         /// <summary>
         /// Connects to the provided pool and associated job in the Batch Account.

@@ -25,7 +25,7 @@ namespace TesApi.Web
         [GeneratedRegex("^[a-zA-Z0-9_-]+$")]
         private static partial Regex PoolNameRegex();
 
-        internal delegate ValueTask<BatchModels.Pool> ModelPoolFactory(string poolId, CancellationToken cancellationToken);
+        internal delegate ValueTask<(BatchModels.Pool PoolSpec, DateTimeOffset Expiry)> ModelPoolFactory(string poolId, CancellationToken cancellationToken);
 
         private (string PoolKey, string DisplayName) GetPoolKey(Tes.Models.TesTask tesTask, Tes.Models.VirtualMachineInformation virtualMachineInformation, List<string> identities, CancellationToken cancellationToken)
         {
@@ -146,10 +146,10 @@ namespace TesApi.Web
                 RandomNumberGenerator.Fill(uniquifier);
                 var poolId = $"{key}-{uniquifier.ConvertToBase32().TrimEnd('=').ToLowerInvariant()}"; // embedded '-' is required by GetKeyFromPoolId()
                 var modelPool = await modelPoolFactory(poolId, cancellationToken);
-                modelPool.Metadata ??= [];
-                modelPool.Metadata.Add(new(PoolMetadata, new IBatchScheduler.PoolMetadata(this.batchPrefix, !isPreemptable, this.runnerMD5).ToString()));
+                modelPool.PoolSpec.Metadata ??= [];
+                modelPool.PoolSpec.Metadata.Add(new(PoolMetadata, new IBatchScheduler.PoolMetadata(this.batchPrefix, !isPreemptable, this.runnerMD5, modelPool.Expiry.AddMinutes(-15).ToUniversalTime()).ToString()));
                 var batchPool = _batchPoolFactory.CreateNew();
-                await batchPool.CreatePoolAndJobAsync(modelPool, isPreemptable, cancellationToken);
+                await batchPool.CreatePoolAndJobAsync(modelPool.PoolSpec, isPreemptable, modelPool.Expiry, cancellationToken);
                 pool = batchPool;
             }
 

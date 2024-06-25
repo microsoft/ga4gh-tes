@@ -43,7 +43,7 @@ namespace TesApi.Tests
             Assert.IsTrue(batchScheduler.RemovePoolFromList(pool));
             Assert.AreEqual(0, batchScheduler.GetPoolGroupKeys().Count());
 
-            pool = (BatchPool)await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(new Pool(name: id)), System.Threading.CancellationToken.None);
+            pool = (BatchPool)await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult((new Pool(name: id), DateTimeOffset.UtcNow.AddDays(1))), System.Threading.CancellationToken.None);
 
             Assert.IsNotNull(pool);
             Assert.AreEqual(1, batchScheduler.GetPoolGroupKeys().Count());
@@ -63,7 +63,7 @@ namespace TesApi.Tests
             var count = batchScheduler.GetPools().Count();
             serviceProvider.AzureProxy.Verify(mock => mock.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<System.Threading.CancellationToken>()), Times.Once);
 
-            var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(new Pool(name: id)), System.Threading.CancellationToken.None);
+            var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult((new Pool(name: id), DateTimeOffset.UtcNow.AddDays(1))), System.Threading.CancellationToken.None);
             await pool.ServicePoolAsync();
 
             Assert.AreEqual(count, batchScheduler.GetPools().Count());
@@ -86,7 +86,7 @@ namespace TesApi.Tests
             var key = batchScheduler.GetPoolGroupKeys().First();
             var count = batchScheduler.GetPools().Count();
 
-            var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(new Pool(name: id)), System.Threading.CancellationToken.None);
+            var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult((new Pool(name: id), DateTimeOffset.UtcNow.AddDays(1))), System.Threading.CancellationToken.None);
             await pool.ServicePoolAsync();
 
             Assert.AreNotEqual(count, batchScheduler.GetPools().Count());
@@ -1448,7 +1448,7 @@ namespace TesApi.Tests
         }
 
         private static async Task<BatchPool> AddPool(BatchScheduler batchScheduler)
-            => (BatchPool)await batchScheduler.GetOrAddPoolAsync("key1", false, (id, cancellationToken) => ValueTask.FromResult<Pool>(new(name: id, displayName: "display1", vmSize: "vmSize1")), System.Threading.CancellationToken.None);
+            => (BatchPool)await batchScheduler.GetOrAddPoolAsync("key1", false, (id, cancellationToken) => ValueTask.FromResult<(Pool PoolSpec, DateTimeOffset Expiry)>((new(name: id, displayName: "display1", vmSize: "vmSize1"), DateTimeOffset.UtcNow.AddDays(1))), System.Threading.CancellationToken.None);
 
         internal static void GuardAssertsWithTesTask(TesTask tesTask, Action assertBlock)
         {
