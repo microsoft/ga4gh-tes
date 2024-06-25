@@ -91,8 +91,30 @@ namespace Tes.RunnerCLI.Commands
 
         private static async Task RootCommandNodeCleanupAsync(Runner.Models.NodeTask nodeTask, Uri dockerUri)
         {
-            await new DockerExecutor(dockerUri).NodeCleanupAsync(new(nodeTask.ImageName, nodeTask.ImageTag, default, default, default, new(), default));
-            await Executor.RunnerHost.NodeCleanupPreviousTasksAsync();
+            Task[]? cleanupTasks = [];
+            try
+            {
+                cleanupTasks =
+                [
+                    new DockerExecutor(dockerUri).NodeCleanupAsync(new(nodeTask.ImageName, nodeTask.ImageTag, default, default, default, new(), default), Logger),
+                    Executor.RunnerHost.NodeCleanupPreviousTasksAsync()
+                ];
+                await Task.WhenAll(cleanupTasks);
+            }
+            catch (AggregateException ex)
+            {
+                foreach (var e in ex.InnerExceptions)
+                {
+                    Logger.LogWarning(e, "({ExceptionType}): {ExceptionMessage}\n{ExceptionStackTrace}", e.GetType().FullName, e.Message, e.StackTrace);
+                }
+            }
+            catch (Exception)
+            {
+                foreach (var e in cleanupTasks?.Where(t => t.IsFaulted).Select(t => t.Exception) ?? [])
+                {
+                    Logger.LogWarning(e!, "({ExceptionType}): {ExceptionMessage}\n{ExceptionStackTrace}", e!.GetType().FullName, e!.Message, e!.StackTrace);
+                }
+            }
         }
 
         /// <summary>
