@@ -1014,11 +1014,6 @@ namespace TesApi.Web
             {
                 throw new TesException("InvalidInputFilePath", "One of Input Url or Content must be set");
             }
-
-            if (inputFile.Type == TesFileType.DIRECTORY)
-            {
-                throw new TesException("InvalidInputFilePath", "Directory input is not supported.");
-            }
         }
 
         enum StartScriptVmFamilies

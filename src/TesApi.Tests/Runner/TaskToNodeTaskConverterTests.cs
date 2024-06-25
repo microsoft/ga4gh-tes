@@ -68,6 +68,12 @@ namespace TesApi.Tests.Runner
             storageAccessProviderMock.Setup(x =>
                     x.GetInternalTesTaskBlobUrlWithoutSasToken(It.IsAny<TesTask>(), It.IsAny<string>()))
                 .Returns(InternalBlobUrl);
+            storageAccessProviderMock.Setup(x =>
+                    x.MapLocalPathToSasUrlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<TimeSpan?>(), It.IsAny<bool>()))
+                .Returns(Task.FromResult(new Uri("http://host")));
+            storageAccessProviderMock.Setup(x =>
+                    x.GetBlobUrlsAsync(It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.FromResult<IList<Uri>>([]));
 
             var azureCloudIdentityConfig = AzureCloudConfig.CreateAsync().Result.AzureEnvironmentConfig;
             taskToNodeTaskConverter = new TaskToNodeTaskConverter(Options.Create(terraOptions), storageAccessProviderMock.Object,

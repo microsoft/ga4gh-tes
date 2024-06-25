@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -88,6 +90,12 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
         ArgumentNullException.ThrowIfNull(blobAbsoluteUrl);
 
         await AzureProxy.UploadBlobAsync(blobAbsoluteUrl, content, cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IList<Uri>> GetBlobUrlsAsync(Uri blobVirtualDirectory, CancellationToken cancellationToken)
+    {
+        return (await AzureProxy.ListBlobsAsync(blobVirtualDirectory, cancellationToken)).Select(b => b.Uri).ToList();
     }
 
     /// <inheritdoc />
