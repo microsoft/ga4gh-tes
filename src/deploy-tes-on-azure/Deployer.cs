@@ -598,9 +598,13 @@ namespace TesDeployer
                             await ExecuteQueriesOnAzurePostgreSQLDbFromK8(kubernetesClient, deploymentName, deploymentNamespace);
                             await kubernetesClient.AppsV1.DeleteNamespacedDeploymentAsync(deploymentName, deploymentNamespace, cancellationToken: cts.Token);
 
-
                             if (configuration.EnableIngress.GetValueOrDefault())
                             {
+                                var tmpValues = await kubernetesManager.ConfigureAltLocalValuesYamlAsync("no-ingress.yml", values => values.Service["enableIngress"] = $"{false}");
+                                var backupValues = kubernetesManager.SwapLocalValuesYaml(tmpValues);
+                                await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient);
+                                kubernetesManager.RestoreLocalValuesYaml(backupValues);
+
                                 await Execute(
                                     $"Enabling Ingress {kubernetesManager.TesHostname}",
                                     async () =>
