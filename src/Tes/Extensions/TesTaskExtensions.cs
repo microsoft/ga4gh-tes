@@ -1,9 +1,11 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Tes.Models;
+using Tes.TaskSubmitters;
 
 namespace Tes.Extensions
 {
@@ -12,6 +14,51 @@ namespace Tes.Extensions
     /// </summary>
     public static class TesTaskExtensions
     {
+        /// <summary>
+        /// Reports if task was submitted by Cromwell.
+        /// </summary>
+        /// <param name="tesTask"><see cref="TesTask"/>.</param>
+        /// <returns><see cref="true"/> if task is from Cromwell, false otherwise.</returns>
+        public static bool IsCromwell(this TesTask tesTask)
+        {
+            return tesTask.TaskSubmitter is CromwellTaskSubmitter;
+        }
+
+        /// <summary>
+        /// Gets Cromwell task metadata
+        /// </summary>
+        /// <param name="tesTask"><see cref="TesTask"/>.</param>
+        /// <returns><see cref="CromwellTaskSubmitter"/>.</returns>
+        public static CromwellTaskSubmitter GetCromwellMetadata(this TesTask tesTask)
+        {
+            return tesTask.TaskSubmitter as CromwellTaskSubmitter;
+        }
+
+        /// <summary>
+        /// Visits each value in an enumeration with an action.
+        /// </summary>
+        /// <typeparam name="T">Type of enumerated items.</typeparam>
+        /// <param name="values">Enumeration on which to visit each item.</param>
+        /// <param name="action">Action to invoke with each item.</param>
+        internal static void ForEach<T>(this IEnumerable<T> values, Action<T> action)
+        {
+            foreach (var value in values)
+            {
+                action(value);
+            }
+        }
+
+        /// <summary>
+        /// Adds a range of items to an <see cref="IList{T}"/>.
+        /// </summary>
+        /// <typeparam name="T">Type of enumerated items.</typeparam>
+        /// <param name="list">List to add <paramref name="items"/> to.</param>
+        /// <param name="items">Items to add to <paramref name="list"/>.</param>
+        public static void AddRange<T>(this IList<T> list, IEnumerable<T> items)
+        {
+            items.ForEach(list.Add);
+        }
+
         /// <summary>
         /// Writes to <see cref="TesTask"/> system log.
         /// </summary>
@@ -22,7 +69,7 @@ namespace Tes.Extensions
             if (logEntries is not null && logEntries.Any(e => !string.IsNullOrEmpty(e)))
             {
                 var tesTaskLog = tesTask.GetOrAddTesTaskLog();
-                tesTaskLog.SystemLogs ??= new();
+                tesTaskLog.SystemLogs ??= [];
                 tesTaskLog.SystemLogs.AddRange(logEntries);
             }
         }
@@ -36,7 +83,7 @@ namespace Tes.Extensions
         public static void SetFailureReason(this TesTask tesTask, string failureReason, params string[] additionalSystemLogItems)
         {
             tesTask.GetOrAddTesTaskLog().FailureReason = failureReason;
-            tesTask.AddToSystemLog(new[] { failureReason });
+            tesTask.AddToSystemLog([failureReason]);
             tesTask.AddToSystemLog(additionalSystemLogItems.Where(i => !string.IsNullOrEmpty(i)));
         }
 
@@ -57,7 +104,7 @@ namespace Tes.Extensions
         public static void SetWarning(this TesTask tesTask, string warning, params string[] additionalSystemLogItems)
         {
             tesTask.GetOrAddTesTaskLog().Warning = warning;
-            tesTask.AddToSystemLog(new[] { warning });
+            tesTask.AddToSystemLog([warning]);
             tesTask.AddToSystemLog(additionalSystemLogItems.Where(i => !string.IsNullOrEmpty(i)));
         }
 
@@ -70,7 +117,7 @@ namespace Tes.Extensions
         {
             if (tesTask.Logs is null || !tesTask.Logs.Any())
             {
-                tesTask.Logs = new() { new() };
+                tesTask.Logs = [new()];
             }
 
             return tesTask.Logs.Last();
@@ -83,7 +130,7 @@ namespace Tes.Extensions
         /// <returns>Last <see cref="TesTaskLog"/></returns>
         public static TesTaskLog AddTesTaskLog(this TesTask tesTask)
         {
-            tesTask.Logs ??= new();
+            tesTask.Logs ??= [];
             tesTask.Logs.Add(new());
 
             return tesTask.Logs.Last();
@@ -114,7 +161,7 @@ namespace Tes.Extensions
         {
             if (tesTaskLog.Logs is null || !tesTaskLog.Logs.Any())
             {
-                tesTaskLog.Logs = new() { new() };
+                tesTaskLog.Logs = [new()];
             }
 
             return tesTaskLog.Logs.Last();

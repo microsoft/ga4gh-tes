@@ -17,11 +17,18 @@ public class BlobDownloader : BlobOperationPipeline
     }
 
     /// <summary>
+    /// Parameter-less constructor for mocking
+    /// </summary>
+    protected BlobDownloader() : base(new BlobPipelineOptions(), Channel.CreateUnbounded<byte[]>())
+    {
+    }
+
+    /// <summary>
     /// Downloads a list of files from an HTTP source.
     /// </summary>
     /// <param name="downloadList">A list of <see cref="DownloadInfo"/></param>
     /// <returns>Total bytes downloaded</returns>
-    public async ValueTask<long> DownloadAsync(List<DownloadInfo> downloadList)
+    public virtual async ValueTask<long> DownloadAsync(List<DownloadInfo> downloadList)
     {
         ValidateDownloadList(downloadList);
 
@@ -60,7 +67,13 @@ public class BlobDownloader : BlobOperationPipeline
     /// <returns>Part's length in bytes</returns>
     public override async ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
     {
-        return await BlobBlockApiHttpUtils.ExecuteHttpRequestAndReadBodyResponseAsync(buffer, () => BlobBlockApiHttpUtils.CreateReadByRangeHttpRequest(buffer), cancellationToken);
+
+        if (buffer.Length == 0)
+        {
+            return 0;
+        }
+
+        return await BlobApiHttpUtils.ExecuteHttpRequestAndReadBodyResponseAsync(buffer, () => BlobApiHttpUtils.CreateReadByRangeHttpRequest(buffer), cancellationToken);
     }
 
     /// <summary>
@@ -74,7 +87,7 @@ public class BlobDownloader : BlobOperationPipeline
 
         try
         {
-            response = await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => new HttpRequestMessage(HttpMethod.Head, new Uri(source)));
+            response = await BlobApiHttpUtils.ExecuteHttpRequestAsync(() => new HttpRequestMessage(HttpMethod.Head, new Uri(source)));
 
             return response.Content.Headers.ContentLength ?? 0;
         }
@@ -91,8 +104,9 @@ public class BlobDownloader : BlobOperationPipeline
     /// <param name="blobUrl"></param>
     /// <param name="fileName"></param>
     /// <param name="rootHash"></param>
+    /// <param name="contentMd5"></param>
     /// <returns></returns>
-    public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash)
+    public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash, string? contentMd5)
     {
         Logger.LogInformation($"Completed download. Total bytes: {length:n0} Filename: {fileName}");
 

@@ -16,8 +16,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
-using Newtonsoft.Json;
+using Tes.Converters;
 using Tes.Utilities;
+using NewtonsoftJson = Newtonsoft.Json;
+using STJSerialization = System.Text.Json.Serialization;
 
 namespace Tes.Models
 {
@@ -35,7 +37,7 @@ namespace Tes.Models
         /// </summary>
         /// <value>Logs for each executor</value>
         [DataMember(Name = "logs")]
-        public List<TesExecutorLog> Logs { get; set; } = new List<TesExecutorLog>();
+        public List<TesExecutorLog> Logs { get; set; } = [];
 
         /// <summary>
         /// Arbitrary logging metadata included by the implementation.
@@ -48,6 +50,8 @@ namespace Tes.Models
         /// When the task started, in RFC 3339 format.
         /// </summary>
         /// <value>When the task started, in RFC 3339 format.</value>
+        [STJSerialization.JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339_JsonText))]
+        [NewtonsoftJson.JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339_Newtonsoft))]
         [DataMember(Name = "start_time")]
         public DateTimeOffset? StartTime { get; set; }
 
@@ -55,6 +59,8 @@ namespace Tes.Models
         /// When the task ended, in RFC 3339 format.
         /// </summary>
         /// <value>When the task ended, in RFC 3339 format.</value>
+        [STJSerialization.JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339_JsonText))]
+        [NewtonsoftJson.JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339_Newtonsoft))]
         [DataMember(Name = "end_time")]
         public DateTimeOffset? EndTime { get; set; }
 
@@ -63,14 +69,14 @@ namespace Tes.Models
         /// </summary>
         /// <value>Information about all output files. Directory outputs are flattened into separate items.</value>
         [DataMember(Name = "outputs")]
-        public List<TesOutputFileLog> Outputs { get; set; } = new List<TesOutputFileLog>();
+        public List<TesOutputFileLog> Outputs { get; set; } = [];
 
         /// <summary>
         /// System logs are any logs the system decides are relevant, which are not tied directly to an Executor process. Content is implementation specific: format, size, etc.  System logs may be collected here to provide convenient access.  For example, the system may include the name of the host where the task is executing, an error message that caused a SYSTEM_ERROR state (e.g. disk is full), etc.  System logs are only included in the FULL task view.
         /// </summary>
         /// <value>System logs are any logs the system decides are relevant, which are not tied directly to an Executor process. Content is implementation specific: format, size, etc.  System logs may be collected here to provide convenient access.  For example, the system may include the name of the host where the task is executing, an error message that caused a SYSTEM_ERROR state (e.g. disk is full), etc.  System logs are only included in the FULL task view.</value>
         [DataMember(Name = "system_logs")]
-        public List<string> SystemLogs { get; set; } = new List<string>();
+        public List<string> SystemLogs { get; set; } = [];
 
         /// <summary>
         /// Returns the string presentation of the object
@@ -93,7 +99,7 @@ namespace Tes.Models
         /// </summary>
         /// <returns>JSON string presentation of the object</returns>
         public string ToJson()
-            => JsonConvert.SerializeObject(this, Formatting.Indented);
+            => NewtonsoftJson.JsonConvert.SerializeObject(this, NewtonsoftJson.Formatting.Indented);
 
         /// <summary>
         /// Returns true if objects are equal

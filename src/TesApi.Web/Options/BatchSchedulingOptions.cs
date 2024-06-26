@@ -19,17 +19,7 @@ namespace TesApi.Web.Options
         public const double DefaultPoolRotationForcedDays = 30.0;
 
         /// <summary>
-        /// Use legacy Azure Batch Autopools implementation
-        /// </summary>
-        public bool UseLegacyAutopools { get; set; } = false;
-
-        /// <summary>
-        /// Disables background service to delete Batch jobs older than seven days for completed tasks (only relevant if <see cref="UseLegacyAutopools"/> is set)
-        /// </summary>
-        public bool DisableJobCleanup { get; set; } = false;
-
-        /// <summary>
-        /// Pool Id prefix and metadata value used to associate batch account pools and jobs to this scheduler. Only relevant if <see cref="UseLegacyAutopools"/> is clear
+        /// Pool Id prefix and metadata value used to associate batch account pools and jobs to this scheduler
         /// </summary>
         /// <remarks>
         /// This value must be provided.
@@ -37,7 +27,7 @@ namespace TesApi.Web.Options
         public string Prefix { get; set; }
 
         /// <summary>
-        /// Maximum active lifetime of an azure batch pool (only relevant if <see cref="UseLegacyAutopools"/> is clear)
+        /// Maximum active lifetime of an azure batch pool
         /// </summary>
         public double PoolRotationForcedDays { get; set; } = DefaultPoolRotationForcedDays;
 
@@ -45,5 +35,10 @@ namespace TesApi.Web.Options
         /// Disable scheduling of dedicated compute nodes
         /// </summary>
         public bool UsePreemptibleVmsOnly { get; set; } = false;
+
+        /// <summary>
+        /// The maximum elapsed time that tasks may run, measured from the time the task starts.
+        /// </summary>
+        public double TaskMaxWallClockTimeDays { get; set; } = DefaultPoolRotationForcedDays;
     }
 }

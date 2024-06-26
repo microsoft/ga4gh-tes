@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Security.Cryptography;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
@@ -16,13 +17,14 @@ public abstract class BlobOperationPipeline : IBlobPipeline
     protected readonly Channel<byte[]> MemoryBufferChannel;
     protected readonly BlobPipelineOptions PipelineOptions;
     protected readonly ILogger Logger = PipelineLoggerFactory.Create<BlobOperationPipeline>();
-    protected readonly BlobBlockApiHttpUtils BlobBlockApiHttpUtils = new BlobBlockApiHttpUtils();
+    protected readonly BlobApiHttpUtils BlobApiHttpUtils = new BlobApiHttpUtils();
 
     private readonly PartsProducer partsProducer;
     private readonly PartsWriter partsWriter;
     private readonly PartsReader partsReader;
 
     private readonly ProcessedPartsProcessor processedPartsProcessor;
+
 
     protected BlobOperationPipeline(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBuffer)
     {
@@ -35,9 +37,11 @@ public abstract class BlobOperationPipeline : IBlobPipeline
         ProcessedBufferChannel = Channel.CreateUnbounded<ProcessedBuffer>();
 
         MemoryBufferChannel = memoryBuffer;
+        //TODO: Right now we are using MaxProcessingTimeScalingStrategy with defaults, but we should be able to use different strategies.        
+        var scalingStrategy = new MaxProcessingTimeScalingStrategy();
         partsProducer = new PartsProducer(this, pipelineOptions);
-        partsWriter = new PartsWriter(this, pipelineOptions, memoryBuffer);
-        partsReader = new PartsReader(this, pipelineOptions, memoryBuffer);
+        partsWriter = new PartsWriter(this, pipelineOptions, memoryBuffer, scalingStrategy);
+        partsReader = new PartsReader(this, pipelineOptions, memoryBuffer, scalingStrategy);
         processedPartsProcessor = new ProcessedPartsProcessor(this);
     }
 
@@ -47,17 +51,38 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
     public abstract Task<long> GetSourceLengthAsync(string source);
 
-    public abstract Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash);
+    public abstract Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash, string? contentMd5);
 
     public abstract void ConfigurePipelineBuffer(PipelineBuffer buffer);
 
+    public async Task<string?> CalculateFileMd5HashAsync(string filePath)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(filePath, nameof(filePath));
+
+        if (!PipelineOptions.CalculateFileContentMd5)
+        {
+            return default;
+        }
+
+        Logger.LogInformation("Calculating MD5 hash for file: {filePath}", filePath);
+
+        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+
+        var hash = await MD5.HashDataAsync(stream);
+
+        Logger.LogInformation("MD5 hash calculated for file: {filePath}.", filePath);
+
+        return BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant();
+    }
+
     protected async Task<long> ExecutePipelineAsync(List<BlobOperationInfo> operations)
     {
+        var cancellationSource = new CancellationTokenSource();
         var pipelineTasks = new List<Task>
         {
-            partsProducer.StartPartsProducersAsync(operations, ReadBufferChannel),
-            partsReader.StartPartsReaderAsync(ReadBufferChannel,WriteBufferChannel),
-            partsWriter.StartPartsWritersAsync(WriteBufferChannel,ProcessedBufferChannel)
+            partsProducer.StartPartsProducersAsync(operations, ReadBufferChannel, cancellationSource),
+            partsReader.StartPartsReaderAsync(ReadBufferChannel,WriteBufferChannel, cancellationSource),
+            partsWriter.StartPartsWritersAsync(WriteBufferChannel,ProcessedBufferChannel, cancellationSource)
         };
 
         var processedPartsProcessorTask = processedPartsProcessor.StartProcessedPartsProcessorAsync(expectedNumberOfFiles: operations.Count, ProcessedBufferChannel, ReadBufferChannel);
@@ -65,6 +90,7 @@ public abstract class BlobOperationPipeline : IBlobPipeline
         try
         {
             await WhenAllFailFast(pipelineTasks);
+
             Logger.LogInformation("Pipeline processing completed.");
         }
         catch (Exception e)
@@ -80,7 +106,7 @@ public abstract class BlobOperationPipeline : IBlobPipeline
         return bytesProcessed;
     }
 
-    protected static async Task WhenAllFailFast(IEnumerable<Task> tasks)
+    private static async Task WhenAllFailFast(IEnumerable<Task> tasks)
     {
         var taskList = tasks.ToList();
         while (taskList.Count > 0)

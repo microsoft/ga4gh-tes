@@ -17,12 +17,17 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <summary>
     /// Cromwell path prefix
     /// </summary>
-    protected const string CromwellPathPrefix = "/cromwell-executions/";
+    public const string CromwellPathPrefix = "/cromwell-executions/";
 
     /// <summary>
     /// TES path for internal execution files
     /// </summary>
     public const string TesExecutionsPathPrefix = "/tes-internal";
+
+    /// <summary>
+    /// Prefix in tes-internal container for tasks (when using default location)
+    /// </summary>
+    protected const string DefaultTasksPrefix = "/tasks/";
 
     /// <summary>
     /// Logger instance. 
@@ -47,19 +52,17 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <inheritdoc />
     public async Task<string> DownloadBlobAsync(string blobRelativePath, CancellationToken cancellationToken)
     {
-        var url = await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken);
+        var blobUrl = await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken);
 
-        if (url is null)
+        if (blobUrl is null)
         {
-            Logger.LogWarning($"The relative path provided could not be mapped to a valid blob URL. Download will be skipped. Blob relative path: {blobRelativePath}");
+            Logger.LogWarning(@"The relative path provided could not be mapped to a valid blob URL. Download will be skipped. Blob relative path: {BlobRelativePath}", blobRelativePath);
             return default;
         }
 
-        var blobUrl = new Uri(url);
-
         if (!await AzureProxy.BlobExistsAsync(blobUrl, cancellationToken))
         {
-            Logger.LogWarning($"The relative path provided was mapped to a blob URL. However, the blob does not exist in the storage account. Download will be skipped. Blob relative path: {blobRelativePath} Storage account: {blobUrl.Host} Blob path: {blobUrl.AbsolutePath}");
+            Logger.LogWarning(@"The relative path provided was mapped to a blob URL. However, the blob does not exist in the storage account. Download will be skipped. Blob relative path: {BlobRelativePath} Storage account: {BlobHost} Blob path: {BlobAbsolutePath}", blobRelativePath, blobUrl.Host, blobUrl.AbsolutePath);
             return default;
         }
 
@@ -71,16 +74,12 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     {
         if (!await AzureProxy.BlobExistsAsync(blobAbsoluteUrl, cancellationToken))
         {
-            Logger.LogWarning($"The blob does not exist in the storage account. Download will be skipped. Storage account: {blobAbsoluteUrl.Host} Blob path: {blobAbsoluteUrl.AbsolutePath}");
+            Logger.LogWarning(@"The blob does not exist in the storage account. Download will be skipped. Storage account: {BlobHost} Blob path: {BlobAbsolutePath}", blobAbsoluteUrl.Host, blobAbsoluteUrl.AbsolutePath);
             return default;
         }
 
         return await AzureProxy.DownloadBlobAsync(blobAbsoluteUrl, cancellationToken);
     }
-
-    /// <inheritdoc />
-    public async Task UploadBlobAsync(string blobRelativePath, string content, CancellationToken cancellationToken)
-        => await this.AzureProxy.UploadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken, getContainerSas: true)), content, cancellationToken);
 
     /// <inheritdoc />
     public async Task UploadBlobAsync(Uri blobAbsoluteUrl, string content,
@@ -92,20 +91,22 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     }
 
     /// <inheritdoc />
-    public async Task UploadBlobFromFileAsync(string blobRelativePath, string sourceLocalFilePath, CancellationToken cancellationToken)
-        => await this.AzureProxy.UploadBlobFromFileAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken, getContainerSas: true)), sourceLocalFilePath, cancellationToken);
-
-    /// <inheritdoc />
     public abstract Task<bool> IsPublicHttpUrlAsync(string uriString, CancellationToken cancellationToken);
 
     /// <inheritdoc />
-    public abstract Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, TimeSpan? sasTokenDuration = default, bool getContainerSas = false);
+    public abstract Task<Uri> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, TimeSpan? sasTokenDuration = default, bool getContainerSas = false);
 
     /// <inheritdoc />
-    public abstract Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken);
+    public abstract Task<Uri> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken);
 
     /// <inheritdoc />
-    public abstract Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken);
+    public abstract Task<Uri> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken);
+
+    /// <inheritdoc />
+    public abstract Uri GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath);
+
+    /// <inheritdoc />
+    public abstract Uri GetInternalTesBlobUrlWithoutSasToken(string blobPath);
 
     /// <summary>
     /// Tries to parse the input into a Http Url. 

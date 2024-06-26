@@ -72,10 +72,10 @@ namespace TesApi.Tests
                 UserAccounts = new List<UserAccount>() { new UserAccount("name", "password") }
             };
 
-            var pool = await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
+            var poolId = await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
-            Assert.IsNotNull(pool);
-            Assert.AreEqual(terraApiStubData.PoolId, pool.PoolId);
+            Assert.IsFalse(string.IsNullOrWhiteSpace(poolId));
+            Assert.AreEqual(terraApiStubData.PoolId, poolId);
         }
 
         [TestMethod]
@@ -90,12 +90,12 @@ namespace TesApi.Tests
                     CloudServiceConfiguration = new CloudServiceConfiguration("osfamily", "osversion"),
                     VirtualMachineConfiguration = new VirtualMachineConfiguration()
                 },
-                UserAccounts = new List<UserAccount>() { new UserAccount("name", "password") }
+                UserAccounts = [new UserAccount("name", "password")]
             };
 
             if (addPoolMetadata)
             {
-                poolInfo.Metadata = new List<MetadataItem>() { new MetadataItem("name", "value") };
+                poolInfo.Metadata = [new MetadataItem("name", "value")];
             }
 
             var pool = await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
@@ -117,25 +117,27 @@ namespace TesApi.Tests
                 },
             };
 
-            var pool = await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
+            await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
             var name = capturedApiCreateBatchPoolRequest.Common.Name;
             var resourceId = capturedApiCreateBatchPoolRequest.Common.ResourceId;
 
-            pool = await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
+            await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
             Assert.AreNotEqual(name, capturedApiCreateBatchPoolRequest.Common.Name);
             Assert.AreNotEqual(resourceId, capturedApiCreateBatchPoolRequest.Common.ResourceId);
         }
 
         [TestMethod]
-        public async Task CreateBatchPoolAsync_UserIdentityMapsCorrectly()
+        public async Task CreateBatchPoolAsync_ValidUserIdentityResourceIdProvided_UserIdentityNameIsMapped()
         {
             var identities = new Dictionary<string, UserAssignedIdentities>();
 
-            var identityName = "MyTestIdentity";
+            var identityName = @"bar-identity";
+            var identityResourceId = $@"/subscriptions/aaaaa450-5f22-4b20-9326-b5852bb89d90/resourcegroups/foo/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identityName}";
 
-            identities.Add(identityName, new UserAssignedIdentities());
+
+            identities.Add(identityResourceId, new UserAssignedIdentities());
 
             var poolInfo = new Pool()
             {
@@ -147,14 +149,51 @@ namespace TesApi.Tests
                 Identity = new BatchPoolIdentity(PoolIdentityType.UserAssigned, identities)
             };
 
-            var pool = await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
+            await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
-            var name = capturedApiCreateBatchPoolRequest.Common.Name;
-            var resourceId = capturedApiCreateBatchPoolRequest.Common.ResourceId;
+            Assert.AreEqual(identityName, capturedApiCreateBatchPoolRequest.AzureBatchPool.UserAssignedIdentities.SingleOrDefault()!.Name);
+        }
 
-            pool = await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
+        [DataTestMethod]
+        [DataRow("/subscription/foo/bar-identity")]
+        [DataRow("bar-identity")]
+        [DataRow("")]
+        public async Task CreateBatchPoolAsync_InvalidUserIdentityResourceIdProvided_ReturnsValueProvided(string identityName)
+        {
+            var identities = new Dictionary<string, UserAssignedIdentities>
+            {
+                { identityName, new UserAssignedIdentities() }
+            };
 
-            Assert.AreEqual(identityName, capturedApiCreateBatchPoolRequest.AzureBatchPool.UserAssignedIdentities.SingleOrDefault().Name);
+            var poolInfo = new Pool()
+            {
+                DeploymentConfiguration = new DeploymentConfiguration()
+                {
+                    CloudServiceConfiguration = new CloudServiceConfiguration("osfamily", "osversion"),
+                    VirtualMachineConfiguration = new VirtualMachineConfiguration()
+                },
+                Identity = new BatchPoolIdentity(PoolIdentityType.UserAssigned, identities)
+            };
+
+            await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
+
+            Assert.AreEqual(identityName, capturedApiCreateBatchPoolRequest.AzureBatchPool.UserAssignedIdentities.SingleOrDefault()!.Name);
+        }
+        [TestMethod]
+        public async Task CreateBatchPoolAsync_NoUserIdentityResourceIdProvided_NoIdentitiesMapped()
+        {
+            var poolInfo = new Pool()
+            {
+                DeploymentConfiguration = new DeploymentConfiguration()
+                {
+                    CloudServiceConfiguration = new CloudServiceConfiguration("osfamily", "osversion"),
+                    VirtualMachineConfiguration = new VirtualMachineConfiguration()
+                },
+            };
+
+            await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
+
+            Assert.IsFalse(capturedApiCreateBatchPoolRequest.AzureBatchPool.UserAssignedIdentities.Any());
         }
 
         [TestMethod]
@@ -170,14 +209,13 @@ namespace TesApi.Tests
                 }
             };
 
-            var pool = await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
+            await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
             var captureUserIdentity = capturedApiCreateBatchPoolRequest.AzureBatchPool.StartTask.UserIdentity;
 
             Assert.AreEqual(poolInfo.StartTask.UserIdentity.UserName, captureUserIdentity.UserName);
             Assert.AreEqual(poolInfo.StartTask.UserIdentity.AutoUser.Scope.ToString(), captureUserIdentity.AutoUser.Scope.ToString());
             Assert.AreEqual(poolInfo.StartTask.UserIdentity.AutoUser.ElevationLevel.ToString(), captureUserIdentity.AutoUser.ElevationLevel.ToString());
-
         }
     }
 }

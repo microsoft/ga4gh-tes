@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Threading.Tasks;
+using CommonUtilities;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace TesDeployer.Tests
@@ -12,8 +13,9 @@ namespace TesDeployer.Tests
         [TestMethod]
         public async Task ValuesTemplateSuccessfullyDeserializesTesdatabaseToYaml()
         {
-            _ = new KubernetesManager(null, null, null);
-            var helmValues = await KubernetesManager.GetHelmValuesAsync(@"./cromwell-on-azure/helm/values-template.yaml");
+            var azureConfig = ExpensiveObjectTestUtility.AzureCloudConfig;
+            var manager = new KubernetesManager(null, null, azureConfig, System.Threading.CancellationToken.None);
+            var helmValues = await manager.GetHelmValuesAsync(@"./cromwell-on-azure/helm/values-template.yaml");
             Assert.IsNotNull(helmValues.TesDatabase);
         }
     }
