@@ -40,7 +40,7 @@ namespace Tes.ApiClients
             return CreateTerraApiClient<DrsHubApiClient>(apiUrl, SharedMemoryCache, tokenCredential, azureCloudIdentityConfig);
         }
 
-        public virtual async Task<DrsResolveApiResponse> ResolveDrsUriAsync(Uri drsUri, CancellationToken cancellationToken = default)
+        public virtual async Task<DrsResolveApiResponse> ResolveDrsUriAsync(string drsUri, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(drsUri);
 
@@ -74,13 +74,13 @@ namespace Tes.ApiClients
             return apiResponse;
         }
 
-        public HttpContent GetDrsResolveRequestContent(Uri drsUri)
+        public HttpContent GetDrsResolveRequestContent(String drsUri)
         {
             ArgumentNullException.ThrowIfNull(drsUri);
 
             var drsResolveApiRequestBody = new DrsResolveRequestContent
             {
-                Url = drsUri.AbsoluteUri,
+                Url = drsUri,
                 CloudPlatform = CloudPlatform.Azure,
                 Fields = ["accessUrl"]
             };
