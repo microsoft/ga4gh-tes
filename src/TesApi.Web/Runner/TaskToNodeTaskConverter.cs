@@ -251,16 +251,7 @@ namespace TesApi.Web.Runner
                     inputs.AddRange(distinctAdditionalInputs);
                 }
 
-                foreach (var input in inputs)
-                {
-                    if (input?.Path.Contains('?') == true)
-                    {
-                        logger.LogWarning("Warning: TES task with ID {TesTask} contains a question mark in its path. The last one will be removed along with all text after it.", task.Id);
-                        task.SetWarning("A task input path contains the character '?'. The path was modified to remove it and all text after.");
-                    }
-                }
-
-                MapInputs(inputs, pathParentDirectory, containerMountParentDirectory, builder);
+                await MapInputsAsync(inputs, pathParentDirectory, containerMountParentDirectory, builder);
             }
         }
 
@@ -271,7 +262,7 @@ namespace TesApi.Web.Runner
 
             if (tesTask.Inputs is null)
             {
-                return new List<TesInput>();
+                return [];
             }
 
             foreach (var input in tesTask.Inputs)
@@ -322,10 +313,10 @@ namespace TesApi.Web.Runner
 
                 logger.LogInformation(@"Input {InputPath} is a regular input", input.Path);
 
-                inputs.Add(key, input);
+                inputs.Add(key, preparedInput);
             }
 
-            return inputs.Values.ToList();
+            return [.. inputs.Values];
         }
 
         /// <summary>
@@ -455,13 +446,19 @@ namespace TesApi.Web.Runner
         private async Task<TesInput> PrepareContentInputAsync(TesTask tesTask, TesInput input,
             CancellationToken cancellationToken)
         {
-
             if (String.IsNullOrWhiteSpace(input?.Content))
             {
                 return default;
             }
 
             logger.LogInformation(@"The input is content. Uploading its content to the internal storage location. Input path:{InputPath}", input.Path);
+
+            if (input.Type == TesFileType.DIRECTORY)
+            {
+                throw new ArgumentException("Content inputs cannot be directories.", nameof(input));
+            }
+
+            input.Type = TesFileType.FILE;
 
             return await UploadContentAndCreateTesInputAsync(tesTask, input.Path, input.Content, cancellationToken);
         }
@@ -477,15 +474,54 @@ namespace TesApi.Web.Runner
             });
         }
 
-        private static void MapInputs(List<TesInput> inputs, string pathParentDirectory, string containerMountParentDirectory,
+        private async Task MapInputsAsync(List<TesInput> inputs, string pathParentDirectory, string containerMountParentDirectory,
             NodeTaskBuilder builder)
         {
-            inputs?.ForEach(input =>
+            if (inputs is null || inputs.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var input in inputs)
+            {
+                if (input?.Type == TesFileType.FILE)
+                {
+                    AddInputToBuilder(input.Path, input.Url);
+                }
+                else
+                {
+                    // Nextflow directory example
+                    // input.Url = /storageaccount/work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
+                    // input.Path = /work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
+                    var blobDirectoryUrlWithSasToken = await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, default, default, getContainerSas: true);
+                    var blobDirectoryUrlWithoutSasToken = blobDirectoryUrlWithSasToken.GetLeftPart(UriPartial.Path);
+                    var blobAbsoluteUrls = await storageAccessProvider.GetBlobUrlsAsync(blobDirectoryUrlWithSasToken, default);
+
+                    if (input.Type == default)
+                    {
+                        if (blobAbsoluteUrls.Count == 0)
+                        {
+                            AddInputToBuilder(input.Path, input.Url);
+                            continue;
+                        }
+                    }
+
+                    foreach (var blobAbsoluteUrl in blobAbsoluteUrls)
+                    {
+                        var blobSuffix = blobAbsoluteUrl.AbsoluteUri[blobDirectoryUrlWithoutSasToken.TrimEnd('/').Length..].TrimStart('/');
+                        var localPath = $"{input.Path.TrimEnd('/')}/{blobSuffix}";
+
+                        AddInputToBuilder(localPath, blobAbsoluteUrl.AbsoluteUri);
+                    }
+                }
+            }
+
+            void AddInputToBuilder(string path, string url)
             {
                 builder.WithInputUsingCombinedTransformationStrategy(
-                    AppendParentDirectoryIfSet(input.Path, pathParentDirectory), input.Url,
+                    AppendParentDirectoryIfSet(path, pathParentDirectory), url,
                     containerMountParentDirectory);
-            });
+            }
         }
 
         private static FileType? ToNodeTaskFileType(TesFileType outputType)
