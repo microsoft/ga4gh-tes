@@ -30,7 +30,7 @@ namespace Tes.Runner.Host
             return new(fullPath);
         }
 
-        public override Task NodeCleanupAsync()
+        public override Task NodeCleanupPreviousTasksAsync()
         {
             var rootDir = Environment.GetEnvironmentVariable(NodeRootDir) ?? throw new InvalidOperationException("Root node directory is unknown.");
             var taskDir = Environment.GetEnvironmentVariable(NodeTaskDir) ?? throw new InvalidOperationException("Task directory is unknown.");
@@ -54,5 +54,10 @@ namespace Tes.Runner.Host
 
             return Task.CompletedTask;
         }
+
+        //public override void WriteMetric(string key, string value)
+        //{
+        //    throw new NotImplementedException();
+        //}
     }
 }

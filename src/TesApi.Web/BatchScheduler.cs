@@ -44,12 +44,14 @@ namespace TesApi.Web
         /// <summary>
         /// Name of <c>$</c> prefixed environment variable to place resources shared by all tasks on each compute node in a pool.
         /// </summary>
-        public const string BatchNodeSharedEnvVar = "$AZ_BATCH_NODE_SHARED_DIR";
+        public const string BatchNodeSharedEnvVar = "${AZ_BATCH_NODE_SHARED_DIR}";
 
         /// <summary>
         /// Name of <c>$</c> prefixed environment variable of the working directory of the running task.
         /// </summary>
         public const string BatchNodeTaskWorkingDirEnvVar = "$AZ_BATCH_TASK_WORKING_DIR";
+
+        internal const string NodeTaskRunnerFilename = "tes-runner";
 
         private const string AzureSupportUrl = "https://portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/newsupportrequest";
         private const int PoolKeyLength = 55; // 64 max pool name length - 9 chars generating unique pool names
@@ -58,7 +60,6 @@ namespace TesApi.Web
         private const int DefaultDiskGb = 10;
         private const string CromwellScriptFileName = "script";
         private const string StartTaskScriptFilename = "start-task.sh";
-        private const string NodeTaskRunnerFilename = "tes-runner";
         private const string NodeTaskRunnerMD5HashFilename = NodeTaskRunnerFilename + ".md5";
         private readonly ILogger logger;
         private readonly IAzureProxy azureProxy;
@@ -906,7 +907,7 @@ namespace TesApi.Web
                 .FirstOrDefault(m => (m.Condition is null || m.Condition(tesTask)) && (m.CurrentBatchTaskState is null || m.CurrentBatchTaskState == combinedBatchTaskInfo.BatchTaskState))
                 ?.ActionAsync(tesTask, combinedBatchTaskInfo, cancellationToken) ?? ValueTask.FromResult(false);
 
-        private async Task<CloudTask> ConvertTesTaskToBatchTaskUsingRunnerAsync(string taskId, TesTask task, string? acrPullIdentity,
+        private async Task<CloudTask> ConvertTesTaskToBatchTaskUsingRunnerAsync(string taskId, TesTask task, string acrPullIdentity,
             CancellationToken cancellationToken)
         {
             ValidateTesTask(task);
@@ -917,18 +918,17 @@ namespace TesApi.Web
 
             var batchRunCommand = taskExecutionScriptingManager.ParseBatchRunCommand(assets);
 
-            var cloudTask = new CloudTask(taskId, batchRunCommand)
+            return new(taskId, batchRunCommand)
             {
                 Constraints = new(maxWallClockTime: taskMaxWallClockTime, retentionTime: TimeSpan.Zero, maxTaskRetryCount: 0),
                 UserIdentity = new(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
+                EnvironmentSettings = assets.Environment?.Select(pair => new EnvironmentSetting(pair.Key, pair.Value)).ToList(),
             };
-
-            return cloudTask;
         }
 
-        private async Task<NodeTaskConversionOptions> GetNodeTaskConversionOptionsAsync(TesTask task, string? acrPullIdentity, CancellationToken cancellationToken)
+        private async Task<NodeTaskConversionOptions> GetNodeTaskConversionOptionsAsync(TesTask task, string acrPullIdentity, CancellationToken cancellationToken)
         {
-            var nodeTaskCreationOptions = new NodeTaskConversionOptions(
+            return new(
                 DefaultStorageAccountName: defaultStorageAccountName,
                 AdditionalInputs: await GetAdditionalCromwellInputsAsync(task, cancellationToken),
                 GlobalManagedIdentity: globalManagedIdentity,
@@ -936,7 +936,6 @@ namespace TesApi.Web
                 DrsHubApiHost: drsHubApiHost,
                 SetContentMd5OnUpload: batchNodesSetContentMd5OnUpload
             );
-            return nodeTaskCreationOptions;
         }
 
         private async Task<List<TesInput>> GetAdditionalCromwellInputsAsync(TesTask task, CancellationToken cancellationToken)
