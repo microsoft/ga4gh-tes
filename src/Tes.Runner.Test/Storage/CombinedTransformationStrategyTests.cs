@@ -47,6 +47,25 @@ namespace Tes.Runner.Test.Storage
             Assert.AreEqual(secondTransformation, result.ToString());
         }
 
+                [TestMethod]
+        public async Task CombinedTransformationStrategy_CompactDrsUri()
+        {
+            var sourceUrl = "drs://my-uri:456_abc";
+            var transformation = "https://first.foo/";
+
+            mockStrategy1.Setup(s => s.TransformUrlWithStrategyAsync(sourceUrl, It.IsAny<BlobSasPermissions>()))
+                .Throws(new UriFormatException());
+            mockStrategy2.Setup(s => s.TransformUrlWithStrategyAsync(sourceUrl, It.IsAny<BlobSasPermissions>()))
+                .ReturnsAsync(() => new Uri(transformation));
+
+            var result = await strategy.TransformUrlWithStrategyAsync(sourceUrl, new BlobSasPermissions());
+
+            mockStrategy1.Verify(s => s.TransformUrlWithStrategyAsync(sourceUrl, It.IsAny<BlobSasPermissions>()), Times.Once);
+            mockStrategy2.Verify(s => s.TransformUrlWithStrategyAsync(sourceUrl, It.IsAny<BlobSasPermissions>()), Times.Once);
+
+            Assert.AreEqual(transformation, result.ToString());
+        }
+
         [TestMethod]
         public async Task CombinedTransformationStrategy_InsertsStrategyFirst_InsertedStrategyIsApplied()
         {

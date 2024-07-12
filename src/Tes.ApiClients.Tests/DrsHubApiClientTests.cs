@@ -47,8 +47,16 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetDrsResolveRequestContent_ValidDrsUri_ReturnsValidRequestContentWithExpectedValues()
         {
-            var drsUriString = "drs://drs.foo";
-            var drsUri = new Uri(drsUriString);
+            var drsUri = "drs://drs.foo";
+            var content = await apiClient.GetDrsResolveRequestContent(drsUri).ReadAsStringAsync();
+
+            Assert.IsNotNull(ExpectedDrsResolveRequestJson, content);
+        }
+
+        [TestMethod]
+        public async Task GetDrsResolveRequestContent_ValidCompactDrsUri_ReturnsValidRequestContentWithExpectedValues()
+        {
+            var drsUri = "drs://drs-things:foo";
             var content = await apiClient.GetDrsResolveRequestContent(drsUri).ReadAsStringAsync();
 
             Assert.IsNotNull(ExpectedDrsResolveRequestJson, content);
