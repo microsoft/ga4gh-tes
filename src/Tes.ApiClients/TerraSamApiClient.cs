@@ -29,9 +29,7 @@ namespace Tes.ApiClients
         /// <param name="logger"></param>
         public TerraSamApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryPolicyBuilder cachingRetryHandler,
             AzureEnvironmentConfig azureCloudIdentityConfig, ILogger<TerraSamApiClient> logger) : base(apiUrl, tokenCredential, cachingRetryHandler, azureCloudIdentityConfig, logger)
-        {
-
-        }
+        { }
 
         public static TerraSamApiClient CreateTerraSamApiClient(string apiUrl, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig)
         {
@@ -43,12 +41,12 @@ namespace Tes.ApiClients
         /// </summary>
         protected TerraSamApiClient() { }
 
-        public virtual async Task<SamActionManagedIdentityApiResponse?> GetActionManagedIdentityForACRPullAsync(Guid resourceId, TimeSpan cacheTTL, CancellationToken cancellationToken)
+        public virtual async Task<SamActionManagedIdentityApiResponse> GetActionManagedIdentityForACRPullAsync(Guid resourceId, TimeSpan cacheTTL, CancellationToken cancellationToken)
         {
             return await GetActionManagedIdentityAsync("private_azure_container_registry", resourceId, "pull_image", cacheTTL, cancellationToken);
         }
 
-        private async Task<SamActionManagedIdentityApiResponse?> GetActionManagedIdentityAsync(string resourceType, Guid resourceId, string action, TimeSpan cacheTTL, CancellationToken cancellationToken)
+        private async Task<SamActionManagedIdentityApiResponse> GetActionManagedIdentityAsync(string resourceType, Guid resourceId, string action, TimeSpan cacheTTL, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(resourceId);
 
@@ -76,7 +74,6 @@ namespace Tes.ApiClients
 
             }
         }
-
 
         public virtual Uri GetSamActionManagedIdentityUrl(string resourceType, Guid resourceId, string action)
         {

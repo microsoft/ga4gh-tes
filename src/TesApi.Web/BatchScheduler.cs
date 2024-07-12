@@ -907,7 +907,7 @@ namespace TesApi.Web
                 .FirstOrDefault(m => (m.Condition is null || m.Condition(tesTask)) && (m.CurrentBatchTaskState is null || m.CurrentBatchTaskState == combinedBatchTaskInfo.BatchTaskState))
                 ?.ActionAsync(tesTask, combinedBatchTaskInfo, cancellationToken) ?? ValueTask.FromResult(false);
 
-        private async Task<CloudTask> ConvertTesTaskToBatchTaskUsingRunnerAsync(string taskId, TesTask task, string? acrPullIdentity,
+        private async Task<CloudTask> ConvertTesTaskToBatchTaskUsingRunnerAsync(string taskId, TesTask task, string acrPullIdentity,
             CancellationToken cancellationToken)
         {
             ValidateTesTask(task);
@@ -918,19 +918,17 @@ namespace TesApi.Web
 
             var batchRunCommand = taskExecutionScriptingManager.ParseBatchRunCommand(assets);
 
-            var cloudTask = new CloudTask(taskId, batchRunCommand)
+            return new(taskId, batchRunCommand)
             {
                 Constraints = new(maxWallClockTime: taskMaxWallClockTime, retentionTime: TimeSpan.Zero, maxTaskRetryCount: 0),
                 UserIdentity = new(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
                 EnvironmentSettings = assets.Environment?.Select(pair => new EnvironmentSetting(pair.Key, pair.Value)).ToList(),
             };
-
-            return cloudTask;
         }
 
-        private async Task<NodeTaskConversionOptions> GetNodeTaskConversionOptionsAsync(TesTask task, string? acrPullIdentity, CancellationToken cancellationToken)
+        private async Task<NodeTaskConversionOptions> GetNodeTaskConversionOptionsAsync(TesTask task, string acrPullIdentity, CancellationToken cancellationToken)
         {
-            var nodeTaskCreationOptions = new NodeTaskConversionOptions(
+            return new(
                 DefaultStorageAccountName: defaultStorageAccountName,
                 AdditionalInputs: await GetAdditionalCromwellInputsAsync(task, cancellationToken),
                 GlobalManagedIdentity: globalManagedIdentity,
@@ -938,7 +936,6 @@ namespace TesApi.Web
                 DrsHubApiHost: drsHubApiHost,
                 SetContentMd5OnUpload: batchNodesSetContentMd5OnUpload
             );
-            return nodeTaskCreationOptions;
         }
 
         private async Task<List<TesInput>> GetAdditionalCromwellInputsAsync(TesTask task, CancellationToken cancellationToken)

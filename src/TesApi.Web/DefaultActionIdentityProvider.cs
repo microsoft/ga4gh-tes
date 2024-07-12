@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -15,10 +14,9 @@ namespace TesApi.Web
         /// <summary>
         /// Returns null, to provide the default behavior
         /// </summary>
-        public Task<string?> GetAcrPullActionIdentity(CancellationToken cancellationToken)
+        public Task<string> GetAcrPullActionIdentity(CancellationToken cancellationToken)
         {
-            return Task.FromResult<string?>(null);
+            return Task.FromResult<string>(null);
         }
-
     }
 }

@@ -43,7 +43,7 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>The resource id of the action identity, if one exists. Otherwise, null.</returns>
-        public async Task<string?> GetAcrPullActionIdentity(CancellationToken cancellationToken)
+        public async Task<string> GetAcrPullActionIdentity(CancellationToken cancellationToken)
         {
             try
             {

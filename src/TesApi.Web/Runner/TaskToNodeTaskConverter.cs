@@ -272,7 +272,7 @@ namespace TesApi.Web.Runner
 
             if (tesTask.Inputs is null)
             {
-                return new List<TesInput>();
+                return [];
             }
 
             foreach (var input in tesTask.Inputs)
@@ -326,7 +326,7 @@ namespace TesApi.Web.Runner
                 inputs.Add(key, input);
             }
 
-            return inputs.Values.ToList();
+            return [.. inputs.Values];
         }
 
         /// <summary>
@@ -521,5 +521,5 @@ namespace TesApi.Web.Runner
     /// <param name="DrsHubApiHost"></param>
     /// <param name="SetContentMd5OnUpload"></param>
     public record NodeTaskConversionOptions(IList<TesInput> AdditionalInputs = default, string DefaultStorageAccountName = default,
-        string GlobalManagedIdentity = default, string? AcrPullIdentity = null, string DrsHubApiHost = default, bool SetContentMd5OnUpload = false);
+        string GlobalManagedIdentity = default, string AcrPullIdentity = default, string DrsHubApiHost = default, bool SetContentMd5OnUpload = false);
 }
