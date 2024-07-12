@@ -242,9 +242,8 @@ namespace TesApi.Web.Runner
 
                 //add additional inputs if not already set
                 var distinctAdditionalInputs = additionalInputs?
-                    .Select(input => new TesInputPrepared(input, input))
                     .Where(additionalInput => !inputs.Any(input =>
-                        input.Prepared.Path != null && input.Prepared.Path.Equals(additionalInput.Prepared.Path, StringComparison.OrdinalIgnoreCase)))
+                        input.Path != null && input.Path.Equals(additionalInput.Path, StringComparison.OrdinalIgnoreCase)))
                     .ToList();
 
                 if (distinctAdditionalInputs != null)
@@ -256,10 +255,10 @@ namespace TesApi.Web.Runner
             }
         }
 
-        private async Task<List<TesInputPrepared>> PrepareInputsForMappingAsync(TesTask tesTask, string defaultStorageAccountName,
+        private async Task<List<TesInput>> PrepareInputsForMappingAsync(TesTask tesTask, string defaultStorageAccountName,
             CancellationToken cancellationToken)
         {
-            var inputs = new Dictionary<string, TesInputPrepared>();
+            var inputs = new Dictionary<string, TesInput>();
 
             if (tesTask.Inputs is null)
             {
@@ -288,7 +287,7 @@ namespace TesApi.Web.Runner
                 if (preparedInput != null)
                 {
                     logger.LogInformation(@"Input {InputPath} is a content input", input.Path);
-                    inputs.Add(key, new(input, preparedInput));
+                    inputs.Add(key, preparedInput);
                     continue;
                 }
 
@@ -298,7 +297,7 @@ namespace TesApi.Web.Runner
                 {
                     logger.LogInformation(@"Input {InputPath} is a local input", input.Path);
 
-                    inputs.Add(key, new(input, preparedInput));
+                    inputs.Add(key, preparedInput);
                     continue;
                 }
 
@@ -308,13 +307,13 @@ namespace TesApi.Web.Runner
                 {
                     logger.LogInformation(@"Input {InputPath} is an external storage account input", input.Path);
 
-                    inputs.Add(key, new(input, preparedInput));
+                    inputs.Add(key, preparedInput);
                     continue;
                 }
 
                 logger.LogInformation(@"Input {InputPath} is a regular input", input.Path);
 
-                inputs.Add(key, new(input, preparedInput));
+                inputs.Add(key, preparedInput);
             }
 
             return [.. inputs.Values];
@@ -475,7 +474,7 @@ namespace TesApi.Web.Runner
             });
         }
 
-        private async Task MapInputsAsync(List<TesInputPrepared> inputs, string pathParentDirectory, string containerMountParentDirectory,
+        private async Task MapInputsAsync(List<TesInput> inputs, string pathParentDirectory, string containerMountParentDirectory,
             NodeTaskBuilder builder)
         {
             if (inputs is null || inputs.Count == 0)
@@ -485,36 +484,32 @@ namespace TesApi.Web.Runner
 
             foreach (var input in inputs)
             {
-                if (input.Prepared?.Type == TesFileType.FILE)
+                if (input?.Type == TesFileType.FILE)
                 {
-                    input.Source.Type = TesFileType.FILE;
-                    AddInputToBuilder(input.Prepared.Path, input.Prepared.Url);
+                    AddInputToBuilder(input.Path, input.Url);
                 }
                 else
                 {
                     // Nextflow directory example
                     // input.Url = /storageaccount/work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
                     // input.Path = /work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
-                    var blobDirectoryUrlWithSasToken = await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Prepared.Url, default, default, getContainerSas: true);
+                    var blobDirectoryUrlWithSasToken = await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, default, default, getContainerSas: true);
                     var blobDirectoryUrlWithoutSasToken = blobDirectoryUrlWithSasToken.GetLeftPart(UriPartial.Path);
                     var blobAbsoluteUrls = await storageAccessProvider.GetBlobUrlsAsync(blobDirectoryUrlWithSasToken, default);
 
-                    if (input.Prepared.Type == default)
+                    if (input.Type == default)
                     {
                         if (blobAbsoluteUrls.Count == 0)
                         {
-                            input.Source.Type = TesFileType.FILE;
-                            AddInputToBuilder(input.Prepared.Path, input.Prepared.Url);
+                            AddInputToBuilder(input.Path, input.Url);
                             continue;
                         }
-
-                        input.Source.Type = TesFileType.DIRECTORY;
                     }
 
                     foreach (var blobAbsoluteUrl in blobAbsoluteUrls)
                     {
                         var blobSuffix = blobAbsoluteUrl.AbsoluteUri[blobDirectoryUrlWithoutSasToken.TrimEnd('/').Length..].TrimStart('/');
-                        var localPath = $"{input.Prepared.Path.TrimEnd('/')}/{blobSuffix}";
+                        var localPath = $"{input.Path.TrimEnd('/')}/{blobSuffix}";
 
                         AddInputToBuilder(localPath, blobAbsoluteUrl.AbsoluteUri);
                     }
@@ -549,8 +544,6 @@ namespace TesApi.Web.Runner
 
             return inputPath;
         }
-
-        private record struct TesInputPrepared(TesInput Source, TesInput Prepared);
     }
 
     /// <summary>
