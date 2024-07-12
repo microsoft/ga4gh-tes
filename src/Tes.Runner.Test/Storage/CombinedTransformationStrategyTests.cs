@@ -47,7 +47,7 @@ namespace Tes.Runner.Test.Storage
             Assert.AreEqual(secondTransformation, result.ToString());
         }
 
-                [TestMethod]
+        [TestMethod]
         public async Task CombinedTransformationStrategy_CompactDrsUri()
         {
             var sourceUrl = "drs://my-uri:456_abc";
