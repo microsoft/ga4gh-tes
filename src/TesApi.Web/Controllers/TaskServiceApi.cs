@@ -146,17 +146,17 @@ namespace TesApi.Controllers
                     return BadRequest("Input URLs to the local file system are not supported.");
                 }
 
-                if (input.Url is not null && input.Content is not null)
+                if (!string.IsNullOrWhiteSpace(input.Url) && !string.IsNullOrWhiteSpace(input.Content))
                 {
                     return BadRequest("Input URL and Content cannot be both set");
                 }
 
-                if (input.Url is null && input.Content is null)
+                if (string.IsNullOrWhiteSpace(input.Url) && string.IsNullOrWhiteSpace(input.Content))
                 {
                     return BadRequest("One of Input URL or Content must be set");
                 }
 
-                if (input.Content is not null && input.Type == TesFileType.DIRECTORY)
+                if (!string.IsNullOrWhiteSpace(input.Content) && input.Type == TesFileType.DIRECTORY)
                 {
                     return BadRequest("Content inputs cannot be directories.");
                 }
