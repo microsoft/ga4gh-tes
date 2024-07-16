@@ -8,12 +8,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using Azure.Storage.Blobs;
+using Azure.Storage.Sas;
 using CommonUtilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.WindowsAzure.Storage;
-using Microsoft.WindowsAzure.Storage.Auth;
-using Microsoft.WindowsAzure.Storage.Blob;
 using Tes.Extensions;
 using Tes.Models;
 using TesApi.Web.Options;
@@ -45,7 +43,7 @@ namespace TesApi.Web.Storage
             this.storageOptions = storageOptions.Value;
             this.azureEnvironmentConfig = azureEnvironmentConfig;
 
-            externalStorageContainers = storageOptions.Value.ExternalStorageContainers?.Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            externalStorageContainers = storageOptions.Value.ExternalStorageContainers?.Split([',', ';', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
                 .Select(uri =>
                 {
                     if (StorageAccountUrlSegments.TryCreate(uri, out var s))
@@ -141,27 +139,37 @@ namespace TesApi.Web.Storage
 
             try
             {
-                var accountKey = await AzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, cancellationToken);
                 var resultPathSegments = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName, pathSegments.BlobName);
-                var policy = new SharedAccessBlobPolicy { SharedAccessExpiryTime = DateTimeOffset.UtcNow.Add(sasTokenDuration ?? SasTokenDuration) };
+                var sharedAccessExpiryTime = DateTimeOffset.UtcNow.Add(sasTokenDuration ?? SasTokenDuration);
+                BlobSasBuilder sasBuilder;
 
                 if (pathSegments.IsContainer || getContainerSas)
                 {
-                    policy.Permissions = SharedAccessBlobPermissions.Add | SharedAccessBlobPermissions.Create | SharedAccessBlobPermissions.List | SharedAccessBlobPermissions.Read | SharedAccessBlobPermissions.Write;
-                    var containerUri = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName).ToUri();
-                    resultPathSegments.SasToken = new CloudBlobContainer(containerUri, new StorageCredentials(storageAccountInfo.Name, accountKey)).GetSharedAccessSignature(policy, null, SharedAccessProtocol.HttpsOnly, null);
+                    sasBuilder = new(BlobContainerSasPermissions.Add | BlobContainerSasPermissions.Create | BlobContainerSasPermissions.List | BlobContainerSasPermissions.Read | BlobContainerSasPermissions.Write, sharedAccessExpiryTime)
+                    {
+                        BlobContainerName = pathSegments.ContainerName,
+                        Resource = "b",
+                    };
                 }
                 else
                 {
-                    policy.Permissions = SharedAccessBlobPermissions.Read;
-                    resultPathSegments.SasToken = new CloudBlob(resultPathSegments.ToUri(), new StorageCredentials(storageAccountInfo.Name, accountKey)).GetSharedAccessSignature(policy, null, null, SharedAccessProtocol.HttpsOnly, null);
+                    sasBuilder = new(BlobContainerSasPermissions.Read, sharedAccessExpiryTime)
+                    {
+                        BlobContainerName = pathSegments.ContainerName,
+                        BlobName = pathSegments.BlobName,
+                        Resource = "c"
+                    };
                 }
+
+                sasBuilder.Protocol = SasProtocol.Https;
+                var accountCredential = new Azure.Storage.StorageSharedKeyCredential(storageAccountInfo.Name, await AzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, cancellationToken));
+                resultPathSegments.SasToken = sasBuilder.ToSasQueryParameters(accountCredential).ToString();
 
                 return resultPathSegments;
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, $"Could not get the key of storage account '{pathSegments.AccountName}'. Make sure that the TES app service has Contributor access to it.");
+                Logger.LogError(ex, "Could not get the key of storage account '{StorageAccount}'. Make sure that the TES app service has Contributor access to it.", pathSegments.AccountName);
                 return null;
             }
         }
