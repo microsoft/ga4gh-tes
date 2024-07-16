@@ -95,7 +95,15 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <inheritdoc/>
     public async Task<IList<Uri>> GetBlobUrlsAsync(Uri blobVirtualDirectory, CancellationToken cancellationToken)
     {
-        return (await AzureProxy.ListBlobsAsync(blobVirtualDirectory, cancellationToken)).Select(b => b.Uri).ToList();
+        Azure.Storage.Blobs.BlobUriBuilder blobBuilder = new(blobVirtualDirectory) { Sas = null };
+        return (await AzureProxy.ListBlobsAsync(blobVirtualDirectory, cancellationToken)).Select(GetBlobUri).ToList();
+
+        Uri GetBlobUri(Azure.Storage.Blobs.Models.BlobItem blob)
+        {
+            // This implementation assumes there are no parallel invocations in the same parent method call.
+            blobBuilder.BlobName = blob.Name;
+            return blobBuilder.ToUri();
+        }
     }
 
     /// <inheritdoc />
