@@ -3,8 +3,8 @@
 
 using System;
 using System.Reflection;
-using System.Threading.Tasks;
 using System.Threading;
+using System.Threading.Tasks;
 using Azure.ResourceManager;
 using CommonUtilities;
 using CommonUtilities.AzureCloud;

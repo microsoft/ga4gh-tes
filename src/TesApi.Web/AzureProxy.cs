@@ -23,6 +23,7 @@ using Tes.Models;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Storage;
+using static CommonUtilities.RetryHandler;
 using BatchProtocol = Microsoft.Azure.Batch.Protocol;
 using BlobModels = Azure.Storage.Blobs.Models;
 using CloudTask = Microsoft.Azure.Batch.CloudTask;
@@ -31,7 +32,6 @@ using JobState = Microsoft.Azure.Batch.Common.JobState;
 using OnAllTasksComplete = Microsoft.Azure.Batch.Common.OnAllTasksComplete;
 using TaskExecutionInformation = Microsoft.Azure.Batch.TaskExecutionInformation;
 using TaskState = Microsoft.Azure.Batch.Common.TaskState;
-using static CommonUtilities.RetryHandler;
 
 namespace TesApi.Web
 {

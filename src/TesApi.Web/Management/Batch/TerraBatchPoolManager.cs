@@ -101,7 +101,7 @@ namespace TesApi.Web.Management.Batch
         private static void AddResourceIdToPoolMetadata(ApiCreateBatchPoolRequest apiRequest, Guid resourceId)
         {
             ApiBatchPoolMetadataItem resourceIdMetadataItem = new()
-                { Name = TerraResourceIdMetadataKey, Value = resourceId.ToString() };
+            { Name = TerraResourceIdMetadataKey, Value = resourceId.ToString() };
 
             if (apiRequest.AzureBatchPool.Metadata is null)
             {
