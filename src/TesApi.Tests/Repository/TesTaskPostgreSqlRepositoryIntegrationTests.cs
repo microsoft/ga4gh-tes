@@ -139,7 +139,7 @@ namespace Tes.Repository.Tests
                     await Parallel.ForEachAsync(items, CancellationToken.None, async (item, token) => await repository.CreateItemAsync(item, token));
                 }
 
-                var controller = new TaskServiceApiController(repository, null, null);
+                var controller = new TaskServiceApiController(repository, null, null, null);
                 string pageToken = null;
                 var tesTaskIds = new HashSet<string>();
 
