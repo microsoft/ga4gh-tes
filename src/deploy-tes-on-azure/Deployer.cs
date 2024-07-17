@@ -80,7 +80,7 @@ namespace TesDeployer
         /// <summary>
         /// Grants full access to manage all resources, but does not allow you to assign roles in Azure RBAC, manage assignments in Azure Blueprints, or share image galleries.
         /// </summary>
-        private static readonly ResourceIdentifier All_Role_Contributor = ResourceIdentifier.Parse("/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c");
+        private static readonly ResourceIdentifier All_Role_Contributor = AuthorizationRoleDefinitionResource.CreateResourceIdentifier(string.Empty, new("b24988ac-6180-42a0-ab88-20f7382dd24c"));
 
         public const string ConfigurationContainerName = "configuration";
         public const string TesInternalContainerName = "tes-internal";
@@ -170,7 +170,7 @@ namespace TesDeployer
 
                 await Execute($"Getting cloud configuration for {configuration.AzureCloudName}...", async () =>
                 {
-                    azureCloudConfig = await AzureCloudConfig.FromKnownCloudNameAsync(configuration.AzureCloudName, All_Role_Contributor, Microsoft.Extensions.Options.Options.Create<CommonUtilities.Options.RetryPolicyOptions>(new()));
+                    azureCloudConfig = await AzureCloudConfig.FromKnownCloudNameAsync(cloudName: configuration.AzureCloudName, retryPolicyOptions: Microsoft.Extensions.Options.Options.Create<CommonUtilities.Options.RetryPolicyOptions>(new()));
                     cloudEnvironment = new(azureCloudConfig.ArmEnvironment.Value, azureCloudConfig.AuthorityHost);
                 });
 
@@ -186,7 +186,7 @@ namespace TesDeployer
                 {
                     tokenCredential = new AzureCliCredential(new() { AuthorityHost = cloudEnvironment.AzureAuthorityHost });
                     armClient = new ArmClient(tokenCredential, configuration.SubscriptionId, new() { Environment = cloudEnvironment.ArmEnvironment });
-                    armSubscription = armClient.GetSubscriptionResource(new($"/subscriptions/{configuration.SubscriptionId}"));
+                    armSubscription = armClient.GetSubscriptionResource(SubscriptionResource.CreateResourceIdentifier(configuration.SubscriptionId));
                     subscriptionIds = await armClient.GetSubscriptions().GetAllAsync(cts.Token).ToListAsync(cts.Token);
                 });
 
@@ -982,7 +982,7 @@ namespace TesDeployer
 
         private async Task<ContainerServiceManagedClusterResource> ProvisionManagedClusterAsync(UserAssignedIdentityResource managedIdentity, OperationalInsightsWorkspaceResource logAnalyticsWorkspace, ResourceIdentifier subnetId, bool privateNetworking)
         {
-            var uami = (await armClient.GetUserAssignedIdentityResource(new(managedIdentity.Id)).GetAsync(cts.Token)).Value;
+            var uami = await EnsureResourceDataAsync(managedIdentity, r => r.HasData, r => r.GetAsync, cts.Token);
             var nodePoolName = "nodepool1";
             ContainerServiceManagedClusterData cluster = new(new(configuration.RegionName))
             {
@@ -1054,13 +1054,11 @@ namespace TesDeployer
         {
             aksCluster.Data.SecurityProfile.IsWorkloadIdentityEnabled = true;
             aksCluster.Data.OidcIssuerProfile.IsEnabled = true;
-            var coaRg = armClient.GetResourceGroupResource(new ResourceIdentifier(resourceGroup.Id));
-            var aksClusterCollection = coaRg.GetContainerServiceManagedClusters();
+            var aksClusterCollection = resourceGroup.GetContainerServiceManagedClusters();
             var cluster = await aksClusterCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, aksCluster.Data.Name, aksCluster.Data, cts.Token);
             var aksOidcIssuer = cluster.Value.Data.OidcIssuerProfile.IssuerUriInfo;
-            var uami = armClient.GetUserAssignedIdentityResource(new ResourceIdentifier(managedIdentity.Id));
 
-            var federatedCredentialsCollection = uami.GetFederatedIdentityCredentials();
+            var federatedCredentialsCollection = managedIdentity.GetFederatedIdentityCredentials();
             var data = new FederatedIdentityCredentialData()
             {
                 IssuerUri = new Uri(aksOidcIssuer),
@@ -1397,7 +1395,7 @@ namespace TesDeployer
         private Task AssignMIAsNetworkContributorToResourceAsync(UserAssignedIdentityResource managedIdentity, ArmResource resource, bool cancelOnException = true)
         {
             // https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#network-contributor
-            ResourceIdentifier roleDefinitionId = new($"/subscriptions/{configuration.SubscriptionId}/providers/Microsoft.Authorization/roleDefinitions/4d97b98b-1d4f-4787-a291-c67834d212e7");
+            var roleDefinitionId = AuthorizationRoleDefinitionResource.CreateResourceIdentifier(SubscriptionResource.CreateResourceIdentifier(configuration.SubscriptionId), new("4d97b98b-1d4f-4787-a291-c67834d212e7"));
             return Execute(
                 "Assigning 'Network Contributor' role for the managed id to resource group scope...",
                 () => roleAssignmentHashConflictRetryPolicy.ExecuteAsync(
@@ -1413,7 +1411,7 @@ namespace TesDeployer
         private Task AssignManagedIdOperatorToResourceAsync(UserAssignedIdentityResource managedIdentity, ArmResource resource)
         {
             // https://docs.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#managed-identity-operator
-            ResourceIdentifier roleDefinitionId = new($"/subscriptions/{configuration.SubscriptionId}/providers/Microsoft.Authorization/roleDefinitions/f1a07417-d97a-45cb-824c-7a7467783830");
+            var roleDefinitionId = AuthorizationRoleDefinitionResource.CreateResourceIdentifier(SubscriptionResource.CreateResourceIdentifier(configuration.SubscriptionId), new("f1a07417-d97a-45cb-824c-7a7467783830"));
             return Execute(
                 "Assigning 'Managed ID Operator' role for the managed id to resource group scope...",
                 () => roleAssignmentHashConflictRetryPolicy.ExecuteAsync(
@@ -1775,7 +1773,7 @@ namespace TesDeployer
                         var connection = new NetworkPrivateLinkServiceConnection
                         {
                             Name = "pe-coa-keyvault",
-                            PrivateLinkServiceId = new(vault.Id)
+                            PrivateLinkServiceId = vault.Id
                         };
                         connection.GroupIds.Add("vault");
 

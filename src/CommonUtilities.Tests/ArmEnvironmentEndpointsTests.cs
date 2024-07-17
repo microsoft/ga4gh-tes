@@ -147,7 +147,7 @@ namespace CommonUtilities.Tests
         [DataRow("AzureChinaCloud", "https://management.chinacloudapi.cn/.default", DisplayName = "AzureChinaCloud")]
         public async Task FromKnownCloudNameAsync_ExpectedDefaultTokenScope(string cloud, string audience)
         {
-            var environment = await AzureCloudConfig.FromKnownCloudNameAsync(cloud, audience, Microsoft.Extensions.Options.Options.Create(new Options.RetryPolicyOptions()));
+            var environment = await AzureCloudConfig.FromKnownCloudNameAsync(cloudName: cloud, retryPolicyOptions: Microsoft.Extensions.Options.Options.Create(new Options.RetryPolicyOptions()));
             Assert.AreEqual(audience, GetPropertyFromEnvironment<string>(environment, nameof(AzureCloudConfig.DefaultTokenScope)));
         }
 
@@ -162,7 +162,7 @@ namespace CommonUtilities.Tests
         [DataRow(Cloud.China, "AzureChinaCloud", DisplayName = "Microsoft Azure operated by 21Vianet")]
         public async Task FromKnownCloudNameAsync_ExpectedValues(Cloud cloud, string cloudName)
         {
-            var environment = await AzureCloudConfig.FromKnownCloudNameAsync(cloudName, cloudName, Microsoft.Extensions.Options.Options.Create(new Options.RetryPolicyOptions()));
+            var environment = await AzureCloudConfig.FromKnownCloudNameAsync(cloudName: cloudName, retryPolicyOptions: Microsoft.Extensions.Options.Options.Create(new Options.RetryPolicyOptions()));
             foreach (var (property, value) in CloudEndpoints[cloud])
             {
                 switch (value)

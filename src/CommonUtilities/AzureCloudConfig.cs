@@ -6,7 +6,6 @@ using System.Text.Json.Serialization;
 using Azure.Identity;
 using Azure.ResourceManager;
 using Microsoft.Extensions.Options;
-using Polly;
 
 namespace CommonUtilities.AzureCloud
 {
@@ -247,62 +246,62 @@ namespace CommonUtilities.AzureCloud
                 };
         }
 
-        public static async Task<AzureCloudConfig> CreateAsync(string azureCloudName = DefaultAzureCloudName, string azureCloudMetadataUrlApiVersion = DefaultAzureCloudMetadataUrlApiVersion)
-        {
-            // It's critical that this succeeds for TES to function
-            // These URLs are expected to always be available
-            string domain;
-            string defaultTokenScope;
-            ArmEnvironment armEnvironment;
-            // Names defined here: https://github.com/Azure/azure-sdk-for-net/blob/bc9f38eca0d8abbf0697dd3e3e75220553eeeafa/sdk/identity/Azure.Identity/src/AzureAuthorityHosts.cs#L11
-            switch (azureCloudName.ToUpperInvariant())
-            {
-                case "AZURECLOUD":
-                    domain = "azure.com";
-                    // The double slash is intentional for the public cloud.
-                    // https://github.com/Azure/azure-sdk-for-net/blob/bc9f38eca0d8abbf0697dd3e3e75220553eeeafa/sdk/identity/Azure.Identity/src/AzureAuthorityHosts.cs#L53
-                    defaultTokenScope = $"https://management.{domain}//.default";
-                    armEnvironment = Azure.ResourceManager.ArmEnvironment.AzurePublicCloud;
-                    break;
-                case "AZUREUSGOVERNMENT":
-                    domain = "usgovcloudapi.net";
-                    defaultTokenScope = $"https://management.{domain}/.default";
-                    armEnvironment = Azure.ResourceManager.ArmEnvironment.AzureGovernment;
-                    break;
-                case "AZURECHINACLOUD":
-                    domain = "chinacloudapi.cn";
-                    defaultTokenScope = $"https://management.{domain}/.default";
-                    armEnvironment = Azure.ResourceManager.ArmEnvironment.AzureChina;
-                    break;
-                default:
-                    throw new ArgumentException($"Invalid Azure cloud name: {azureCloudName}");
-            }
+        //public static async Task<AzureCloudConfig> CreateAsync(string azureCloudName = DefaultAzureCloudName, string azureCloudMetadataUrlApiVersion = DefaultAzureCloudMetadataUrlApiVersion)
+        //{
+        //    // It's critical that this succeeds for TES to function
+        //    // These URLs are expected to always be available
+        //    string domain;
+        //    string defaultTokenScope;
+        //    ArmEnvironment armEnvironment;
+        //    // Names defined here: https://github.com/Azure/azure-sdk-for-net/blob/bc9f38eca0d8abbf0697dd3e3e75220553eeeafa/sdk/identity/Azure.Identity/src/AzureAuthorityHosts.cs#L11
+        //    switch (azureCloudName.ToUpperInvariant())
+        //    {
+        //        case "AZURECLOUD":
+        //            domain = "azure.com";
+        //            // The double slash is intentional for the public cloud.
+        //            // https://github.com/Azure/azure-sdk-for-net/blob/bc9f38eca0d8abbf0697dd3e3e75220553eeeafa/sdk/identity/Azure.Identity/src/AzureAuthorityHosts.cs#L53
+        //            defaultTokenScope = $"https://management.{domain}//.default";
+        //            armEnvironment = Azure.ResourceManager.ArmEnvironment.AzurePublicCloud;
+        //            break;
+        //        case "AZUREUSGOVERNMENT":
+        //            domain = "usgovcloudapi.net";
+        //            defaultTokenScope = $"https://management.{domain}/.default";
+        //            armEnvironment = Azure.ResourceManager.ArmEnvironment.AzureGovernment;
+        //            break;
+        //        case "AZURECHINACLOUD":
+        //            domain = "chinacloudapi.cn";
+        //            defaultTokenScope = $"https://management.{domain}/.default";
+        //            armEnvironment = Azure.ResourceManager.ArmEnvironment.AzureChina;
+        //            break;
+        //        default:
+        //            throw new ArgumentException($"Invalid Azure cloud name: {azureCloudName}");
+        //    }
 
-            string azureCloudMetadataUrl = $"https://management.{domain}/metadata/endpoints?api-version={azureCloudMetadataUrlApiVersion}";
+        //    string azureCloudMetadataUrl = $"https://management.{domain}/metadata/endpoints?api-version={azureCloudMetadataUrlApiVersion}";
 
-            var retryPolicy = Policy
-                .Handle<Exception>()
-                .WaitAndRetryAsync(10, retryAttempt => TimeSpan.FromSeconds(30), onRetry: (exception, timespan, retryAttempt, context) =>
-                {
-                    Console.WriteLine($"Attempt {retryAttempt}: Retrying AzureCloudConfig creation due to error: {exception.Message}.  {exception}");
-                });
+        //    var retryPolicy = Policy
+        //        .Handle<Exception>()
+        //        .WaitAndRetryAsync(10, retryAttempt => TimeSpan.FromSeconds(30), onRetry: (exception, timespan, retryAttempt, context) =>
+        //        {
+        //            Console.WriteLine($"Attempt {retryAttempt}: Retrying AzureCloudConfig creation due to error: {exception.Message}.  {exception}");
+        //        });
 
-            using var httpClient = new HttpClient();
+        //    using var httpClient = new HttpClient();
 
-            return await retryPolicy.ExecuteAsync(async () =>
-            {
-                var httpResponse = await httpClient.GetAsync(azureCloudMetadataUrl);
-                httpResponse.EnsureSuccessStatusCode();
-                var jsonString = await httpResponse.Content.ReadAsStringAsync();
-                var config = JsonSerializer.Deserialize(jsonString, AzureCloudConfigContext.Default.AzureCloudConfig)!;
-                config.DefaultTokenScope = defaultTokenScope;
-                config.ArmEnvironment = armEnvironment;
-                config.Domain = domain;
-                config.AzureEnvironmentConfig = new AzureEnvironmentConfig(config.Authentication?.LoginEndpointUrl, config.DefaultTokenScope, config.Suffixes?.StorageSuffix);
-                config.AuthorityHost = new(config.Authentication!.LoginEndpointUrl!);
-                return config;
-            });
-        }
+        //    return await retryPolicy.ExecuteAsync(async () =>
+        //    {
+        //        var httpResponse = await httpClient.GetAsync(azureCloudMetadataUrl);
+        //        httpResponse.EnsureSuccessStatusCode();
+        //        var jsonString = await httpResponse.Content.ReadAsStringAsync();
+        //        var config = JsonSerializer.Deserialize(jsonString, AzureCloudConfigContext.Default.AzureCloudConfig)!;
+        //        config.DefaultTokenScope = defaultTokenScope;
+        //        config.ArmEnvironment = armEnvironment;
+        //        config.Domain = domain;
+        //        config.AzureEnvironmentConfig = new AzureEnvironmentConfig(config.Authentication?.LoginEndpointUrl, config.DefaultTokenScope, config.Suffixes?.StorageSuffix);
+        //        config.AuthorityHost = new(config.Authentication!.LoginEndpointUrl!);
+        //        return config;
+        //    });
+        //}
     }
 
     [JsonSerializable(typeof(AzureCloudConfig))]

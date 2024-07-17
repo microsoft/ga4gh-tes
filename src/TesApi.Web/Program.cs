@@ -152,7 +152,7 @@ namespace TesApi.Web
                 var tesOptions = new GeneralOptions();
                 configuration.Bind(GeneralOptions.SectionName, tesOptions);
                 Console.WriteLine($"tesOptions.AzureCloudName: {tesOptions.AzureCloudName}");
-                return AzureCloudConfig.CreateAsync(tesOptions.AzureCloudName, tesOptions.AzureCloudMetadataUrlApiVersion).Result;
+                return AzureCloudConfig.FromKnownCloudNameAsync(cloudName: tesOptions.AzureCloudName, azureCloudMetadataUrlApiVersion: tesOptions.AzureCloudMetadataUrlApiVersion).Result;
             }
         }
     }
