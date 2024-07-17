@@ -212,6 +212,9 @@ namespace TesApi.Web
         public string GetArmRegion() => azureProxy.GetArmRegion();
 
         /// <inheritdoc/>
+        public string GetManagedIdentityInBatchAccountResourceGroup(string identityName) => azureProxy.GetManagedIdentityInBatchAccountResourceGroup(identityName);
+
+        /// <inheritdoc/>
         public async Task<string> CreateBatchPoolAsync(BatchModels.Pool poolSpec, bool isPreemptable, CancellationToken cancellationToken)
         {
             try

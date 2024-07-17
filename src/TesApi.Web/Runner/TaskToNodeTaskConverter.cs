@@ -43,31 +43,31 @@ namespace TesApi.Web.Runner
         private readonly TerraOptions terraOptions;
         private readonly ILogger<TaskToNodeTaskConverter> logger;
         private readonly IList<ExternalStorageContainerInfo> externalStorageContainers;
-        private readonly BatchAccountOptions batchAccountOptions;
+        private readonly IAzureProxy azureProxy;
         private readonly AzureEnvironmentConfig azureCloudIdentityConfig;
 
         /// <summary>
         /// Constructor of TaskToNodeTaskConverter
         /// </summary>
         /// <param name="terraOptions"></param>
-        /// <param name="storageAccessProvider"></param>
         /// <param name="storageOptions"></param>
-        /// <param name="batchAccountOptions"></param>
+        /// <param name="storageAccessProvider"></param>
+        /// <param name="azureProxy"></param>
         /// <param name="azureCloudIdentityConfig"></param>
         /// <param name="logger"></param>
-        public TaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, IStorageAccessProvider storageAccessProvider, IOptions<StorageOptions> storageOptions, IOptions<BatchAccountOptions> batchAccountOptions, AzureEnvironmentConfig azureCloudIdentityConfig, ILogger<TaskToNodeTaskConverter> logger)
+        public TaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, IOptions<StorageOptions> storageOptions, IStorageAccessProvider storageAccessProvider, IAzureProxy azureProxy, AzureEnvironmentConfig azureCloudIdentityConfig, ILogger<TaskToNodeTaskConverter> logger)
         {
             ArgumentNullException.ThrowIfNull(terraOptions);
             ArgumentNullException.ThrowIfNull(storageOptions);
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
-            ArgumentNullException.ThrowIfNull(batchAccountOptions);
+            ArgumentNullException.ThrowIfNull(azureProxy);
             ArgumentNullException.ThrowIfNull(azureCloudIdentityConfig);
             ArgumentNullException.ThrowIfNull(logger);
 
             this.terraOptions = terraOptions.Value;
             this.logger = logger;
             this.storageAccessProvider = storageAccessProvider;
-            this.batchAccountOptions = batchAccountOptions.Value;
+            this.azureProxy = azureProxy;
             this.azureCloudIdentityConfig = azureCloudIdentityConfig;
             externalStorageContainers = StorageUrlUtils.GetExternalStorageContainerInfos(storageOptions.Value);
         }
@@ -90,7 +90,7 @@ namespace TesApi.Web.Runner
                 var builder = new NodeTaskBuilder();
                 builder.WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
                     .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath: string.Empty))
-                    .WithResourceIdManagedIdentity(GetNodeManagedIdentityResourceId(task, nodeTaskConversionOptions.GlobalManagedIdentity));
+                    .WithResourceIdManagedIdentity(GetNodeManagedIdentityResourceId(nodeTaskConversionOptions.GlobalManagedIdentity, task));
 
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
                 {
@@ -334,8 +334,13 @@ namespace TesApi.Web.Runner
                 task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters
                     .workflow_execution_identity);
 
-            if (string.IsNullOrEmpty(workflowId))
+            if (string.IsNullOrWhiteSpace(workflowId))
             {
+                if (!NodeTaskBuilder.IsValidManagedIdentityResourceId(globalManagedIdentity))
+                {
+                    throw new TesException("NoManagedIdentityForRunner", "Neither the TES server nor the task provided an Azure User Managed Identity for the task runner. Please check your configuration.");
+                }
+
                 return globalManagedIdentity;
             }
 
@@ -344,7 +349,38 @@ namespace TesApi.Web.Runner
                 return workflowId;
             }
 
-            return $"/subscriptions/{batchAccountOptions.SubscriptionId}/resourceGroups/{batchAccountOptions.ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{workflowId}";
+            return azureProxy.GetManagedIdentityInBatchAccountResourceGroup(workflowId);
+        }
+
+        /// <summary>
+        /// This returns the global managed identity if it is set, otherwise it returns the node managed identity resource id from the task.
+        /// If the value in the workflow identity is not a full resource id, it is assumed to be the name. In this case, the resource id is constructed from the name.
+        /// </summary>
+        /// <param name="globalManagedIdentity"></param>
+        /// <param name="task"></param>
+        /// <returns></returns>
+        public string GetNodeManagedIdentityResourceId(string globalManagedIdentity, TesTask task)
+        {
+            if (NodeTaskBuilder.IsValidManagedIdentityResourceId(globalManagedIdentity))
+            {
+                return globalManagedIdentity;
+            }
+
+            var workflowId =
+                task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters
+                    .workflow_execution_identity);
+
+            if (string.IsNullOrWhiteSpace(workflowId))
+            {
+                throw new TesException("NoManagedIdentityForRunner", "Neither the TES server nor the task provided an Azure User Managed Identity for the task runner. Please check your configuration.");
+            }
+
+            if (NodeTaskBuilder.IsValidManagedIdentityResourceId(workflowId))
+            {
+                return workflowId;
+            }
+
+            return azureProxy.GetManagedIdentityInBatchAccountResourceGroup(workflowId);
         }
 
 

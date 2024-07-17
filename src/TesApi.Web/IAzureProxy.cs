@@ -239,6 +239,13 @@ namespace TesApi.Web
         string GetArmRegion();
 
         /// <summary>
+        /// Gets the managed identity in batch account resource group.
+        /// </summary>
+        /// <param name="identityName">Name of the identity.</param>
+        /// <returns>Resource Id of the purported managed identity.</returns>
+        string GetManagedIdentityInBatchAccountResourceGroup(string identityName);
+
+        /// <summary>
         /// Disables AutoScale in a Batch Pool
         /// </summary>
         /// <param name="poolId">The id of the pool.</param>
