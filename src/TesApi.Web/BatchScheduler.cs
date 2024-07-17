@@ -910,8 +910,6 @@ namespace TesApi.Web
         private async Task<CloudTask> ConvertTesTaskToBatchTaskUsingRunnerAsync(string taskId, TesTask task, string acrPullIdentity,
             CancellationToken cancellationToken)
         {
-            ValidateTesTask(task);
-
             var nodeTaskCreationOptions = await GetNodeTaskConversionOptionsAsync(task, acrPullIdentity, cancellationToken);
 
             var assets = await taskExecutionScriptingManager.PrepareBatchScriptAsync(task, nodeTaskCreationOptions, cancellationToken);
@@ -1000,36 +998,6 @@ namespace TesApi.Web
             }
 
             return additionalInputFiles;
-        }
-
-        private void ValidateTesTask(TesTask task)
-        {
-            ArgumentNullException.ThrowIfNull(task);
-
-            task.Inputs?.ForEach(input => ValidateTesTaskInput(input, task));
-        }
-
-        private void ValidateTesTaskInput(TesInput inputFile, TesTask tesTask)
-        {
-            if (string.IsNullOrWhiteSpace(inputFile.Path) || !inputFile.Path.StartsWith("/"))
-            {
-                throw new TesException("InvalidInputFilePath", $"Unsupported input path '{inputFile.Path}' for task Id {tesTask.Id}. Must start with '/'.");
-            }
-
-            if (inputFile.Url is not null && inputFile.Content is not null)
-            {
-                throw new TesException("InvalidInputFilePath", "Input Url and Content cannot be both set");
-            }
-
-            if (inputFile.Url is null && inputFile.Content is null)
-            {
-                throw new TesException("InvalidInputFilePath", "One of Input Url or Content must be set");
-            }
-
-            if (inputFile.Type == TesFileType.DIRECTORY)
-            {
-                throw new TesException("InvalidInputFilePath", "Directory input is not supported.");
-            }
         }
 
         enum StartScriptVmFamilies
