@@ -80,16 +80,17 @@ namespace TesApi.Web.Runner
         /// <summary>
         /// Generates <see cref="NodeTaskResolverOptions"/>.
         /// </summary>
+        /// <param name="task">The TES task.</param>
         /// <param name="nodeTaskConversionOptions">The node task conversion options.</param>
         /// <returns>Environment required for runner to retrieve blobs from storage.</returns>
-        public virtual NodeTaskResolverOptions ToNodeTaskResolverOptions(NodeTaskConversionOptions nodeTaskConversionOptions)
+        public virtual NodeTaskResolverOptions ToNodeTaskResolverOptions(TesTask task, NodeTaskConversionOptions nodeTaskConversionOptions)
         {
             try
             {
                 var builder = new NodeTaskBuilder();
                 builder.WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
                     .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath: string.Empty))
-                    .WithResourceIdManagedIdentity(nodeTaskConversionOptions.GlobalManagedIdentity);
+                    .WithResourceIdManagedIdentity(GetNodeManagedIdentityResourceId(task, nodeTaskConversionOptions.GlobalManagedIdentity));
 
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
                 {
