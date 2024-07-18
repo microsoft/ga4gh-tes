@@ -30,24 +30,24 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="expectedBasicJsonResult.json">
+    <Content Include="expectedBasicJsonResult.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="expectedFullJsonResult.json">
+    </Content>
+    <Content Include="expectedFullJsonResult.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="expectedMinimalJsonResult.json">
+    </Content>
+    <Content Include="expectedMinimalJsonResult.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="testask1.json">
+    </Content>
+    <Content Include="testask1.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="tesTaskExample.json">
+    </Content>
+    <Content Include="tesTaskExample.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="scripts\tes-runner.md5">
+    </Content>
+    <Content Include="scripts\tes-runner.md5">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    </Content>
   </ItemGroup>
 
 </Project>

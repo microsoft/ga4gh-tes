@@ -11,6 +11,36 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="Dockerfile_PackagePublishedFiles">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+    <Content Include="..\Dockerfile-Tes">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+    <Content Include="..\deploy-tes-docker-image.sh">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+    <Content Include=".dockerignore">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Content>
+    <Content Include="docker-compose.yml">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tes-compliance-test\entrypoint.sh">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="scripts\config-docker.sh">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="scripts\config-nvme.sh">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="AutoMapper" Version="13.0.1" />
     <PackageReference Include="Azure.ResourceManager.ApplicationInsights" Version="1.0.0" />
     <PackageReference Include="Azure.ResourceManager.Batch" Version="1.4.0" />
@@ -49,15 +79,4 @@
     <ProjectReference Include="..\Tes\Tes.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Update="tes-compliance-test\entrypoint.sh">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="scripts\config-docker.sh">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="scripts\config-nvme.sh">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
 </Project>
