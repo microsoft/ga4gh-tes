@@ -164,6 +164,7 @@ namespace TesDeployer
 
                 await ValidateSubscriptionAndResourceGroupAsync(configuration);
                 kubernetesManager = new(configuration, azureCredentials, azureCloudConfig, cts.Token);
+
                 IResourceGroup resourceGroup = null;
                 ContainerServiceManagedClusterResource aksCluster = null;
                 BatchAccount batchAccount = null;
@@ -394,6 +395,7 @@ namespace TesDeployer
                     }
 
                     ValidateRegionName(configuration.RegionName);
+                    await ValidateVmAsync();
                     ValidateMainIdentifierPrefix(configuration.MainIdentifierPrefix);
                     storageAccount = await ValidateAndGetExistingStorageAccountAsync();
                     batchAccount = await ValidateAndGetExistingBatchAccountAsync();
