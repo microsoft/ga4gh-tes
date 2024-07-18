@@ -2,7 +2,7 @@
   "profiles": {
     "Setup": {
       "commandName": "Project",
-      "commandLineArgs": "--subscriptionid 594bef42-33f3-42df-b056-e7399d6ae7a0 --regionname westus2 --mainidentifierprefix toatest --AadGroupIds 3f16f955-665a-423c-b00b-492ba77d48b8 --HelmBinaryPath %USERPROFILE%\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helm.Helm_Microsoft.Winget.Source_8wekyb3d8bbwe\\windows-amd64\\helm.exe --EnableIngress true --LetsEncryptEmail sc-vny406119@microsoft.com --DebugLogging true --KubectlBinaryPath %USERPROFILE%\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Kubernetes.kubectl_Microsoft.Winget.Source_8wekyb3d8bbwe\\kubectl.exe",
+      "commandLineArgs": "--subscriptionid aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee --regionname westus2 --mainidentifierprefix toatest --AadGroupIds aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
       "sqlDebugging": true
     }
   }

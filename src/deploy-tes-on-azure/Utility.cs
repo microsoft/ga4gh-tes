@@ -146,24 +146,16 @@ namespace TesDeployer
             => typeof(Deployer).Assembly.GetManifestResourceStream($"deploy-tes-on-azure.{string.Join(".", pathComponentsRelativeToAppBase)}");
 
         // borrowed from https://github.com/Azure/azure-libraries-for-net/blob/7d85e294e4e7280c3f74b1c41438e2f20bce2052/src/ResourceManagement/ResourceManager/ResourceNamer.cs
-        private class ResourceNamer
+        private class ResourceNamer(string name)
         {
-            private readonly string randName;
+            private readonly string randName = name.ToLowerInvariant() + Guid.NewGuid().ToString("N")[..3].ToLowerInvariant();
             private static readonly Random random = new();
-
-            public ResourceNamer(string name)
-            {
-                lock (random)
-                {
-                    this.randName = name.ToLower() + Guid.NewGuid().ToString("N")[..3].ToLower();
-                }
-            }
 
             public string RandomName(string prefix, int maxLen)
             {
-                lock (random)
+                lock (random) // https://learn.microsoft.com/dotnet/fundamentals/runtime-libraries/system-random#thread-safety
                 {
-                    prefix = prefix.ToLower();
+                    prefix = prefix.ToLowerInvariant();
                     var minRandomnessLength = 5;
                     var minRandomString = random.Next(0, 100000).ToString("D5");
 
@@ -183,7 +175,7 @@ namespace TesDeployer
                 var str = "";
                 while (str.Length < length)
                 {
-                    str += Guid.NewGuid().ToString("N")[..Math.Min(32, length)].ToLower();
+                    str += Guid.NewGuid().ToString("N")[..Math.Min(32, length)].ToLowerInvariant();
                 }
                 return str;
             }

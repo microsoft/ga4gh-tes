@@ -80,6 +80,7 @@ namespace TesDeployer
         /// <summary>
         /// Grants full access to manage all resources, but does not allow you to assign roles in Azure RBAC, manage assignments in Azure Blueprints, or share image galleries.
         /// </summary>
+        /// <remarks>https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#general 'Contributor' in table.</remarks>
         private static readonly ResourceIdentifier All_Role_Contributor = AuthorizationRoleDefinitionResource.CreateResourceIdentifier(string.Empty, new("b24988ac-6180-42a0-ab88-20f7382dd24c"));
 
         public const string ConfigurationContainerName = "configuration";

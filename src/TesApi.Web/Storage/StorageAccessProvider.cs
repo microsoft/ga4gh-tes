@@ -100,7 +100,9 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
 
         Uri GetBlobUri(Azure.Storage.Blobs.Models.BlobItem blob)
         {
-            // This implementation assumes there are no parallel invocations in the same parent method call.
+            // This implementation reuses the BlobUriBuilder in the parent method, so GetBlobUri cannot be called in parallel with the same instance of BlobUriBuilder.
+            // It is safe for concurrent instances of GetBlobUrlsAsync to run simultaneously, however.
+            // Refactor if the ListBlobsAsync enumeration is ever parallelized at the stage of calling this converter method.
             blobBuilder.BlobName = blob.Name;
             return blobBuilder.ToUri();
         }
