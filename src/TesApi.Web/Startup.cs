@@ -8,7 +8,7 @@ using System.Net;
 using System.Reflection;
 using System.Threading;
 using Azure.Core;
-using Azure.Identity;
+using Azure.ResourceManager;
 using CommonUtilities;
 using CommonUtilities.AzureCloud;
 using CommonUtilities.Options;
@@ -42,7 +42,7 @@ namespace TesApi.Web
     public class Startup
     {
         // TODO centralize in single location
-        internal const string TesVersion = "5.3.3";
+        internal const string TesVersion = "5.3.4";
         private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
@@ -69,6 +69,12 @@ namespace TesApi.Web
                 services
                     .AddSingleton(AzureCloudConfig)
                     .AddSingleton(AzureCloudConfig.AzureEnvironmentConfig)
+                    .AddSingleton(s =>
+                    {
+                        var options = ActivatorUtilities.CreateInstance<AzureServicesConnectionStringCredentialOptions>(s);
+                        options.AuthorityHost = AzureCloudConfig.AuthorityHost;
+                        return options;
+                    })
                     .AddLogging()
                     .AddApplicationInsightsTelemetry(configuration)
                     .Configure<GeneralOptions>(configuration.GetSection(GeneralOptions.SectionName))
@@ -91,7 +97,7 @@ namespace TesApi.Web
                     .AddTransient<BatchPool>()
                     .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                     .AddSingleton(CreateTerraApiClient)
-                    .AddSingleton(CreateBatchPoolManagerFromConfiguration)
+                    .AddSingleton<IBatchPoolManager>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesBatchPoolManager>(sp, CreateBatchPoolManagerFromConfiguration(sp)))
 
                     .AddControllers(options => options.Filters.Add<Controllers.OperationCancelledExceptionFilter>())
                         .AddNewtonsoftJson(opts =>
@@ -118,13 +124,10 @@ namespace TesApi.Web
                     .AddSingleton<AzureManagementClientsFactory>()
                     .AddSingleton<ConfigurationUtils>()
                     .AddSingleton<IAllowedVmSizesService, AllowedVmSizesService>()
-                    .AddSingleton<TokenCredential>(s =>
-                    {
-                        return new DefaultAzureCredential(
-                            new DefaultAzureCredentialOptions { AuthorityHost = new Uri(AzureCloudConfig.Authentication.LoginEndpointUrl) });
-                    })
+                    .AddSingleton<TokenCredential, AzureServicesConnectionStringCredential>()
                     .AddSingleton<TaskToNodeTaskConverter>()
                     .AddSingleton<TaskExecutionScriptingManager>()
+                    .AddSingleton<PoolMetadataReader>()
 
                     .AddSingleton(c =>
                     {
@@ -433,7 +436,7 @@ namespace TesApi.Web
                 if (string.IsNullOrWhiteSpace(options.Value.AppKey))
                 {
                     //we are assuming Arm with MI/RBAC if no key is provided. Try to get info from the batch account.
-                    var task = ArmResourceInformationFinder.TryGetResourceInformationFromAccountNameAsync(options.Value.AccountName, AzureCloudConfig, System.Threading.CancellationToken.None);
+                    var task = ArmResourceInformationFinder.TryGetBatchAccountInformationFromAccountNameAsync(options.Value.AccountName, services.GetRequiredService<TokenCredential>(), AzureCloudConfig.ArmEnvironment.Value, CancellationToken.None);
                     task.Wait();
 
                     if (task.Result is null)

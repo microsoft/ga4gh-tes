@@ -6,9 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
-using Microsoft.Azure.Batch;
-using Microsoft.Azure.Batch.Auth;
-using Microsoft.Azure.Management.Batch.Models;
+using Azure.ResourceManager.Batch;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.ApiClients;
@@ -18,7 +16,7 @@ using TesApi.Web.Management.Models.Terra;
 namespace TesApi.Web.Management.Batch
 {
     /// <summary>
-    /// 
+    /// Provides management plane operations for Azure Batch Pools using Terra
     /// </summary>
     public class TerraBatchPoolManager : IBatchPoolManager
     {
@@ -35,28 +33,28 @@ namespace TesApi.Web.Management.Batch
         private readonly IMapper mapper;
         private readonly ILogger<TerraBatchPoolManager> logger;
         private readonly TerraOptions terraOptions;
-        private readonly BatchAccountOptions batchAccountOptions;
+        private readonly PoolMetadataReader poolMetadataReader;
 
         /// <summary>
         /// Provides batch pool created and delete operations via the Terra api. 
         /// </summary>
         /// <param name="terraWsmApiClient"></param>
         /// <param name="mapper"></param>
-        /// <param name="batchAccountOptions"></param>
+        /// <param name="poolMetadata"></param>
         /// <param name="logger"></param>
         /// <param name="terraOptions"></param>
-        public TerraBatchPoolManager(TerraWsmApiClient terraWsmApiClient, IMapper mapper, IOptions<TerraOptions> terraOptions, IOptions<BatchAccountOptions> batchAccountOptions, ILogger<TerraBatchPoolManager> logger)
+        public TerraBatchPoolManager(TerraWsmApiClient terraWsmApiClient, IMapper mapper, PoolMetadataReader poolMetadata, IOptions<TerraOptions> terraOptions, ILogger<TerraBatchPoolManager> logger)
         {
             ArgumentNullException.ThrowIfNull(terraWsmApiClient);
             ArgumentNullException.ThrowIfNull(mapper);
+            ArgumentNullException.ThrowIfNull(poolMetadata);
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(terraOptions);
-            ArgumentNullException.ThrowIfNull(batchAccountOptions);
 
             this.terraWsmApiClient = terraWsmApiClient;
             this.mapper = mapper;
+            this.poolMetadataReader = poolMetadata;
             this.logger = logger;
-            this.batchAccountOptions = batchAccountOptions.Value;
             this.terraOptions = terraOptions.Value;
 
             ValidateOptions();
@@ -70,12 +68,14 @@ namespace TesApi.Web.Management.Batch
         /// <param name="isPreemptable"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        public async Task<string> CreateBatchPoolAsync(Pool poolSpec, bool isPreemptable, CancellationToken cancellationToken)
+        public async Task<string> CreateBatchPoolAsync(BatchAccountPoolData poolSpec, bool isPreemptable, CancellationToken cancellationToken)
         {
             var resourceId = Guid.NewGuid();
             var resourceName = $"TES-{resourceId}";
+            var nameItem = poolSpec.Metadata.Single(i => string.IsNullOrEmpty(i.Name));
+            poolSpec.Metadata.Remove(nameItem);
 
-            var apiRequest = new ApiCreateBatchPoolRequest()
+            ApiCreateBatchPoolRequest apiRequest = new()
             {
                 Common = new ApiCommon
                 {
@@ -89,7 +89,7 @@ namespace TesApi.Web.Management.Batch
                 AzureBatchPool = mapper.Map<ApiAzureBatchPool>(poolSpec),
             };
 
-            apiRequest.AzureBatchPool.Id = poolSpec.Name;
+            apiRequest.AzureBatchPool.Id = nameItem.Value;
 
             AddResourceIdToPoolMetadata(apiRequest, resourceId);
 
@@ -100,11 +100,12 @@ namespace TesApi.Web.Management.Batch
 
         private static void AddResourceIdToPoolMetadata(ApiCreateBatchPoolRequest apiRequest, Guid resourceId)
         {
-            var resourceIdMetadataItem =
-                new ApiBatchPoolMetadataItem() { Name = TerraResourceIdMetadataKey, Value = resourceId.ToString() };
+            ApiBatchPoolMetadataItem resourceIdMetadataItem = new()
+            { Name = TerraResourceIdMetadataKey, Value = resourceId.ToString() };
+
             if (apiRequest.AzureBatchPool.Metadata is null)
             {
-                apiRequest.AzureBatchPool.Metadata = new ApiBatchPoolMetadataItem[] { resourceIdMetadataItem };
+                apiRequest.AzureBatchPool.Metadata = [resourceIdMetadataItem];
                 return;
             }
 
@@ -112,7 +113,7 @@ namespace TesApi.Web.Management.Batch
 
             metadataList.Add(resourceIdMetadataItem);
 
-            apiRequest.AzureBatchPool.Metadata = metadataList.ToArray();
+            apiRequest.AzureBatchPool.Metadata = [.. metadataList];
         }
 
         /// <summary>
@@ -127,18 +128,18 @@ namespace TesApi.Web.Management.Batch
             try
             {
                 logger.LogInformation(
-                    $"Deleting pool with the ID/name: {poolId}");
+                    "Deleting pool with the ID/name: {PoolId}", poolId);
 
                 var wsmResourceId = await GetWsmResourceIdFromBatchPoolMetadataAsync(poolId, cancellationToken);
 
                 await terraWsmApiClient.DeleteBatchPoolAsync(Guid.Parse(terraOptions.WorkspaceId), wsmResourceId, cancellationToken);
 
                 logger.LogInformation(
-                    $"Successfully deleted pool with the ID/name via WSM: {poolId}");
+                    "Successfully deleted pool with the ID/name via WSM: {PoolId}", poolId);
             }
             catch (Exception e)
             {
-                logger.LogError(e, $"Error trying to delete pool named {poolId}");
+                logger.LogError(e, "Error trying to delete pool named {PoolId}", poolId);
 
                 throw;
             }
@@ -146,37 +147,20 @@ namespace TesApi.Web.Management.Batch
 
         private async Task<Guid> GetWsmResourceIdFromBatchPoolMetadataAsync(string poolId, CancellationToken cancellationToken)
         {
-            var batchClient = CreateBatchClientFromOptions();
+            var metadataItem = await poolMetadataReader.GetMetadataValueAsync(poolId, TerraResourceIdMetadataKey, cancellationToken);
 
-            var pool = await batchClient.PoolOperations.GetPoolAsync(poolId, cancellationToken: cancellationToken);
-
-            if (pool is null)
-            {
-                throw new InvalidOperationException($"The Batch pool was not found. Pool ID: {poolId}");
-            }
-
-            var metadataItem = pool.Metadata.SingleOrDefault(m => m.Name.Equals(TerraResourceIdMetadataKey));
-
-            if (string.IsNullOrEmpty(metadataItem?.Value))
+            if (string.IsNullOrEmpty(metadataItem))
             {
                 throw new InvalidOperationException("The WSM resource ID was not found in the pool's metadata.");
             }
 
-            var wsmResourceId = Guid.Parse(metadataItem.Value);
+            var wsmResourceId = Guid.Parse(metadataItem);
             return wsmResourceId;
         }
-
-        private BatchClient CreateBatchClientFromOptions()
-            => BatchClient.Open(new BatchSharedKeyCredentials(batchAccountOptions.BaseUrl,
-                batchAccountOptions.AccountName, batchAccountOptions.AppKey));
 
         private void ValidateOptions()
         {
             ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceId, nameof(terraOptions.WorkspaceId));
-            ArgumentException.ThrowIfNullOrEmpty(batchAccountOptions.AccountName, nameof(batchAccountOptions.AccountName));
-            ArgumentException.ThrowIfNullOrEmpty(batchAccountOptions.AppKey, nameof(batchAccountOptions.AppKey));
-            ArgumentException.ThrowIfNullOrEmpty(batchAccountOptions.BaseUrl, nameof(batchAccountOptions.BaseUrl));
-            ArgumentException.ThrowIfNullOrEmpty(batchAccountOptions.ResourceGroup, nameof(batchAccountOptions.ResourceGroup));
         }
     }
 }
