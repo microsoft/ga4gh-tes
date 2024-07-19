@@ -52,6 +52,7 @@ namespace TesApi.Web
         //TODO: This dependency should be injected at a higher level (e.g. scheduler), but that requires significant refactoring that should be done separately.
         private readonly IBatchPoolManager batchPoolManager;
         private readonly AzureCloudConfig azureCloudConfig;
+        private readonly Func<string, string> createNodeManagedIdentityResourceId;
 
         /// <summary>
         /// Constructor of AzureProxy
@@ -76,6 +77,8 @@ namespace TesApi.Web
             this.azureCloudConfig = azureCloudConfig;
             this.batchPoolManager = batchPoolManager;
             this.logger = logger;
+
+            createNodeManagedIdentityResourceId = name => $"/subscriptions/{batchAccountInformation.SubscriptionId}/resourceGroups/{batchAccountInformation.ResourceGroupName}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{name}";
 
             if (string.IsNullOrWhiteSpace(batchAccountOptions.Value.AccountName))
             {
@@ -613,6 +616,12 @@ namespace TesApi.Web
             }
 
             await batchClient.PoolOperations.EnableAutoScaleAsync(poolId, formulaFactory(preemptable, preemptable ? currentLowPriority ?? 0 : currentDedicated ?? 0), interval, cancellationToken: cancellationToken);
+        }
+
+        /// <inheritdoc/>
+        public string GetManagedIdentityInBatchAccountResourceGroup(string identityName)
+        {
+            return createNodeManagedIdentityResourceId(identityName);
         }
     }
 }

@@ -510,7 +510,14 @@ namespace TesApi.Web
 
                 if (tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true)
                 {
-                    identities.Add(tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity));
+                    var workflowId = tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity);
+
+                    if (!NodeTaskBuilder.IsValidManagedIdentityResourceId(workflowId))
+                    {
+                        workflowId = azureProxy.GetManagedIdentityInBatchAccountResourceGroup(workflowId);
+                    }
+
+                    identities.Add(workflowId);
                 }
 
                 var acrPullIdentity = await actionIdentityProvider.GetAcrPullActionIdentity(CancellationToken.None);
@@ -535,7 +542,7 @@ namespace TesApi.Web
                     modelPoolFactory: (id, ct) => GetPoolSpecification(
                         name: id,
                         displayName: displayName,
-                        poolIdentity: GetBatchPoolIdentity(identities.ToArray()),
+                        poolIdentity: GetBatchPoolIdentity([.. identities]),
                         vmSize: virtualMachineInfo.VmSize,
                         vmFamily: virtualMachineInfo.VmFamily,
                         preemptable: virtualMachineInfo.LowPriority,
