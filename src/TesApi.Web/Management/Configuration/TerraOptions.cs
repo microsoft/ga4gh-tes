@@ -13,6 +13,7 @@ public class TerraOptions
     /// </summary>
     public const string SectionName = "Terra";
     private const int DefaultSasTokenExpirationInSeconds = 60 * 24 * 3; // 3 days
+    private const int DefaultSamActionIdentityCacheTTLMinutes = 5;
 
     /// <summary>
     /// Landing zone id containing the Tes back-end resources
@@ -20,7 +21,7 @@ public class TerraOptions
     public string LandingZoneId { get; set; }
 
     /// <summary>
-    /// Landing zone api host. 
+    /// Landing zone api host.
     /// </summary>
     public string LandingZoneApiHost { get; set; }
 
@@ -28,6 +29,21 @@ public class TerraOptions
     /// Wsm api host.
     /// </summary>
     public string WsmApiHost { get; set; }
+
+    /// <summary>
+    /// Sam api host.
+    /// </summary>
+    public string SamApiHost { get; set; }
+
+    /// <summary>
+    /// Id of the Sam resource associated with the ACR pull identity
+    /// </summary>
+    public string SamResourceIdForAcrPull { get; set; }
+
+    /// <summary>
+    /// Amount of time that cached action identities should live before we ask Sam for them again
+    /// </summary>
+    public int SamActionIdentityCacheTTLMinutes { get; set; } = DefaultSamActionIdentityCacheTTLMinutes;
 
     /// <summary>
     /// Workspace storage container resource id

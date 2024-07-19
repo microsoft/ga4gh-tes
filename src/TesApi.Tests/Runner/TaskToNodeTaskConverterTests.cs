@@ -33,7 +33,6 @@ namespace TesApi.Tests.Runner
         private readonly TesTask tesTask = GetTestTesTask();
         private TerraOptions terraOptions;
         private StorageOptions storageOptions;
-        private BatchAccountOptions batchAccountOptions;
 
         private const string SasToken = "sv=2019-12-12&ss=bfqt&srt=sco&spr=https&st=2023-09-27T17%3A32%3A57Z&se=2023-09-28T17%3A32%3A57Z&sp=rwdlacupx&sig=SIGNATURE";
 
@@ -55,10 +54,14 @@ namespace TesApi.Tests.Runner
         [TestInitialize]
         public void SetUp()
         {
-            terraOptions = new TerraOptions();
-            storageOptions = new StorageOptions() { ExternalStorageContainers = ExternalStorageContainerWithSas };
-            batchAccountOptions = new BatchAccountOptions() { SubscriptionId = SubscriptionId, ResourceGroup = ResourceGroup };
-            storageAccessProviderMock = new Mock<IStorageAccessProvider>();
+            terraOptions = new();
+            storageOptions = new() { ExternalStorageContainers = ExternalStorageContainerWithSas };
+
+            Mock<Web.IAzureProxy> azureProxyMock = new();
+            azureProxyMock.Setup(x => x.GetManagedIdentityInBatchAccountResourceGroup(It.IsAny<string>()))
+                .Returns<string>(name => $"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{name}");
+
+            storageAccessProviderMock = new();
             storageAccessProviderMock.Setup(x =>
                     x.GetInternalTesTaskBlobUrlAsync(It.IsAny<TesTask>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(InternalBlobUrlWithSas);
@@ -76,8 +79,8 @@ namespace TesApi.Tests.Runner
                 .Returns(Task.FromResult<IList<Uri>>([]));
 
             var azureCloudIdentityConfig = AzureCloudConfig.FromKnownCloudNameAsync().Result.AzureEnvironmentConfig;
-            taskToNodeTaskConverter = new TaskToNodeTaskConverter(Options.Create(terraOptions), storageAccessProviderMock.Object,
-                Options.Create(storageOptions), Options.Create(batchAccountOptions), azureCloudIdentityConfig, new NullLogger<TaskToNodeTaskConverter>());
+            taskToNodeTaskConverter = new TaskToNodeTaskConverter(Options.Create(terraOptions), Options.Create(storageOptions),
+                storageAccessProviderMock.Object, azureProxyMock.Object, azureCloudIdentityConfig, new NullLogger<TaskToNodeTaskConverter>());
         }
 
 
@@ -115,6 +118,34 @@ namespace TesApi.Tests.Runner
             var resourceId = taskToNodeTaskConverter.GetNodeManagedIdentityResourceId(tesTask, GlobalManagedIdentity);
 
             Assert.AreEqual(expectedResourceId, resourceId);
+        }
+
+        [DataTestMethod]
+        [DataRow("myIdentity", $@"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/myIdentity", false)]
+        [DataRow($@"/subscriptions/{SubscriptionId}/resourcegroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/myIdentity", $@"/subscriptions/{SubscriptionId}/resourcegroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/myIdentity", false)]
+        [DataRow($@"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/myIdentity", $@"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/myIdentity", false)]
+        [DataRow("", null, true)]
+        [DataRow(null, null, true)]
+        public void GetNodeManagedIdentityResourceId_NoGlobalManagedIdentity_ReturnsExpectedResult(string workflowIdentity, string expectedResourceId, bool exceptionExpected)
+        {
+            tesTask.Resources = new TesResources()
+            {
+                BackendParameters = new Dictionary<string, string>()
+                {
+                    {TesResources.SupportedBackendParameters.workflow_execution_identity.ToString(), workflowIdentity}
+                }
+            };
+
+            try
+            {
+                var resourceId = taskToNodeTaskConverter.GetNodeManagedIdentityResourceId(string.Empty, tesTask);
+                Assert.AreEqual(exceptionExpected, false);
+                Assert.AreEqual(expectedResourceId, resourceId);
+            }
+            catch (TesException)
+            {
+                Assert.AreEqual(exceptionExpected, true);
+            }
         }
 
         [TestMethod]

@@ -634,7 +634,7 @@ namespace TesApi.Tests
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual("TES-hostname-edicated1-rpsd645merzfkqmdnj7pkqrase2ancnh-", tesTask.PoolId[0..^8]);
+                Assert.AreEqual("TES-hostname-edicated1-obkfufnroslrzwlitqbrmjeowu7iuhfm-", tesTask.PoolId[0..^8]);
                 Assert.AreEqual("VmSizeDedicated1", pool.VmSize);
                 Assert.IsTrue(((BatchScheduler)batchScheduler).TryGetPool(tesTask.PoolId, out _));
             });
@@ -658,8 +658,8 @@ namespace TesApi.Tests
             {
                 Assert.AreEqual("VmSizeDedicated1", poolSpec.VmSize);
                 Assert.IsTrue(poolSpec.ScaleSettings.AutoScale.Formula.Contains("TargetDedicated"));
-                Assert.AreEqual(1, poolSpec.Identity.UserAssignedIdentities.Count);
-                Assert.AreEqual(identity, poolSpec.Identity.UserAssignedIdentities.Keys.First());
+                Assert.AreEqual(2, poolSpec.Identity.UserAssignedIdentities.Count);
+                Assert.AreEqual(identity, poolSpec.Identity.UserAssignedIdentities.Keys.Skip(1).First());
             });
         }
 
@@ -1316,6 +1316,9 @@ namespace TesApi.Tests
         private static Action<Mock<IAzureProxy>> GetMockAzureProxy(AzureProxyReturnValues azureProxyReturnValues)
             => azureProxy =>
             {
+                azureProxy.Setup(a => a.GetManagedIdentityInBatchAccountResourceGroup(It.IsAny<string>()))
+                    .Returns<string>(name => $"/subscriptions/defaultsubscription/resourceGroups/defaultresourcegroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{name}");
+
                 azureProxy.Setup(a => a.BlobExistsAsync(It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
                     .ReturnsAsync(true);
 
@@ -1363,23 +1366,21 @@ namespace TesApi.Tests
 
         private static Func<IEnumerable<(string Key, string Value)>> GetMockConfig()
             => new(() =>
-            {
-                var config = Enumerable.Empty<(string Key, string Value)>()
-                .Append(("Storage:DefaultAccountName", "defaultstorageaccount"))
-                .Append(("BatchScheduling:Prefix", "hostname"))
-                .Append(("BatchImageGen1:Offer", "ubuntu-server-container"))
-                .Append(("BatchImageGen1:Publisher", "microsoft-azure-batch"))
-                .Append(("BatchImageGen1:Sku", "20-04-lts"))
-                .Append(("BatchImageGen1:Version", "latest"))
-                .Append(("BatchImageGen1:NodeAgentSkuId", "batch.node.ubuntu 20.04"))
-                .Append(("BatchImageGen2:Offer", "ubuntu-hpc"))
-                .Append(("BatchImageGen2:Publisher", "microsoft-dsvm"))
-                .Append(("BatchImageGen2:Sku", "2004"))
-                .Append(("BatchImageGen2:Version", "latest"))
-                .Append(("BatchImageGen2:NodeAgentSkuId", "batch.node.ubuntu 20.04"));
-
-                return config;
-            });
+            [
+                ("Storage:DefaultAccountName", "defaultstorageaccount"),
+                ("BatchNodes:GlobalManagedIdentity", "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/SomeResourceGroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/GlobalManagedIdentity"),
+                ("BatchScheduling:Prefix", "hostname"),
+                ("BatchImageGen1:Offer", "ubuntu-server-container"),
+                ("BatchImageGen1:Publisher", "microsoft-azure-batch"),
+                ("BatchImageGen1:Sku", "20-04-lts"),
+                ("BatchImageGen1:Version", "latest"),
+                ("BatchImageGen1:NodeAgentSkuId", "batch.node.ubuntu 20.04"),
+                ("BatchImageGen2:Offer", "ubuntu-hpc"),
+                ("BatchImageGen2:Publisher", "microsoft-dsvm"),
+                ("BatchImageGen2:Sku", "2004"),
+                ("BatchImageGen2:Version", "latest"),
+                ("BatchImageGen2:NodeAgentSkuId", "batch.node.ubuntu 20.04"),
+            ]);
 
         private static IEnumerable<FileToDownload> GetFilesToDownload(Mock<IAzureProxy> azureProxy)
         {

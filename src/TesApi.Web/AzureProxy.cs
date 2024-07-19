@@ -49,6 +49,7 @@ namespace TesApi.Web
         private readonly BatchProtocol.BatchServiceClient batchServiceClient;
         private readonly BatchClient batchClient;
         private readonly string location;
+        private readonly Func<string, string> createNodeManagedIdentityResourceId;
         private readonly ArmEnvironment armEnvironment;
 
         /// <summary>
@@ -76,6 +77,8 @@ namespace TesApi.Web
             this.armEnvironment = azureCloudConfig.ArmEnvironment.Value;
             this.credentialOptions = credentialOptions;
             this.logger = logger;
+
+            createNodeManagedIdentityResourceId = name => $"/subscriptions/{batchAccountInformation.SubscriptionId}/resourceGroups/{batchAccountInformation.ResourceGroupName}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{name}";
 
             if (string.IsNullOrWhiteSpace(batchAccountOptions.Value.AccountName))
             {
@@ -527,6 +530,12 @@ namespace TesApi.Web
             }
 
             await batchClient.PoolOperations.EnableAutoScaleAsync(poolId, formulaFactory(preemptable, preemptable ? currentLowPriority ?? 0 : currentDedicated ?? 0), interval, cancellationToken: cancellationToken);
+        }
+
+        /// <inheritdoc/>
+        public string GetManagedIdentityInBatchAccountResourceGroup(string identityName)
+        {
+            return createNodeManagedIdentityResourceId(identityName);
         }
     }
 }

@@ -80,6 +80,8 @@ namespace TesApi.Tests
                 options.WorkspaceStorageAccountName = TerraApiStubData.WorkspaceAccountName;
                 options.WorkspaceStorageContainerName = TerraApiStubData.WorkspaceStorageContainerName;
                 options.WorkspaceStorageContainerResourceId = terraApiStubData.ContainerResourceId.ToString();
+                options.SamApiHost = TerraApiStubData.SamApiHost;
+                options.SamResourceIdForAcrPull = terraApiStubData.AcrPullIdentitySamResourceId.ToString();
             });
         }
 
@@ -92,10 +94,10 @@ namespace TesApi.Tests
 
             var serviceProvider = services.BuildServiceProvider();
 
-            var terraStorageProvider = serviceProvider.GetService<IStorageAccessProvider>();
+            var storageProvider = serviceProvider.GetService<IStorageAccessProvider>();
 
-            Assert.IsNotNull(terraStorageProvider);
-            Assert.IsInstanceOfType(terraStorageProvider, typeof(TerraStorageAccessProvider));
+            Assert.IsNotNull(storageProvider);
+            Assert.IsInstanceOfType(storageProvider, typeof(TerraStorageAccessProvider));
         }
 
         [TestMethod]
@@ -105,10 +107,38 @@ namespace TesApi.Tests
 
             var serviceProvider = services.BuildServiceProvider();
 
-            var terraStorageProvider = serviceProvider.GetService<IStorageAccessProvider>();
+            var storageProvider = serviceProvider.GetService<IStorageAccessProvider>();
 
-            Assert.IsNotNull(terraStorageProvider);
-            Assert.IsInstanceOfType(terraStorageProvider, typeof(DefaultStorageAccessProvider));
+            Assert.IsNotNull(storageProvider);
+            Assert.IsInstanceOfType(storageProvider, typeof(DefaultStorageAccessProvider));
+        }
+
+        [TestMethod]
+        public void ConfigureServices_TerraOptionsAreConfigured_TerraActionIdentityProviderIsResolved()
+        {
+            ConfigureTerraOptions();
+
+            startup.ConfigureServices(services);
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            var terraActionIdentityProvider = serviceProvider.GetService<IActionIdentityProvider>();
+
+            Assert.IsNotNull(terraActionIdentityProvider);
+            Assert.IsInstanceOfType(terraActionIdentityProvider, typeof(TerraActionIdentityProvider));
+        }
+
+        [TestMethod]
+        public void ConfigureServices_TerraOptionsAreNotConfigured_DefaultActionIdentityProviderIsResolved()
+        {
+            startup.ConfigureServices(services);
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            var actionIdentityProvider = serviceProvider.GetService<IActionIdentityProvider>();
+
+            Assert.IsNotNull(actionIdentityProvider);
+            Assert.IsInstanceOfType(actionIdentityProvider, typeof(DefaultActionIdentityProvider));
         }
 
         [TestMethod]

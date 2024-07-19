@@ -163,6 +163,9 @@ namespace TesApi.Web
         string IAzureProxy.GetArmRegion() => azureProxy.GetArmRegion();
 
         /// <inheritdoc/>
+        string IAzureProxy.GetManagedIdentityInBatchAccountResourceGroup(string identityName) => azureProxy.GetManagedIdentityInBatchAccountResourceGroup(identityName);
+
+        /// <inheritdoc/>
         Task<FullBatchPoolAllocationState> IAzureProxy.GetFullAllocationStateAsync(string poolId, CancellationToken cancellationToken)
             => cachingAsyncRetry.ExecuteWithRetryAndCachingAsync(
                 $"{nameof(CachingWithRetriesAzureProxy)}:{poolId}",
