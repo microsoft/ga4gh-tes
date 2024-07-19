@@ -1,12 +1,16 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using CommonUtilities.AzureCloud;
+
 namespace CommonUtilities
 {
-    public class AzureEnvironmentConfig
+    public record class AzureEnvironmentConfig(string? AzureAuthorityHostUrl, string? TokenScope, string? StorageUrlSuffix)
     {
-        public string? AzureAuthorityHostUrl { get; set; }
-        public string? TokenScope { get; set; }
-        public string? StorageUrlSuffix { get; set; }
+        public static AzureEnvironmentConfig FromArmEnvironmentEndpoints(AzureCloudConfig azureCloudConfig)
+        {
+            ArgumentNullException.ThrowIfNull(azureCloudConfig);
+            return new(azureCloudConfig.Authentication?.LoginEndpointUrl, azureCloudConfig.DefaultTokenScope, azureCloudConfig.Suffixes?.StorageSuffix);
+        }
     }
 }

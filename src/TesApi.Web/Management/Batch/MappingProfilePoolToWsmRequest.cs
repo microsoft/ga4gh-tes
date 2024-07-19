@@ -4,15 +4,16 @@
 using System;
 using System.Linq;
 using AutoMapper;
-using Microsoft.Azure.Management.Batch.Models;
-using Microsoft.Azure.Management.ContainerRegistry.Fluent.Models;
+using Azure.Core;
+using Azure.ResourceManager.Batch;
+using Azure.ResourceManager.Batch.Models;
 using TesApi.Web.Management.Models.Terra;
 using TesApi.Web.Runner;
 
 namespace TesApi.Web.Management.Batch
 {
     /// <summary>
-    /// Automapper mapping profile for Batch Pool to Wsm Create Batch API
+    /// AutoMapper mapping profile for Batch Pool to Wsm Create Batch API
     /// </summary>
     public class MappingProfilePoolToWsmRequest : Profile
     {
@@ -21,37 +22,40 @@ namespace TesApi.Web.Management.Batch
         /// </summary>
         public MappingProfilePoolToWsmRequest()
         {
-            CreateMap<DeploymentConfiguration, ApiDeploymentConfiguration>();
-            CreateMap<VirtualMachineConfiguration, ApiVirtualMachineConfiguration>();
-            CreateMap<CloudServiceConfiguration, ApiCloudServiceConfiguration>();
-            CreateMap<ScaleSettings, ApiScaleSettings>();
-            CreateMap<AutoScaleSettings, ApiAutoScale>()
-                .ForMember(dest => dest.EvaluationInterval, opt => opt.MapFrom(src => Convert.ToInt64(src.EvaluationInterval.Value.TotalMinutes)));
-            CreateMap<StartTask, ApiStartTask>();
-            CreateMap<ResourceFile, ApiResourceFile>();
-            CreateMap<ComputeNodeIdentityReference, ApiIdentityReference>();
-            CreateMap<EnvironmentSetting, ApiEnvironmentSetting>();
-            CreateMap<UserIdentity, ApiUserIdentity>();
-            CreateMap<AutoUserSpecification, ApiAutoUserSpecification>();
-            CreateMap<TaskContainerSettings, ApiContainerSettings>();
-            CreateMap<ApplicationPackageReference, ApiApplicationPackage>();
-            CreateMap<ContainerRegistry, ApiContainerRegistry>();
-            CreateMap<NetworkConfiguration, ApiNetworkConfiguration>();
-            CreateMap<PoolEndpointConfiguration, ApiEndpointConfiguration>();
-            CreateMap<InboundNatPool, ApiInboundNatPool>();
-            CreateMap<NetworkSecurityGroupRule, ApiNetworkSecurityGroupRule>();
-            CreateMap<ImageReference, ApiImageReference>();
-            CreateMap<FixedScaleSettings, ApiFixedScale>();
-            CreateMap<PublicIPAddressConfiguration, ApiPublicIpAddressConfiguration>();
-            CreateMap<MetadataItem, ApiBatchPoolMetadataItem>();
-            //TODO: This mapping to be updated once the WSM API changes to support the correct values 
-            CreateMap<UserAssignedIdentities, ApiUserAssignedIdentity>()
-                .ForMember(dest => dest.ClientId, opt => opt.MapFrom(src => src.ClientId))
-                .ForMember(dest => dest.ResourceGroupName, opt => opt.Ignore())
-                .ForMember(dest => dest.Name, opt => opt.Ignore());
-            CreateMap<Pool, ApiAzureBatchPool>()
-                .ForMember(dest => dest.Id, opt => opt.MapFrom(src => src.Name))
-                .ForMember(dest => dest.UserAssignedIdentities, opt => opt.MapFrom(src => src.Identity.UserAssignedIdentities.Select(kvp => new ApiUserAssignedIdentity() { Name = TryGetManagedIdentityNameFromResourceId(kvp.Key), ClientId = kvp.Value.ClientId })));
+            CreateMap<BatchDeploymentConfiguration, ApiDeploymentConfiguration>()
+                .ForMember(dst => dst.VirtualMachineConfiguration, opt => opt.MapFrom(src => src.VmConfiguration))
+                .ForMember(dst => dst.CloudServiceConfiguration, opt => opt.MapFrom(src => src.CloudServiceConfiguration));
+            CreateMap<BatchVmConfiguration, ApiVirtualMachineConfiguration>();
+            CreateMap<BatchCloudServiceConfiguration, ApiCloudServiceConfiguration>();
+            CreateMap<BatchAccountPoolScaleSettings, ApiScaleSettings>();
+            CreateMap<BatchAccountAutoScaleSettings, ApiAutoScale>()
+                .ForMember(dst => dst.EvaluationInterval, opt => opt.MapFrom(src => Convert.ToInt64(src.EvaluationInterval.Value.TotalMinutes)));
+            CreateMap<BatchAccountPoolStartTask, ApiStartTask>();
+            CreateMap<BatchResourceFile, ApiResourceFile>()
+                .ForMember(dst => dst.AutoStorageContainerName, opt => opt.MapFrom(src => src.AutoBlobContainerName))
+                .ForMember(dst => dst.HttpUrl, opt => opt.MapFrom(src => src.HttpUri))
+                .ForMember(dst => dst.IdentityReference, opt => opt.MapFrom(src => src.IdentityResourceId))
+                .ForMember(dst => dst.StorageContainerUrl, opt => opt.MapFrom(src => src.BlobContainerUri));
+            CreateMap<ResourceIdentifier, ApiIdentityReference>()
+                .ForMember(dst => dst.ResourceId, opt => opt.MapFrom(src => src.ToString()));
+            CreateMap<BatchEnvironmentSetting, ApiEnvironmentSetting>();
+            CreateMap<BatchUserIdentity, ApiUserIdentity>();
+            CreateMap<BatchAutoUserSpecification, ApiAutoUserSpecification>();
+            CreateMap<BatchTaskContainerSettings, ApiContainerSettings>();
+            CreateMap<BatchApplicationPackageReference, ApiApplicationPackage>();
+            CreateMap<BatchVmContainerRegistry, ApiContainerRegistry>()
+                .ForMember(dst => dst.IdentityReference, opt => opt.MapFrom(src => src.IdentityResourceId));
+            CreateMap<BatchNetworkConfiguration, ApiNetworkConfiguration>()
+                .ForPath(dst => dst.EndpointConfiguration.InboundNatPools, opt => opt.MapFrom(src => src.EndpointInboundNatPools));
+            CreateMap<BatchInboundNatPool, ApiInboundNatPool>();
+            CreateMap<BatchNetworkSecurityGroupRule, ApiNetworkSecurityGroupRule>();
+            CreateMap<BatchImageReference, ApiImageReference>();
+            CreateMap<BatchAccountFixedScaleSettings, ApiFixedScale>();
+            CreateMap<BatchPublicIPAddressConfiguration, ApiPublicIpAddressConfiguration>();
+            CreateMap<BatchAccountPoolMetadataItem, ApiBatchPoolMetadataItem>();
+            CreateMap<BatchAccountPoolData, ApiAzureBatchPool>()
+                .ForMember(dst => dst.Id, opt => opt.MapFrom(src => src.Name))
+                .ForMember(dst => dst.UserAssignedIdentities, opt => opt.MapFrom(src => src.Identity.UserAssignedIdentities.Select(kvp => new ApiUserAssignedIdentity() { Name = TryGetManagedIdentityNameFromResourceId(kvp.Key) })));
         }
 
         /// <summary>

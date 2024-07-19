@@ -78,7 +78,7 @@ namespace TesApi.Tests.Runner
                     x.GetBlobUrlsAsync(It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult<IList<Uri>>([]));
 
-            var azureCloudIdentityConfig = AzureCloudConfig.CreateAsync().Result.AzureEnvironmentConfig;
+            var azureCloudIdentityConfig = AzureCloudConfig.FromKnownCloudNameAsync().Result.AzureEnvironmentConfig;
             taskToNodeTaskConverter = new TaskToNodeTaskConverter(Options.Create(terraOptions), Options.Create(storageOptions),
                 storageAccessProviderMock.Object, azureProxyMock.Object, azureCloudIdentityConfig, new NullLogger<TaskToNodeTaskConverter>());
         }
