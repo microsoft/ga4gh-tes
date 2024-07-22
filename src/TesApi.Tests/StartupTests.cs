@@ -24,7 +24,6 @@ namespace TesApi.Tests
     public class StartupTests
     {
         private Startup startup;
-        private Mock<IConfiguration> configurationMock;
         private Mock<IWebHostEnvironment> hostingEnvMock;
         private ServiceCollection services;
         private TerraApiStubData terraApiStubData;
@@ -51,8 +50,9 @@ namespace TesApi.Tests
                 options.Prefix = "TES-prefix";
             });
 
-            configurationMock = new Mock<IConfiguration>();
-            configurationMock.Setup(c => c.GetSection(It.IsAny<string>())).Returns(new Mock<IConfigurationSection>().Object);
+            ConfigurationBuilder builder = new();
+            builder.AddInMemoryCollection([new("AzureServicesAuthConnectionString", $"RunAs=App;AppId={System.Guid.Empty:D}")]);
+
             hostingEnvMock = new Mock<IWebHostEnvironment>();
             hostingEnvMock.Setup(e => e.EnvironmentName).Returns("Development");
 
@@ -62,8 +62,11 @@ namespace TesApi.Tests
             services.AddSingleton(hostEnv.Object);
 #pragma warning restore CS0618
 
-            Startup.AzureCloudConfig = AzureCloudConfig.CreateAsync().Result;
-            startup = new Startup(configurationMock.Object, NullLogger<Startup>.Instance, hostingEnvMock.Object);
+            Startup.AzureCloudConfig = AzureCloudConfig.FromKnownCloudNameAsync().Result;
+            var configuration = builder.Build();
+            services.AddSingleton(configuration);
+            services.AddSingleton<IConfiguration>(configuration);
+            startup = new Startup(configuration, NullLogger<Startup>.Instance, hostingEnvMock.Object);
         }
 
         private void ConfigureTerraOptions()
@@ -91,10 +94,51 @@ namespace TesApi.Tests
 
             var serviceProvider = services.BuildServiceProvider();
 
-            var terraStorageProvider = serviceProvider.GetService<IStorageAccessProvider>();
+            var storageProvider = serviceProvider.GetService<IStorageAccessProvider>();
 
-            Assert.IsNotNull(terraStorageProvider);
-            Assert.IsInstanceOfType(terraStorageProvider, typeof(TerraStorageAccessProvider));
+            Assert.IsNotNull(storageProvider);
+            Assert.IsInstanceOfType(storageProvider, typeof(TerraStorageAccessProvider));
+        }
+
+        [TestMethod]
+        public void ConfigureServices_TerraOptionsAreNotConfigured_DefaultStorageProviderIsResolved()
+        {
+            startup.ConfigureServices(services);
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            var storageProvider = serviceProvider.GetService<IStorageAccessProvider>();
+
+            Assert.IsNotNull(storageProvider);
+            Assert.IsInstanceOfType(storageProvider, typeof(DefaultStorageAccessProvider));
+        }
+
+        [TestMethod]
+        public void ConfigureServices_TerraOptionsAreConfigured_TerraActionIdentityProviderIsResolved()
+        {
+            ConfigureTerraOptions();
+
+            startup.ConfigureServices(services);
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            var terraActionIdentityProvider = serviceProvider.GetService<IActionIdentityProvider>();
+
+            Assert.IsNotNull(terraActionIdentityProvider);
+            Assert.IsInstanceOfType(terraActionIdentityProvider, typeof(TerraActionIdentityProvider));
+        }
+
+        [TestMethod]
+        public void ConfigureServices_TerraOptionsAreNotConfigured_DefaultActionIdentityProviderIsResolved()
+        {
+            startup.ConfigureServices(services);
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            var actionIdentityProvider = serviceProvider.GetService<IActionIdentityProvider>();
+
+            Assert.IsNotNull(actionIdentityProvider);
+            Assert.IsInstanceOfType(actionIdentityProvider, typeof(DefaultActionIdentityProvider));
         }
 
         [TestMethod]
@@ -137,7 +181,22 @@ namespace TesApi.Tests
             var poolManager = serviceProvider.GetService<IBatchPoolManager>();
 
             Assert.IsNotNull(poolManager);
-            Assert.IsInstanceOfType(poolManager, typeof(TerraBatchPoolManager));
+            Assert.IsInstanceOfType(poolManager, typeof(CachingWithRetriesBatchPoolManager));
+            Assert.IsInstanceOfType(poolManager.GetType().GetField("batchPoolManager", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(poolManager), typeof(TerraBatchPoolManager));
+        }
+
+        [TestMethod]
+        public void ConfigureServices_TerraOptionsAreNotConfigured_ArmBatchPoolManagerIsResolved()
+        {
+            startup.ConfigureServices(services);
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            var poolManager = serviceProvider.GetService<IBatchPoolManager>();
+
+            Assert.IsNotNull(poolManager);
+            Assert.IsInstanceOfType(poolManager, typeof(CachingWithRetriesBatchPoolManager));
+            Assert.IsInstanceOfType(poolManager.GetType().GetField("batchPoolManager", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(poolManager), typeof(ArmBatchPoolManager));
         }
 
         [TestMethod]
@@ -153,6 +212,19 @@ namespace TesApi.Tests
 
             Assert.IsNotNull(quotaProvider);
             Assert.IsInstanceOfType(quotaProvider, typeof(TerraQuotaProvider));
+        }
+
+        [TestMethod]
+        public void ConfigureServices_TerraOptionsAreNotConfigured_ArmBatchQuotaVerifierIsResolved()
+        {
+            startup.ConfigureServices(services);
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            var quotaProvider = serviceProvider.GetService<IBatchQuotaProvider>();
+
+            Assert.IsNotNull(quotaProvider);
+            Assert.IsInstanceOfType(quotaProvider, typeof(ArmBatchQuotaProvider));
         }
     }
 }
