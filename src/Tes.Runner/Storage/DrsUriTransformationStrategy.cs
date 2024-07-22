@@ -42,7 +42,7 @@ namespace Tes.Runner.Storage
                 return new Uri(sourceUrl);
             }
 
-            var response = await drsHubApiClient.ResolveDrsUriAsync(UrlTransformationUtils.RestoreCompactDrsUri(sourceUrl));
+            var response = await drsHubApiClient.ResolveDrsUriAsync(sourceUrl);
 
             try
             {

@@ -6,7 +6,6 @@ using Azure.Core;
 using CommonUtilities;
 using CommonUtilities.AzureCloud;
 using Docker.DotNet.Models;
-using Microsoft.Azure.Management.Monitor.Fluent.Models;
 using Microsoft.Extensions.Logging;
 using Tes.ApiClients;
 using Tes.Runner.Authentication;

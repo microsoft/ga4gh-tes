@@ -534,12 +534,6 @@ namespace TesApi.Web
                     identities.Add(acrPullIdentity);
                 }
 
-                var acrPullIdentity = await actionIdentityProvider.GetAcrPullActionIdentity(CancellationToken.None);
-                if (acrPullIdentity is not null)
-                {
-                    identities.Add(acrPullIdentity);
-                }
-
                 var virtualMachineInfo = await GetVmSizeAsync(tesTask, cancellationToken);
 
                 (poolKey, var displayName) = GetPoolKey(tesTask, virtualMachineInfo, identities, cancellationToken);
