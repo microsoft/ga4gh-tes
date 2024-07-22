@@ -446,13 +446,13 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public Task UploadBlobAsync(Uri blobAbsoluteUri, string content, CancellationToken cancellationToken)
-            => new BlobClient(blobAbsoluteUri).UploadAsync(BinaryData.FromString(content), cancellationToken);
+            => new BlobClient(blobAbsoluteUri).UploadAsync(BinaryData.FromString(content), overwrite: true, cancellationToken);
 
         /// <inheritdoc/>
         public Task UploadBlobFromFileAsync(Uri blobAbsoluteUri, string filePath, CancellationToken cancellationToken)
         {
             using var stream = System.IO.File.OpenRead(filePath);
-            return new BlobClient(blobAbsoluteUri).UploadAsync(BinaryData.FromStream(stream), cancellationToken);
+            return new BlobClient(blobAbsoluteUri).UploadAsync(BinaryData.FromStream(stream), overwrite: true, cancellationToken);
         }
 
         /// <inheritdoc/>
