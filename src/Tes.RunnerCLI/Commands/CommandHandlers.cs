@@ -144,6 +144,14 @@ namespace Tes.RunnerCLI.Commands
                 {
                     Logger.LogInformation("Docker container result error: {ContainerResultError}", result.ContainerResult.Error);
                 }
+
+                Environment.ExitCode = result.ContainerResult.ExitCode switch
+                {
+                    var code when code == 0 => 0,
+                    var code when code < 0 => 255,
+                    var code when code > 255 => 255,
+                    _ => (int)result.ContainerResult.ExitCode,
+                };
             }
             catch (Exception e)
             {
