@@ -29,7 +29,7 @@ namespace TesApi.Web.Management.Batch
         private const string AccessScopeSharedAccess = "SHARED_ACCESS";
         private const string UserManaged = "USER";
 
-        private readonly TerraWsmApiClient terraWsmApiClient;
+        private readonly Lazy<TerraWsmApiClient> terraWsmApiClient;
         private readonly IMapper mapper;
         private readonly ILogger<TerraBatchPoolManager> logger;
         private readonly TerraOptions terraOptions;
@@ -43,7 +43,7 @@ namespace TesApi.Web.Management.Batch
         /// <param name="poolMetadata"></param>
         /// <param name="logger"></param>
         /// <param name="terraOptions"></param>
-        public TerraBatchPoolManager(TerraWsmApiClient terraWsmApiClient, IMapper mapper, PoolMetadataReader poolMetadata, IOptions<TerraOptions> terraOptions, ILogger<TerraBatchPoolManager> logger)
+        public TerraBatchPoolManager(Lazy<TerraWsmApiClient> terraWsmApiClient, IMapper mapper, PoolMetadataReader poolMetadata, IOptions<TerraOptions> terraOptions, ILogger<TerraBatchPoolManager> logger)
         {
             ArgumentNullException.ThrowIfNull(terraWsmApiClient);
             ArgumentNullException.ThrowIfNull(mapper);
@@ -93,7 +93,7 @@ namespace TesApi.Web.Management.Batch
 
             AddResourceIdToPoolMetadata(apiRequest, resourceId);
 
-            var response = await terraWsmApiClient.CreateBatchPool(Guid.Parse(terraOptions.WorkspaceId), apiRequest, cancellationToken);
+            var response = await terraWsmApiClient.Value.CreateBatchPool(Guid.Parse(terraOptions.WorkspaceId), apiRequest, cancellationToken);
 
             return response.AzureBatchPool.Attributes.Id;
         }
@@ -132,7 +132,7 @@ namespace TesApi.Web.Management.Batch
 
                 var wsmResourceId = await GetWsmResourceIdFromBatchPoolMetadataAsync(poolId, cancellationToken);
 
-                await terraWsmApiClient.DeleteBatchPoolAsync(Guid.Parse(terraOptions.WorkspaceId), wsmResourceId, cancellationToken);
+                await terraWsmApiClient.Value.DeleteBatchPoolAsync(Guid.Parse(terraOptions.WorkspaceId), wsmResourceId, cancellationToken);
 
                 logger.LogInformation(
                     "Successfully deleted pool with the ID/name via WSM: {PoolId}", poolId);

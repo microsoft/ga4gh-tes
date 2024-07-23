@@ -60,20 +60,6 @@ namespace CommonUtilities
             ConnectionString = connectionString;
         }
 
-        public AzureServicesConnectionStringCredentialOptions(bool notUsed)
-        {
-            if (!notUsed)
-            {
-                throw new ArgumentException($"Invalid configuration of {nameof(AzureServicesConnectionStringCredentialOptions)}.", nameof(notUsed));
-            }
-
-            ConnectionString = string.Empty;
-            Audience = string.Empty;
-            Resource = null!;
-            TenantId = string.Empty;
-            AdditionallyAllowedTenants = [];
-        }
-
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         private AzureServicesConnectionStringCredentialOptions()
 #pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
