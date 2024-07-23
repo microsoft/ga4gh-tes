@@ -42,7 +42,7 @@ namespace TesApi.Web
     public class Startup
     {
         // TODO centralize in single location
-        internal const string TesVersion = "5.3.4";
+        internal const string TesVersion = "5.4.0";
         private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
@@ -71,7 +71,9 @@ namespace TesApi.Web
                     .AddSingleton(AzureCloudConfig.AzureEnvironmentConfig)
                     .AddSingleton(s =>
                     {
-                        var options = ActivatorUtilities.CreateInstance<AzureServicesConnectionStringCredentialOptions>(s);
+                        var options = TerraOptionsAreConfigured(s)
+                            ? new AzureServicesConnectionStringCredentialOptions("RunAs=App", s.GetRequiredService<AzureCloudConfig>())
+                            : ActivatorUtilities.CreateInstance<AzureServicesConnectionStringCredentialOptions>(s);
                         options.AuthorityHost = AzureCloudConfig.AuthorityHost;
                         return options;
                     })
@@ -373,7 +375,7 @@ namespace TesApi.Web
                 return false;
             }
 
-            TerraWsmApiClient CreateTerraApiClient(IServiceProvider services)
+            Lazy<TerraWsmApiClient> CreateTerraApiClient(IServiceProvider services)
             {
                 logger.LogInformation("Attempting to create a Terra WSM API client");
 
@@ -383,7 +385,7 @@ namespace TesApi.Web
 
                     ValidateRequiredOptionsForTerraStorageProvider(options.Value);
 
-                    return ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services, options.Value.WsmApiHost);
+                    return new(() => ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services, options.Value.WsmApiHost));
                 }
 
                 throw new InvalidOperationException("Terra WSM API Host is not configured.");
@@ -399,7 +401,7 @@ namespace TesApi.Web
 
                     ValidateRequiredOptionsForTerraActionIdentities(options.Value);
 
-                    var samClient = ActivatorUtilities.CreateInstance<TerraSamApiClient>(services, options.Value.SamApiHost);
+                    var samClient = new Lazy<TerraSamApiClient>(() => ActivatorUtilities.CreateInstance<TerraSamApiClient>(services, options.Value.SamApiHost));
 
                     logger.LogInformation("Creating TerraActionIdentityProvider");
                     return ActivatorUtilities.CreateInstance<TerraActionIdentityProvider>(services, samClient);

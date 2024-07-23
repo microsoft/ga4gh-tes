@@ -46,7 +46,7 @@ namespace TesApi.Tests
 
             var mapperCfg = new MapperConfiguration(cfg => cfg.AddProfile(typeof(MappingProfilePoolToWsmRequest)));
 
-            terraBatchPoolManager = new TerraBatchPoolManager(wsmApiClientMock.Object, mapperCfg.CreateMapper(),
+            terraBatchPoolManager = new TerraBatchPoolManager(new(wsmApiClientMock.Object), mapperCfg.CreateMapper(),
                 poolMetadataReaderMock.Object, terraOptionsMock.Object, NullLogger<TerraBatchPoolManager>.Instance);
         }
 
