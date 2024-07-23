@@ -179,7 +179,7 @@ namespace CommonUtilities
 
         internal Azure.Identity.ManagedIdentityCredential CreateManagedIdentityCredential(int _1)
         {
-            return new(null, this);
+            return new((string)null!, this);
         }
 
         void CopyAdditionallyAllowedTenants(IList<string> additionalTenants)
