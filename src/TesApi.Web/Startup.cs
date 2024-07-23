@@ -71,6 +71,11 @@ namespace TesApi.Web
                     .AddSingleton(AzureCloudConfig.AzureEnvironmentConfig)
                     .AddSingleton(s =>
                     {
+                        if (TerraOptionsAreConfigured(s))
+                        {
+                            return new AzureServicesConnectionStringCredentialOptions(notUsed: true);
+                        }
+
                         var options = ActivatorUtilities.CreateInstance<AzureServicesConnectionStringCredentialOptions>(s);
                         options.AuthorityHost = AzureCloudConfig.AuthorityHost;
                         return options;
