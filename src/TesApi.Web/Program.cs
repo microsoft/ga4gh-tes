@@ -66,7 +66,10 @@ namespace TesApi.Web
                 var config = configBuilder.Build();
                 Startup.AzureCloudConfig = GetAzureCloudConfig(config);
                 StorageUrlUtils.BlobEndpointHostNameSuffix = $".blob.{Startup.AzureCloudConfig.Suffixes.StorageSuffix}";
-                applicationInsightsOptions = GetApplicationInsightsConnectionString(config, Startup.AzureCloudConfig.ArmEnvironment.Value, new AzureServicesConnectionStringCredential(new(config, Startup.AzureCloudConfig)));
+                applicationInsightsOptions = GetApplicationInsightsConnectionString(
+                    config,
+                    Startup.AzureCloudConfig.ArmEnvironment.Value,
+                    string.IsNullOrWhiteSpace(config["AzureServicesAuthConnectionString"]) ? null : new AzureServicesConnectionStringCredential(new(config, Startup.AzureCloudConfig)));
 
                 if (!string.IsNullOrEmpty(applicationInsightsOptions?.ConnectionString))
                 {
@@ -85,7 +88,7 @@ namespace TesApi.Web
 
                     var applicationInsightsConnectionString = configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
 
-                    if (string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
+                    if (string.IsNullOrWhiteSpace(applicationInsightsConnectionString) && credential is not null)
                     {
                         applicationInsightsConnectionString = ArmResourceInformationFinder.GetAppInsightsConnectionStringFromAccountNameAsync(applicationInsightsAccountName, credential, armEnvironment, CancellationToken.None).Result;
                     }

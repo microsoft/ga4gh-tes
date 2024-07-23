@@ -46,7 +46,7 @@ namespace TesApi.Tests
         {
             var optionsMock = new Mock<IOptions<TerraOptions>>();
             optionsMock.Setup(o => o.Value).Returns(new TerraOptions() { SamApiHost = TerraApiStubData.SamApiHost, SamResourceIdForAcrPull = resourceId.ToString() });
-            return new TerraActionIdentityProvider(terraSamApiClientMock.Object, optionsMock.Object, NullLogger<TerraActionIdentityProvider>.Instance);
+            return new TerraActionIdentityProvider(new(terraSamApiClientMock.Object), optionsMock.Object, NullLogger<TerraActionIdentityProvider>.Instance);
         }
 
         [TestMethod]
