@@ -17,7 +17,7 @@ namespace TesApi.Web
     public class TerraActionIdentityProvider : IActionIdentityProvider
     {
         private readonly Guid samResourceIdForAcrPull;
-        private readonly TerraSamApiClient terraSamApiClient;
+        private readonly Lazy<TerraSamApiClient> terraSamApiClient;
         private readonly TimeSpan samCacheTTL;
         private readonly ILogger Logger;
 
@@ -27,7 +27,7 @@ namespace TesApi.Web
         /// <param name="terraSamApiClient"><see cref="TerraSamApiClient"/></param>
         /// <param name="terraOptions"><see cref="TerraOptions"/></param>
         /// <param name="Logger"><see cref="ILogger"/></param>
-        public TerraActionIdentityProvider(TerraSamApiClient terraSamApiClient, IOptions<TerraOptions> terraOptions, ILogger<TerraActionIdentityProvider> Logger)
+        public TerraActionIdentityProvider(Lazy<TerraSamApiClient> terraSamApiClient, IOptions<TerraOptions> terraOptions, ILogger<TerraActionIdentityProvider> Logger)
         {
             ArgumentNullException.ThrowIfNull(terraOptions);
             ArgumentNullException.ThrowIfNull(terraOptions.Value.SamResourceIdForAcrPull);
@@ -47,7 +47,7 @@ namespace TesApi.Web
         {
             try
             {
-                var response = await terraSamApiClient.GetActionManagedIdentityForACRPullAsync(samResourceIdForAcrPull, samCacheTTL, CancellationToken.None);
+                var response = await terraSamApiClient.Value.GetActionManagedIdentityForACRPullAsync(samResourceIdForAcrPull, samCacheTTL, CancellationToken.None);
                 if (response is null)
                 {
                     // Corresponds to no identity existing in Sam, or the user not having access to it.
