@@ -46,7 +46,6 @@ using CommonUtilities.AzureCloud;
 using k8s;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Graph;
-using Microsoft.Rest;
 using Newtonsoft.Json;
 using Polly;
 using Polly.Retry;
@@ -61,13 +60,13 @@ namespace TesDeployer
     public class Deployer(Configuration configuration)
     {
         private static readonly AsyncRetryPolicy roleAssignmentHashConflictRetryPolicy = Policy
-            .Handle<Microsoft.Rest.Azure.CloudException>(cloudException =>
-                "HashConflictOnDifferentRoleAssignmentIds".Equals(cloudException.Body.Code))
+            .Handle<RequestFailedException>(requestFailedException =>
+                "HashConflictOnDifferentRoleAssignmentIds".Equals(requestFailedException.ErrorCode))
             .RetryAsync();
 
         private static readonly AsyncRetryPolicy operationNotAllowedConflictRetryPolicy = Policy
-            .Handle<Azure.RequestFailedException>(azureException =>
-                (int)System.Net.HttpStatusCode.Conflict == azureException.Status &&
+            .Handle<RequestFailedException>(azureException =>
+                (int)HttpStatusCode.Conflict == azureException.Status &&
                 "OperationNotAllowed".Equals(azureException.ErrorCode))
             .WaitAndRetryAsync(30, retryAttempt => TimeSpan.FromSeconds(10));
 
@@ -779,9 +778,9 @@ namespace TesDeployer
                             ConsoleEx.WriteLine($"WebSocket ErrorCode: {wExc.WebSocketErrorCode}");
                         }
 
-                        if (exc is HttpOperationException hExc)
+                        if (exc is RequestFailedException fExc)
                         {
-                            ConsoleEx.WriteLine($"HTTP Response: {hExc.Response.Content}");
+                            ConsoleEx.WriteLine($"HTTP Response: {fExc.GetRawResponse().Content}");
                         }
 
                         if (exc is HttpRequestException rExc)
@@ -1279,7 +1278,7 @@ namespace TesDeployer
                         }
                     });
             }
-            catch (Microsoft.Rest.Azure.CloudException ex) when (ex.ToCloudErrorType() == CloudErrorType.AuthorizationFailed)
+            catch (RequestFailedException ex) when (ex.ErrorCode.Equals("AuthorizationFailed", StringComparison.OrdinalIgnoreCase))
             {
                 ConsoleEx.WriteLine();
                 ConsoleEx.WriteLine("Unable to programmatically register the required resource providers.", ConsoleColor.Red);
@@ -1360,7 +1359,7 @@ namespace TesDeployer
                         }
                     });
             }
-            catch (Microsoft.Rest.Azure.CloudException ex) when (ex.ToCloudErrorType() == CloudErrorType.AuthorizationFailed)
+            catch (RequestFailedException ex) when (ex.ErrorCode.Equals("AuthorizationFailed", StringComparison.OrdinalIgnoreCase))
             {
                 ConsoleEx.WriteLine();
                 ConsoleEx.WriteLine("Unable to programmatically register the required features.", ConsoleColor.Red);
@@ -1370,7 +1369,7 @@ namespace TesDeployer
                 ConsoleEx.WriteLine();
                 ConsoleEx.WriteLine("1. For each of the following, execute 'az feature register --namespace {RESOURCE_PROVIDER_NAME} --name {FEATURE_NAME}'", ConsoleColor.Yellow);
                 ConsoleEx.WriteLine();
-                unregisteredFeatures.ForEach(f => ConsoleEx.WriteLine($"- {f.Data.Name}", ConsoleColor.Yellow));
+                unregisteredFeatures.ForEach(f => ConsoleEx.WriteLine($"- {f.Data.ResourceType.Namespace} - {f.Data.Name}", ConsoleColor.Yellow));
                 ConsoleEx.WriteLine();
                 ConsoleEx.WriteLine("After completion, please re-attempt deployment.");
 
@@ -2412,8 +2411,13 @@ namespace TesDeployer
                     WriteExecutionTime(line, startTime);
                     return result;
                 }
-                catch (Microsoft.Rest.Azure.CloudException cloudException) when (cloudException.ToCloudErrorType() == CloudErrorType.ExpiredAuthenticationToken)
+                catch (RequestFailedException requestFailedException) when (requestFailedException.ErrorCode.Equals("ExpiredAuthenticationToken", StringComparison.OrdinalIgnoreCase))
                 {
+                }
+                catch (RequestFailedException requestFailedException) when (requestFailedException.ErrorCode.Equals("RoleAssignmentExists", StringComparison.OrdinalIgnoreCase))
+                {
+                    line.Write($" skipped. Role assignment already exists.", ConsoleColor.Yellow);
+                    return default;
                 }
                 catch (OperationCanceledException) when (cts.Token.IsCancellationRequested)
                 {

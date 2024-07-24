@@ -1,8 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Azure;
-using Microsoft.Rest.Azure;
 using static CommonUtilities.RetryHandler;
 
 namespace CommonUtilities
@@ -12,27 +10,6 @@ namespace CommonUtilities
     /// </summary>
     public static class PagedInterfaceExtensions
     {
-        /// <summary>
-        /// Splits an <see cref="AsyncPageable{T}"/> into pages and re-presents it as an <see cref="IAsyncEnumerable{T}"/> to facilitate retry logic
-        /// </summary>
-        /// <typeparam name="T">The type of objects to enumerate.</typeparam>
-        /// <param name="source">The <see cref="AsyncPageable{T}"/> to enumerate.</param>
-        /// <returns>An <see cref="IAsyncEnumerable{T}"/></returns>
-        /// <exception cref="ArgumentNullException"></exception>
-        public static IAsyncEnumerable<T> ToAsyncEnumerable<T>(this AsyncPageable<T> source) where T : notnull
-            => new AsyncPageableEnumerable<T>(source);
-
-        /// <summary>
-        /// Creates an <see cref="IAsyncEnumerable{T}"/> from an <see cref="IPage{T}"/>
-        /// </summary>
-        /// <typeparam name="T">The type of objects to enumerate.</typeparam>
-        /// <param name="source">The <see cref="IPage{T}"/> to enumerate.</param>
-        /// <param name="nextPageFunc">The function taking the nextPageLink and returning a new <see cref="IPage{T}"/>.</param>
-        /// <returns>An <see cref="IAsyncEnumerable{T}"/></returns>
-        /// <exception cref="ArgumentNullException"></exception>
-        public static IAsyncEnumerable<T> ToAsyncEnumerable<T>(this IPage<T> source, Func<string, CancellationToken, Task<IPage<T>?>> nextPageFunc)
-            => new AsyncEnumerable<T>(source, nextPageFunc);
-
         /// <summary>
         /// Adapts calls returning <see cref="IAsyncEnumerable{T}"/> to <see cref="AsyncRetryPolicy"/>.
         /// </summary>
@@ -52,94 +29,43 @@ namespace CommonUtilities
             return new PollyAsyncEnumerable<T>(retryPolicy.RetryPolicy.Execute(_ => func(), ctx), asyncRetryPolicy, ctx);
         }
 
-        /// <summary>
-        /// Adapts calls returning <see cref="IAsyncEnumerable{T}"/> to <see cref="AsyncRetryPolicy"/>.
-        /// </summary>
-        /// <typeparam name="T">Type of results returned in <see cref="IAsyncEnumerable{T}"/> by <paramref name="func"/>.</typeparam>
-        /// <param name="asyncRetryPolicy">Policy retrying call to <paramref name="func"/> and calls made while enumerating results returned by <paramref name="func"/>.</param>
-        /// <param name="func">Method returning <see cref="ValueTask{IAsyncEnumerable{T}}"/>.</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="caller">Name of method originating the retriable operation.</param>
-        /// <returns></returns>
-        public static async ValueTask<IAsyncEnumerable<T>> ExecuteWithRetryAsync<T>(this AsyncRetryHandlerPolicy asyncRetryPolicy, Func<CancellationToken, ValueTask<IAsyncEnumerable<T>>> func, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
-        {
-            ArgumentNullException.ThrowIfNull(asyncRetryPolicy);
-            ArgumentNullException.ThrowIfNull(func);
+        ///// <summary>
+        ///// Adapts calls returning <see cref="IAsyncEnumerable{T}"/> to <see cref="AsyncRetryPolicy"/>.
+        ///// </summary>
+        ///// <typeparam name="T">Type of results returned in <see cref="IAsyncEnumerable{T}"/> by <paramref name="func"/>.</typeparam>
+        ///// <param name="asyncRetryPolicy">Policy retrying call to <paramref name="func"/> and calls made while enumerating results returned by <paramref name="func"/>.</param>
+        ///// <param name="func">Method returning <see cref="ValueTask{IAsyncEnumerable{T}}"/>.</param>
+        ///// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        ///// <param name="caller">Name of method originating the retriable operation.</param>
+        ///// <returns></returns>
+        //public static async ValueTask<IAsyncEnumerable<T>> ExecuteWithRetryAsync<T>(this AsyncRetryHandlerPolicy asyncRetryPolicy, Func<CancellationToken, ValueTask<IAsyncEnumerable<T>>> func, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
+        //{
+        //    ArgumentNullException.ThrowIfNull(asyncRetryPolicy);
+        //    ArgumentNullException.ThrowIfNull(func);
 
-            var ctx = PrepareContext(caller);
-            return new PollyAsyncEnumerable<T>(await asyncRetryPolicy.RetryPolicy.ExecuteAsync((_, ct) => func(ct).AsTask(), ctx, cancellationToken), asyncRetryPolicy, ctx);
-        }
+        //    var ctx = PrepareContext(caller);
+        //    return new PollyAsyncEnumerable<T>(await asyncRetryPolicy.RetryPolicy.ExecuteAsync((_, ct) => func(ct).AsTask(), ctx, cancellationToken), asyncRetryPolicy, ctx);
+        //}
 
-        /// <summary>
-        /// Adapts calls returning <see cref="IAsyncEnumerable{T}"/> to <see cref="AsyncRetryPolicy"/>.
-        /// </summary>
-        /// <typeparam name="T">Type of results returned in <see cref="IAsyncEnumerable{T}"/> by <paramref name="func"/>.</typeparam>
-        /// <param name="asyncRetryPolicy">Policy retrying call to <paramref name="func"/> and calls made while enumerating results returned by <paramref name="func"/>.</param>
-        /// <param name="func">Method returning <see cref="Task{IAsyncEnumerable{T}}"/>.</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="caller">Name of method originating the retriable operation.</param>
-        /// <returns></returns>
-        public static async Task<IAsyncEnumerable<T>> ExecuteWithRetryAsync<T>(this AsyncRetryHandlerPolicy asyncRetryPolicy, Func<CancellationToken, Task<IAsyncEnumerable<T>>> func, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
-        {
-            ArgumentNullException.ThrowIfNull(asyncRetryPolicy);
-            ArgumentNullException.ThrowIfNull(func);
+        ///// <summary>
+        ///// Adapts calls returning <see cref="IAsyncEnumerable{T}"/> to <see cref="AsyncRetryPolicy"/>.
+        ///// </summary>
+        ///// <typeparam name="T">Type of results returned in <see cref="IAsyncEnumerable{T}"/> by <paramref name="func"/>.</typeparam>
+        ///// <param name="asyncRetryPolicy">Policy retrying call to <paramref name="func"/> and calls made while enumerating results returned by <paramref name="func"/>.</param>
+        ///// <param name="func">Method returning <see cref="Task{IAsyncEnumerable{T}}"/>.</param>
+        ///// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        ///// <param name="caller">Name of method originating the retriable operation.</param>
+        ///// <returns></returns>
+        //public static async Task<IAsyncEnumerable<T>> ExecuteWithRetryAsync<T>(this AsyncRetryHandlerPolicy asyncRetryPolicy, Func<CancellationToken, Task<IAsyncEnumerable<T>>> func, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
+        //{
+        //    ArgumentNullException.ThrowIfNull(asyncRetryPolicy);
+        //    ArgumentNullException.ThrowIfNull(func);
 
-            var ctx = PrepareContext(caller);
-            return new PollyAsyncEnumerable<T>(await asyncRetryPolicy.RetryPolicy.ExecuteAsync((_, ct) => func(ct), ctx, cancellationToken), asyncRetryPolicy, ctx);
-        }
+        //    var ctx = PrepareContext(caller);
+        //    return new PollyAsyncEnumerable<T>(await asyncRetryPolicy.RetryPolicy.ExecuteAsync((_, ct) => func(ct), ctx, cancellationToken), asyncRetryPolicy, ctx);
+        //}
 
         #region Implementation classes
-        private readonly struct AsyncPageableEnumerable<T> : IAsyncEnumerable<T> where T : notnull
-        {
-            private readonly Func<CancellationToken, IAsyncEnumerator<T>> _getEnumerator;
-            private readonly AsyncPageable<T> _source;
-
-            public AsyncPageableEnumerable(AsyncPageable<T> source)
-            {
-                ArgumentNullException.ThrowIfNull(source);
-
-                _source = source;
-                _getEnumerator = c => new AsyncPageableEnumerator<T>(null!, GetNextPage, c);
-            }
-
-            /// <inheritdoc/>
-            IAsyncEnumerator<T> IAsyncEnumerable<T>.GetAsyncEnumerator(CancellationToken cancellationToken)
-                => _getEnumerator(cancellationToken);
-
-            private async Task<Page<T>> GetNextPage(Page<T> page, CancellationToken cancellationToken)
-            {
-                var enumerator = (page switch
-                {
-                    null => _source.AsPages(),
-                    var x when string.IsNullOrEmpty(page.ContinuationToken) => null!,
-                    _ => _source.AsPages(continuationToken: page.ContinuationToken)
-                })?.GetAsyncEnumerator(cancellationToken);
-
-                if (await (enumerator?.MoveNextAsync(cancellationToken) ?? ValueTask.FromResult(false)))
-                {
-                    return enumerator!.Current;
-                }
-
-                return null!;
-            }
-        }
-
-        private readonly struct AsyncEnumerable<T> : IAsyncEnumerable<T>
-        {
-            private readonly Func<CancellationToken, IAsyncEnumerator<T>> _getEnumerator;
-
-            public AsyncEnumerable(IPage<T> source, Func<string, CancellationToken, Task<IPage<T>?>> nextPageFunc)
-            {
-                ArgumentNullException.ThrowIfNull(source);
-
-                _getEnumerator = c => new PageEnumerator<T>(source, nextPageFunc, c);
-            }
-
-            /// <inheritdoc/>
-            IAsyncEnumerator<T> IAsyncEnumerable<T>.GetAsyncEnumerator(CancellationToken cancellationToken)
-                => _getEnumerator(cancellationToken);
-        }
-
         private sealed class PollyAsyncEnumerable<T> : IAsyncEnumerable<T>
         {
             private readonly IAsyncEnumerable<T> _source;
@@ -192,121 +118,6 @@ namespace CommonUtilities
             /// <inheritdoc/>
             ValueTask<bool> IAsyncEnumerator<T>.MoveNextAsync()
                 => new(_retryPolicy.RetryPolicy.ExecuteAsync((_, ct) => _source.MoveNextAsync(ct).AsTask(), new(_ctx.OperationKey, _ctx), _cancellationToken));
-        }
-
-        private sealed class PageEnumerator<T> : PagingEnumerator<T, IPage<T>>
-        {
-            public PageEnumerator(IPage<T> source, Func<string, CancellationToken, Task<IPage<T>?>> nextPageFunc, CancellationToken cancellationToken)
-                : base(source, s => s.GetEnumerator(), (s, ct) => s.NextPageLink is null ? Task.FromResult<IPage<T>?>(null) : nextPageFunc(s.NextPageLink, ct), cancellationToken)
-            { }
-        }
-
-        private sealed class AsyncPageableEnumerator<T> : PagingEnumerator<T, Page<T>> where T : notnull
-        {
-            public AsyncPageableEnumerator(Page<T> source, Func<Page<T>, CancellationToken, Task<Page<T>>> nextPageFunc, CancellationToken cancellationToken)
-#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type.
-                : base(source, s => (s.Values ?? []).GetEnumerator(), (s, ct) => nextPageFunc(s, ct), cancellationToken)
-#pragma warning restore CS8619 // Nullability of reference types in value doesn't match target type.
-            { }
-        }
-
-        private abstract class PagingEnumerator<TItem, TSource> : AbstractEnumerator<TItem, IEnumerator<TItem>>
-        {
-            protected TSource? _source;
-
-            private readonly Func<TSource, IEnumerator<TItem>> _getEnumerator;
-            private readonly Func<TSource, CancellationToken, Task<TSource?>> _getNext;
-
-            protected PagingEnumerator(TSource source, Func<TSource, IEnumerator<TItem>> getEnumerator, Func<TSource, CancellationToken, Task<TSource?>> getNext, CancellationToken cancellationToken)
-                : base(getEnumerator(source), e => e.Current, cancellationToken)
-            {
-                ArgumentNullException.ThrowIfNull(source);
-                ArgumentNullException.ThrowIfNull(getEnumerator);
-                ArgumentNullException.ThrowIfNull(getNext);
-
-                _source = source;
-                _getEnumerator = getEnumerator;
-                _getNext = getNext;
-            }
-
-            /// <inheritdoc/>
-            public override ValueTask<bool> MoveNextAsync()
-            {
-                CancellationToken.ThrowIfCancellationRequested();
-                return Enumerator?.MoveNext() switch
-                {
-                    null => ValueTask.FromResult(false),
-                    true => ValueTask.FromResult(true),
-                    false => new(MoveToNextSource())
-                };
-
-                async Task<bool> MoveToNextSource()
-                {
-                    do
-                    {
-                        Enumerator?.Dispose();
-                        Enumerator = null;
-                        _source = await _getNext(_source!, CancellationToken);
-
-                        if (_source is null)
-                        {
-                            return false;
-                        }
-
-                        Enumerator = _getEnumerator(_source);
-                    }
-                    while (!(Enumerator?.MoveNext() ?? false));
-
-                    return true;
-                }
-            }
-        }
-
-        public abstract class AbstractEnumerator<TItem, TEnumerator> : IAsyncEnumerator<TItem> where TEnumerator : IDisposable
-        {
-            protected readonly CancellationToken CancellationToken;
-            protected TEnumerator? Enumerator;
-
-            private readonly Func<TEnumerator, TItem> GetCurrent;
-
-            /// <summary>
-            /// Constructor.
-            /// </summary>
-            /// <param name="enumerator">Initial enumerator.</param>
-            /// <param name="getCurrent">Method that returns the equivalent of <see cref="IEnumerator{T}.Current"/>'s value.</param>
-            /// <param name="cancellationToken"></param>
-            protected AbstractEnumerator(TEnumerator enumerator, Func<TEnumerator, TItem> getCurrent, CancellationToken cancellationToken)
-            {
-                ArgumentNullException.ThrowIfNull(enumerator);
-                ArgumentNullException.ThrowIfNull(getCurrent);
-
-                GetCurrent = getCurrent;
-                Enumerator = enumerator;
-                CancellationToken = cancellationToken;
-            }
-
-            /// <inheritdoc/>
-            TItem IAsyncEnumerator<TItem>.Current => GetCurrent(Enumerator!);
-
-            /// <inheritdoc/>
-            public abstract ValueTask<bool> MoveNextAsync();
-
-            /// <summary>
-            /// <c>DisposeAsync</c> pattern method.
-            /// </summary>
-            /// <remarks>https://learn.microsoft.com/dotnet/standard/garbage-collection/implementing-disposeasync</remarks>
-            protected virtual ValueTask DisposeAsyncCore()
-            {
-                Enumerator?.Dispose();
-                return ValueTask.CompletedTask;
-            }
-
-            /// <inheritdoc/>
-            async ValueTask IAsyncDisposable.DisposeAsync()
-            {
-                await DisposeAsyncCore();
-                GC.SuppressFinalize(this);
-            }
         }
         #endregion
     }
