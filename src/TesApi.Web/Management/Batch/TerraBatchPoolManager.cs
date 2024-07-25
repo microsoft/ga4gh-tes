@@ -75,6 +75,12 @@ namespace TesApi.Web.Management.Batch
             var nameItem = poolSpec.Metadata.Single(i => string.IsNullOrEmpty(i.Name));
             poolSpec.Metadata.Remove(nameItem);
 
+            // Workaround: WSM requires inboundNatPools to be set if networkConfiguration somehow included endpointConfiguration
+            if (poolSpec.NetworkConfiguration is not null)
+            {
+                poolSpec.NetworkConfiguration.EndpointInboundNatPools ??= [];
+            }
+
             ApiCreateBatchPoolRequest apiRequest = new()
             {
                 Common = new ApiCommon
