@@ -742,7 +742,7 @@ namespace TesApi.Tests
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual("TES-hostname-edicated1-rpsd645merzfkqmdnj7pkqrase2ancnh-", tesTask.PoolId[0..^8]);
+                Assert.AreEqual("TES-hostname-edicated1-obkfufnroslrzwlitqbrmjeowu7iuhfm-", tesTask.PoolId[0..^8]);
                 Assert.AreEqual("VmSizeDedicated1", pool.VmSize);
                 Assert.IsTrue(((BatchScheduler)batchScheduler).TryGetPool(tesTask.PoolId, out _));
             });
@@ -1025,7 +1025,7 @@ namespace TesApi.Tests
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual(TesState.CANCELING, tesTask.State);
+                Assert.AreEqual(TesState.CANCELED, tesTask.State);
                 azureProxy.Verify(i => i.TerminateBatchTaskAsync(tesTask.Id, It.IsAny<string>(), It.IsAny<CancellationToken>()));
             });
         }
@@ -1357,7 +1357,7 @@ namespace TesApi.Tests
                 await foreach (var _ in batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, Enumerable.Repeat(azureProxyReturnValues.BatchTaskState, tesTasks.Length).ToArray(), CancellationToken.None)) { }
             }
 
-            var createBatchPoolAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IBatchPoolManager.CreateBatchPoolAsync));
+            var createBatchPoolAsyncInvocation = serviceProvider.BatchPoolManager.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IBatchPoolManager.CreateBatchPoolAsync));
             var addBatchTaskAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.AddBatchTasksAsync));
 
             var jobId = (addBatchTaskAsyncInvocation?.Arguments[1]) as string;
