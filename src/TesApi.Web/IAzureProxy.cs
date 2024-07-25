@@ -6,8 +6,9 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
+using Tes.Models;
 using TesApi.Web.Storage;
-using BatchModels = Microsoft.Azure.Management.Batch.Models;
+using BlobModels = Azure.Storage.Blobs.Models;
 
 namespace TesApi.Web
 {
@@ -21,7 +22,7 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="jobId">The name of the job to create</param>
         /// <param name="poolId">Tje pool with which to associate the new job</param>
-        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         Task CreateBatchJobAsync(string jobId, string poolId, CancellationToken cancellationToken);
 
         /// <summary>
@@ -48,19 +49,10 @@ namespace TesApi.Web
         Task<StorageAccountInfo> GetStorageAccountInfoAsync(string storageAccountName, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Creates an Azure Batch pool who's lifecycle must be manually managed
-        /// </summary>
-        /// <param name="poolSpec">Contains the specification for the pool.</param>
-        /// <param name="isPreemptable">True if nodes in this pool will all be preemptable. False if nodes will all be dedicated.</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns><see cref="BatchModels.ProxyResource.Name"/> (from <paramref name="poolSpec"/>) becomes the <see cref="CloudPool.Id"/> (aka <see cref="PoolInformation.PoolId"/>).</returns>
-        Task<string> CreateBatchPoolAsync(BatchModels.Pool poolSpec, bool isPreemptable, CancellationToken cancellationToken);
-
-        /// <summary>
         /// Terminates an Azure Batch task
         /// </summary>
         /// <param name="tesTaskId">The unique TES task ID</param>
-        /// <param name="jobId">The batch job that contains the task</param>
+        /// <param name="jobId">The batch job that holds the task</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         Task TerminateBatchTaskAsync(string tesTaskId, string jobId, CancellationToken cancellationToken);
 
@@ -146,7 +138,7 @@ namespace TesApi.Web
         /// <param name="blobAbsoluteUri">Absolute Blob URI</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        Task<Azure.Storage.Blobs.Models.BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken);
+        Task<BlobModels.BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken);
 
         /// <summary>
         /// List blobs whose tags match a given search expression in the given directory.
@@ -172,13 +164,6 @@ namespace TesApi.Web
         /// <param name="hostName"></param>
         /// <returns>List of <see cref="Microsoft.Azure.Batch.Protocol.Models.CloudPool"/> managed by the host.</returns>
         IAsyncEnumerable<CloudPool> GetActivePoolsAsync(string hostName);
-
-        /// <summary>
-        /// Deletes the specified pool
-        /// </summary>
-        /// <param name="poolId">The id of the pool.</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken);
 
         /// <summary>
         /// Retrieves the specified pool
@@ -236,6 +221,13 @@ namespace TesApi.Web
         /// </summary>
         /// <returns>arm region</returns>
         string GetArmRegion();
+
+        /// <summary>
+        /// Gets the managed identity in batch account resource group.
+        /// </summary>
+        /// <param name="identityName">Name of the identity.</param>
+        /// <returns>Resource Id of the purported managed identity.</returns>
+        string GetManagedIdentityInBatchAccountResourceGroup(string identityName);
 
         /// <summary>
         /// Disables AutoScale in a Batch Pool

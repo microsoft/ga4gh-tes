@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Collections.Generic;
-using Microsoft.Azure.Management.Batch.Models;
+using Azure.ResourceManager.Batch.Models;
 
 namespace TesApi.Web
 {
@@ -15,6 +15,7 @@ namespace TesApi.Web
         /// Gets the active job and job schedule quota for the Batch account.
         /// </summary>
         public int ActiveJobAndJobScheduleQuota { get; set; }
+
         /// <summary>
         /// Gets the dedicated core quota for the Batch account.
         /// </summary>
@@ -23,12 +24,14 @@ namespace TesApi.Web
         ///     on the subscription so this value is not returned.
         /// </remarks>
         public int DedicatedCoreQuota { get; set; }
+
         /// <summary>
         /// Gets a list of the dedicated core quota per Virtual Machine family for the Batch
         ///     account. For accounts with PoolAllocationMode set to UserSubscription, quota
         ///     is managed on the subscription so this value is not returned.
         /// </summary>
-        public IList<VirtualMachineFamilyCoreQuota> DedicatedCoreQuotaPerVMFamily { get; set; }
+        public IReadOnlyList<BatchVmFamilyCoreQuota> DedicatedCoreQuotaPerVMFamily { get; set; }
+
         /// <summary>
         /// Gets a value indicating whether core quotas per Virtual Machine family are enforced
         ///     for this account
@@ -43,6 +46,7 @@ namespace TesApi.Web
         ///     account, and the old dedicatedCoreQuota does not apply.
         /// </remarks>
         public bool DedicatedCoreQuotaPerVMFamilyEnforced { get; set; }
+
         /// <summary>
         /// Gets the low priority core quota for the Batch account.
         /// </summary>
@@ -51,6 +55,7 @@ namespace TesApi.Web
         ///     on the subscription so this value is not returned.
         /// </remarks>
         public int LowPriorityCoreQuota { get; set; }
+
         /// <summary>
         /// Gets the pool quota for the Batch account.
         /// </summary>

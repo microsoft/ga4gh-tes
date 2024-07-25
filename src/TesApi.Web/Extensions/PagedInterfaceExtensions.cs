@@ -41,7 +41,7 @@ namespace TesApi.Web.Extensions
                 => GetEnumerator(cancellationToken);
         }
 
-        private sealed class PagedEnumerableEnumerator<T> : CommonUtilities.PagedInterfaceExtensions.AbstractEnumerator<T, IPagedEnumerator<T>>
+        private sealed class PagedEnumerableEnumerator<T> : AbstractEnumerator<T, IPagedEnumerator<T>>
         {
             public PagedEnumerableEnumerator(IPagedEnumerable<T> source, CancellationToken cancellationToken)
                 : base(source.GetPagedEnumerator(), e => e.Current, cancellationToken)
@@ -52,6 +52,53 @@ namespace TesApi.Web.Extensions
             {
                 CancellationToken.ThrowIfCancellationRequested();
                 return await Enumerator.MoveNextAsync(CancellationToken);
+            }
+        }
+
+        private abstract class AbstractEnumerator<TItem, TEnumerator> : IAsyncEnumerator<TItem> where TEnumerator : IDisposable
+        {
+            protected readonly CancellationToken CancellationToken;
+            protected TEnumerator Enumerator;
+
+            private readonly Func<TEnumerator, TItem> GetCurrent;
+
+            /// <summary>
+            /// Constructor.
+            /// </summary>
+            /// <param name="enumerator">Initial enumerator.</param>
+            /// <param name="getCurrent">Method that returns the equivalent of <see cref="IEnumerator{T}.Current"/>'s value.</param>
+            /// <param name="cancellationToken"></param>
+            protected AbstractEnumerator(TEnumerator enumerator, Func<TEnumerator, TItem> getCurrent, CancellationToken cancellationToken)
+            {
+                ArgumentNullException.ThrowIfNull(enumerator);
+                ArgumentNullException.ThrowIfNull(getCurrent);
+
+                GetCurrent = getCurrent;
+                Enumerator = enumerator;
+                CancellationToken = cancellationToken;
+            }
+
+            /// <inheritdoc/>
+            TItem IAsyncEnumerator<TItem>.Current => GetCurrent(Enumerator!);
+
+            /// <inheritdoc/>
+            public abstract ValueTask<bool> MoveNextAsync();
+
+            /// <summary>
+            /// <c>DisposeAsync</c> pattern method.
+            /// </summary>
+            /// <remarks>https://learn.microsoft.com/dotnet/standard/garbage-collection/implementing-disposeasync</remarks>
+            protected virtual ValueTask DisposeAsyncCore()
+            {
+                Enumerator?.Dispose();
+                return ValueTask.CompletedTask;
+            }
+
+            /// <inheritdoc/>
+            async ValueTask IAsyncDisposable.DisposeAsync()
+            {
+                await DisposeAsyncCore();
+                GC.SuppressFinalize(this);
             }
         }
         #endregion

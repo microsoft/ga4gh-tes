@@ -7,7 +7,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
-using Azure.Storage;
 using Azure.Storage.Blobs;
 using Azure.Storage.Sas;
 using CommonUtilities;
@@ -43,7 +42,7 @@ namespace TesApi.Web.Storage
             this.storageOptions = storageOptions.Value;
             this.azureEnvironmentConfig = azureEnvironmentConfig;
 
-            externalStorageContainers = storageOptions.Value.ExternalStorageContainers?.Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            externalStorageContainers = storageOptions.Value.ExternalStorageContainers?.Split([',', ';', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
                 .Select(uri =>
                 {
                     if (StorageAccountUrlSegments.TryCreate(uri, out var s))
@@ -190,20 +189,21 @@ namespace TesApi.Web.Storage
 
             try
             {
-                var accountKey = await AzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, cancellationToken);
                 var resultPathSegments = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName, pathSegments.BlobName);
-                var builder = createBuilder(DateTimeOffset.UtcNow.Add(sasTokenDuration ?? SasTokenDuration), resultPathSegments.BlobName);
+                var sharedAccessExpiryTime = DateTimeOffset.UtcNow.Add(sasTokenDuration ?? SasTokenDuration);
+                var sasBuilder = createBuilder(sharedAccessExpiryTime, pathSegments.BlobName);
+                sasBuilder.Resource = pathSegments.IsContainer || sasBuilder.Permissions.Contains('l') ? "c" : "b";
+                sasBuilder.BlobContainerName = pathSegments.ContainerName;
+                sasBuilder.Protocol = SasProtocol.Https;
+                var accountCredential = new Azure.Storage.StorageSharedKeyCredential(storageAccountInfo.Name, await AzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, cancellationToken));
+                resultPathSegments.SasToken = sasBuilder.ToSasQueryParameters(accountCredential).ToString();
 
-                builder.BlobContainerName = resultPathSegments.ContainerName;
-                builder.Protocol = SasProtocol.Https;
-
-                resultPathSegments.SasToken = builder.ToSasQueryParameters(new StorageSharedKeyCredential(storageAccountInfo.Name, accountKey)).ToString();
                 return resultPathSegments;
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, $"Could not get the key of storage account '{pathSegments.AccountName}'. Make sure that the TES app service has Contributor access to it.");
-                throw;
+                Logger.LogError(ex, "Could not get the key of storage account '{StorageAccount}'. Make sure that the TES app service has Contributor access to it.", pathSegments.AccountName);
+                return null;
             }
         }
 

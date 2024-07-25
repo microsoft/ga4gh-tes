@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Storage.Sas;
@@ -121,5 +122,13 @@ namespace TesApi.Web.Storage
         /// <param name="blobPath">A relative path within the blob storage space reserved for the TES server.</param>
         /// <returns>An Azure Block Blob or Container URL without SAS token.</returns>
         public Uri GetInternalTesBlobUrlWithoutSasToken(string blobPath);
+
+        /// <summary>
+        /// Gets all of the blob URLs for a given blob prefix (virtual directory)
+        /// </summary>
+        /// <param name="blobVirtualDirectory">The URI for the blob prefix (virtual directory)</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns>A list of all blob URLs</returns>
+        public Task<IList<Uri>> GetBlobUrlsAsync(Uri blobVirtualDirectory, CancellationToken cancellationToken);
     }
 }

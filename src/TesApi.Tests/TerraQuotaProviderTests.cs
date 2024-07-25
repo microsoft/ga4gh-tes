@@ -39,7 +39,7 @@ namespace TesApi.Tests
             terraWsmApiClientMock
                 .Setup(t => t.GetResourceQuotaAsync(It.Is<Guid>(g => g.Equals(terraApiStubData.WorkspaceId)), It.Is<string>(b => string.Equals(b, terraApiStubData.BatchAccountId, StringComparison.OrdinalIgnoreCase)), It.Is<bool>(c => c == true), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync(quotaApiResponse);
-            terraQuotaProvider = new(terraWsmApiClientMock.Object, optionsMock.Object);
+            terraQuotaProvider = new(new(terraWsmApiClientMock.Object), optionsMock.Object);
         }
 
         [TestMethod]

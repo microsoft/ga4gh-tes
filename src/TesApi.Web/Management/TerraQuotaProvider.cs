@@ -23,7 +23,7 @@ namespace TesApi.Web.Management
         private const string BatchAccountResourceType = @"Microsoft.Batch/batchAccounts";
         private const string SharedResourcePurpose = "SHARED_RESOURCE";
 
-        private readonly TerraWsmApiClient terraWsmClient;
+        private readonly Lazy<TerraWsmApiClient> terraWsmClient;
         private readonly Guid workspaceId;
 
         /// <summary>
@@ -32,7 +32,7 @@ namespace TesApi.Web.Management
         /// <param name="terraWsmClient"></param>
         /// <param name="terraOptions"></param>
         /// <exception cref="ArgumentException"></exception>
-        public TerraQuotaProvider(TerraWsmApiClient terraWsmClient, IOptions<TerraOptions> terraOptions)
+        public TerraQuotaProvider(Lazy<TerraWsmApiClient> terraWsmClient, IOptions<TerraOptions> terraOptions)
         {
             ArgumentNullException.ThrowIfNull(terraOptions);
             ArgumentNullException.ThrowIfNull(terraWsmClient);
@@ -97,12 +97,12 @@ namespace TesApi.Web.Management
         {
             var batchResourceId = await GetBatchAccountResourceIdFromLandingZone(cancellationToken);
 
-            return await terraWsmClient.GetResourceQuotaAsync(workspaceId, batchResourceId, cacheResults: true, cancellationToken: cancellationToken);
+            return await terraWsmClient.Value.GetResourceQuotaAsync(workspaceId, batchResourceId, cacheResults: true, cancellationToken: cancellationToken);
         }
 
         private async Task<string> GetBatchAccountResourceIdFromLandingZone(CancellationToken cancellationToken)
         {
-            var resources = await terraWsmClient.GetLandingZoneResourcesAsync(workspaceId, cancellationToken);
+            var resources = await terraWsmClient.Value.GetLandingZoneResourcesAsync(workspaceId, cancellationToken);
 
             var sharedResources = resources.Resources.FirstOrDefault(r => r.Purpose.Equals(SharedResourcePurpose));
 

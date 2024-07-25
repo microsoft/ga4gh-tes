@@ -186,7 +186,46 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateTaskAsync_ReturnsBadRequest_ForMissingDockerImage()
         {
-            var tesTask = new TesTask();
+            TesTask tesTask = new() { Executors = [new()] };
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            var controller = services.GetT();
+
+            var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as ObjectResult;
+
+            Assert.IsNotNull(result);
+            Assert.AreEqual(400, result.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task CreateTaskAsync_ReturnsBadRequest_ForRelativeInputPath()
+        {
+            TesTask tesTask = new() { Inputs = [new() { Path = "xyz/path" }] };
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            var controller = services.GetT();
+
+            var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as ObjectResult;
+
+            Assert.IsNotNull(result);
+            Assert.AreEqual(400, result.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task CreateTaskAsync_ReturnsBadRequest_ForInputMissingContentAndPath()
+        {
+            TesTask tesTask = new() { Inputs = [new() { Url = "http://host/path" }] };
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            var controller = services.GetT();
+
+            var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as ObjectResult;
+
+            Assert.IsNotNull(result);
+            Assert.AreEqual(400, result.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task CreateTaskAsync_ReturnsBadRequest_ForInputContentAndPath()
+        {
+            TesTask tesTask = new() { Inputs = [new() { Url = "http://host/path", Path = "/path/file", Content = "content" }] };
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
@@ -479,7 +518,7 @@ namespace TesApi.Tests
             {
                 Description = taskDescription,
                 Executors = [new() { Image = "ubuntu" }],
-                Inputs = [new() { Type = TesFileType.FILE, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" }],
+                Inputs = [new() { Type = TesFileType.FILE, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script", Content = "command" }],
                 Outputs =
                 [
                     new() { Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" },
@@ -508,7 +547,7 @@ namespace TesApi.Tests
             {
                 Description = taskDescription,
                 Executors = [new() { Image = "ubuntu" }],
-                Inputs = [new() { Type = TesFileType.FILE, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" }],
+                Inputs = [new() { Type = TesFileType.FILE, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script", Content = "command" }],
                 Outputs =
                 [
                     new() { Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" },
@@ -537,7 +576,7 @@ namespace TesApi.Tests
             {
                 Description = taskDescription,
                 Executors = [new() { Image = "ubuntu" }],
-                Inputs = [new() { Type = TesFileType.FILE, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"{path}/script" }],
+                Inputs = [new() { Type = TesFileType.FILE, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"{path}/script", Url = $"{path}/script" }],
                 Outputs =
                 [
                     new() { Name = "commandScript", Path = $"{path}/script" },

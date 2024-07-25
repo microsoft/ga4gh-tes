@@ -56,7 +56,7 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
-        /// Prepares the runtime scripting assets required for the execution of a TES task in a Batch node using the TES runner. 
+        /// Prepares the runtime scripting assets required for the execution of a TES task in a Batch node using the TES runner.
         /// </summary>
         /// <param name="tesTask"></param>
         /// <param name="nodeTaskConversionOptions"></param>
@@ -72,7 +72,7 @@ namespace TesApi.Web.Runner
 
                 List<KeyValuePair<string, string>> environment =
                     [new(nameof(NodeTaskResolverOptions), JsonConvert.SerializeObject(
-                        taskToNodeConverter.ToNodeTaskResolverOptions(nodeTaskConversionOptions),
+                        taskToNodeConverter.ToNodeTaskResolverOptions(tesTask, nodeTaskConversionOptions),
                         DefaultSerializerSettings))];
 
                 return new BatchScriptAssetsInfo(nodeTaskUrl, environment.ToDictionary().AsReadOnly());

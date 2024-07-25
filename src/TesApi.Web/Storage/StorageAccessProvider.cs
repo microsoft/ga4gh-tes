@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Storage.Sas;
@@ -90,6 +92,10 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
 
         await AzureProxy.UploadBlobAsync(blobAbsoluteUrl, content, cancellationToken);
     }
+
+    /// <inheritdoc/>
+    public async Task<IList<Uri>> GetBlobUrlsAsync(Uri blobVirtualDirectory, CancellationToken cancellationToken)
+        => await AzureProxy.ListBlobsAsync(blobVirtualDirectory, cancellationToken).Select(blob => blob.BlobUri).ToListAsync(cancellationToken);
 
     /// <inheritdoc />
     public abstract Task<bool> IsPublicHttpUrlAsync(string uriString, CancellationToken cancellationToken);

@@ -172,6 +172,32 @@ namespace Tes.ApiClients
         }
 
         /// <summary>
+        /// Checks the cache and if the request was not found, sends the GET request with a retry policy.
+        /// If the GET request is successful, adds it to the cache with the specified TTL.
+        /// </summary>
+        /// <param name="requestUrl"></param>
+        /// <param name="typeInfo">JSON serialization-related metadata.</param>
+        /// <param name="cacheTTL">Time after which a newly-added entry will expire from the cache.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="setAuthorizationHeader">If true, the authentication header is set with an authentication token.</param>
+        /// <typeparam name="TResponse">Response's content deserialization type.</typeparam>
+        /// <returns></returns>
+        protected async Task<TResponse> HttpGetRequestWithExpirableCachingAndRetryPolicyAsync<TResponse>(Uri requestUrl,
+            JsonTypeInfo<TResponse> typeInfo, TimeSpan cacheTTL, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
+        {
+            var cacheKey = await ToCacheKeyAsync(requestUrl, setAuthorizationHeader, cancellationToken);
+
+            return (await cachingRetryHandler.ExecuteWithRetryConversionAndCachingAsync(cacheKey, async ct =>
+            {
+                //request must be recreated in every retry.
+                var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
+
+                return await HttpClient.SendAsync(httpRequest, ct);
+            },
+            (m, ct) => GetApiResponseContentAsync(m, typeInfo, ct), DateTimeOffset.Now + cacheTTL, cancellationToken))!;
+        }
+
+        /// <summary>
         /// Get request with retry policy
         /// </summary>
         /// <param name="requestUrl"></param>

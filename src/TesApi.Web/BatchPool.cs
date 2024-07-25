@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
+using Azure.ResourceManager.Batch;
 using CommonUtilities;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
@@ -36,6 +37,7 @@ namespace TesApi.Web
 
         private readonly ILogger _logger;
         private readonly IAzureProxy _azureProxy;
+        private readonly Management.Batch.IBatchPoolManager _batchPoolManager;
         private readonly IStorageAccessProvider _storageAccessProvider;
 
         /// <summary>
@@ -44,18 +46,20 @@ namespace TesApi.Web
         /// <param name="batchScheduler"></param>
         /// <param name="batchSchedulingOptions"></param>
         /// <param name="azureProxy"></param>
+        /// <param name="batchPoolManager"></param>
         /// <param name="storageAccessProvider"></param>
         /// <param name="logger"></param>
         /// <exception cref="ArgumentException"></exception>
-        public BatchPool(IBatchScheduler batchScheduler, IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IAzureProxy azureProxy, IStorageAccessProvider storageAccessProvider, ILogger<BatchPool> logger)
+        public BatchPool(IBatchScheduler batchScheduler, IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IAzureProxy azureProxy, Management.Batch.IBatchPoolManager batchPoolManager, IStorageAccessProvider storageAccessProvider, ILogger<BatchPool> logger)
         {
             var rotationDays = batchSchedulingOptions.Value.PoolRotationForcedDays;
             if (rotationDays == 0) { rotationDays = Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays; }
             _forcePoolRotationAge = TimeSpan.FromDays(rotationDays);
 
-            this._azureProxy = azureProxy;
-            this._storageAccessProvider = storageAccessProvider;
-            this._logger = logger;
+            _azureProxy = azureProxy;
+            _batchPoolManager = batchPoolManager;
+            _storageAccessProvider = storageAccessProvider;
+            _logger = logger;
             _batchPools = batchScheduler as BatchScheduler ?? throw new ArgumentException("batchScheduler must be of type BatchScheduler", nameof(batchScheduler));
         }
 
@@ -702,17 +706,19 @@ namespace TesApi.Web
             => (await _azureProxy.GetFullAllocationStateAsync(PoolId, cancellationToken)).AllocationStateTransitionTime ?? DateTime.UtcNow;
 
         /// <inheritdoc/>
-        public async ValueTask CreatePoolAndJobAsync(Microsoft.Azure.Management.Batch.Models.Pool poolModel, bool isPreemptible, CancellationToken cancellationToken)
+        public async ValueTask CreatePoolAndJobAsync(BatchAccountPoolData poolModel, bool isPreemptible, CancellationToken cancellationToken)
         {
+            var jobId = poolModel.Metadata.Single(i => string.IsNullOrEmpty(i.Name)).Value;
+
             try
             {
                 CloudPool pool = default;
 
                 await Task.WhenAll(
-                    _azureProxy.CreateBatchJobAsync(poolModel.Name, poolModel.Name, cancellationToken),
+                    _azureProxy.CreateBatchJobAsync(jobId, jobId, cancellationToken),
                     Task.Run(async () =>
                     {
-                        var poolId = await _azureProxy.CreateBatchPoolAsync(poolModel, isPreemptible, cancellationToken);
+                        var poolId = await _batchPoolManager.CreateBatchPoolAsync(poolModel, isPreemptible, cancellationToken);
                         pool = await _azureProxy.GetBatchPoolAsync(poolId, cancellationToken, new ODATADetailLevel { SelectClause = CloudPoolSelectClause });
                     }, cancellationToken));
 
@@ -739,8 +745,9 @@ namespace TesApi.Web
             {
                 // When the batch management API creating the pool times out, it may or may not have created the pool.
                 // Add an inactive record to delete it if it did get created and try again later. That record will be removed later whether or not the pool was created.
-                PoolId ??= poolModel.Name;
+                PoolId ??= jobId;
                 _ = _batchPools.AddPool(this);
+
                 return ex switch
                 {
                     OperationCanceledException => ex.InnerException is null ? ex : new AzureBatchPoolCreationException(ex.Message, isTimeout: true, ex),
