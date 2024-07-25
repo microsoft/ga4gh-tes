@@ -106,7 +106,7 @@ namespace TesApi.Web.Storage
 
             var terraBlobInfo = await GetTerraBlobInfoFromContainerNameAsync(path, cancellationToken);
 
-            if (sasPermissions.HasFlag(BlobSasPermissions.List))
+            if (sasPermissions.HasFlag(BlobSasPermissions.List) || string.IsNullOrWhiteSpace(terraBlobInfo.BlobName))
             {
                 return await GetMappedSasContainerUrlFromWsmAsync(terraBlobInfo, false, cancellationToken);
             }

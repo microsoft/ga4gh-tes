@@ -100,10 +100,10 @@ namespace TesApi.Web.Storage
                 path = $"/{storageOptions.DefaultAccountName}{path}";
             }
 
-            //TODO: refactor this to throw an exception instead of logging and error and returning null.
             if (!StorageAccountUrlSegments.TryCreate(path, out var pathSegments))
             {
-                Logger.LogError("Could not parse path '{UnparsablePath}'.", path);
+                //TODO: refactor this to throw an exception instead of logging an error and returning null.
+                Logger.LogError("URL does not appear to point to known azure storage."); // Not printing {path} because of "Log entries created from user input" CodeQL report.
                 return null;
             }
 
@@ -111,19 +111,19 @@ namespace TesApi.Web.Storage
             {
                 return new StorageAccountUrlSegments(externalStorageAccountInfo.BlobEndpoint, pathSegments.ContainerName, pathSegments.BlobName, externalStorageAccountInfo.SasToken).ToUri();
             }
-            else
+
+            try
             {
-                try
-                {
-                    var result = pathSegments.IsContainer
-                        ? await AddSasTokenAsync(pathSegments, sasTokenDuration, ConvertSasPermissions(sasPermissions, nameof(sasPermissions)), path: path, cancellationToken: cancellationToken)
-                        : await AddSasTokenAsync(pathSegments, sasTokenDuration, sasPermissions, path: path, cancellationToken: cancellationToken);
-                    return result.ToUri();
-                }
-                catch
-                {
-                    return null;
-                }
+                var result = pathSegments.IsContainer
+                    ? await AddSasTokenAsync(pathSegments, sasTokenDuration, ConvertSasPermissions(sasPermissions, nameof(sasPermissions)), path: path, cancellationToken: cancellationToken)
+                    : await AddSasTokenAsync(pathSegments, sasTokenDuration, sasPermissions, path: path, cancellationToken: cancellationToken);
+                return result.ToUri();
+            }
+            catch (Exception ex)
+            {
+                //TODO: refactor this to throw an exception instead of logging an error and returning null.
+                Logger.LogError(ex, "SAS token could not be obtained: {FailureMessage}.", ex.Message);
+                return null;
             }
         }
 
