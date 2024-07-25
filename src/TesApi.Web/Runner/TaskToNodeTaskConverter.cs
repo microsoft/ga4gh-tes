@@ -315,7 +315,7 @@ namespace TesApi.Web.Runner
 
                 logger.LogInformation(@"Input {InputPath} is a regular input", input.Path);
 
-                inputs.Add(key, preparedInput);
+                inputs.Add(key, input);
             }
 
             return [.. inputs.Values];
