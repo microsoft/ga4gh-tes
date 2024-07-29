@@ -361,10 +361,10 @@ namespace TesApi.Controllers
                     {
                         tags = zippedTags;
                     }
-                    else if (tagKeys.Length == tagValues?.Length)
+                    else if (tagKeys.Length >= tagValues?.Length)
                     {
                         logger.LogWarning("Using backup method to parse tag filters.");
-                        tags = tagKeys.Zip(tagValues, (Key, Value) => (Key, Value))
+                        tags = tagKeys.Zip(tagValues.Concat(Enumerable.Repeat(string.Empty, tagKeys.Length - (tagValues?.Length ?? 0))), (Key, Value) => (Key, Value))
                             .ToDictionary(x => x.Key, x => x.Value ?? string.Empty, StringComparer.Ordinal);
                     }
                     else
