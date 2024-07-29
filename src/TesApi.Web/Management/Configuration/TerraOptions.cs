@@ -74,4 +74,10 @@ public class TerraOptions
     /// Sas token allowed Ip ranges
     /// </summary>
     public string SasAllowedIpRange { get; set; }
+
+    /// <summary>
+    /// URL from which to read "allowed-vm-sizes" instead of the default location in the global "tes-internals" area
+    /// </summary>
+    /// <remarks>This url is assume to work with a simple http[s] GET without any further manipulation.</remarks>
+    public string AllowedVmSizes { get; set; }
 }
