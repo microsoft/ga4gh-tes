@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using AutoMapper;
 using Azure.Core;
@@ -46,7 +48,12 @@ namespace TesApi.Web.Management.Batch
             CreateMap<BatchVmContainerRegistry, ApiContainerRegistry>()
                 .ForMember(dst => dst.IdentityReference, opt => opt.MapFrom(src => src.IdentityResourceId));
             CreateMap<BatchNetworkConfiguration, ApiNetworkConfiguration>()
-                .ForPath(dst => dst.EndpointConfiguration.InboundNatPools, opt => opt.MapFrom(src => src.EndpointInboundNatPools));
+                .ForMember(dst => dst.EndpointConfiguration, opt => opt.MapFrom(src => src.EndpointInboundNatPools));
+            CreateMap<IList<BatchInboundNatPool>, ApiEndpointConfiguration>()
+                .ForMember(dst => dst.InboundNatPools, opt => opt.MapFrom(src => src))
+                .ReverseMap();
+            CreateMap<ApiInboundNatPool[], IList<BatchInboundNatPool>>()
+                .ForMember("Item", opt => opt.Ignore());
             CreateMap<BatchInboundNatPool, ApiInboundNatPool>();
             CreateMap<BatchNetworkSecurityGroupRule, ApiNetworkSecurityGroupRule>();
             CreateMap<BatchImageReference, ApiImageReference>();
@@ -59,7 +66,7 @@ namespace TesApi.Web.Management.Batch
         }
 
         /// <summary>
-        /// Gets name of the managed identity if the resource ID is a valid Azure MI resource ID.        
+        /// Gets name of the managed identity if the resource ID is a valid Azure MI resource ID.
         /// If the resource ID is not a valid Resource ID, returns the value provided.
         /// </summary>
         /// <param name="resourceId"></param>
