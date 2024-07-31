@@ -142,34 +142,6 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
-        public void ConfigureServices_TerraOptionsAreConfigured_TerraActionIdentityProviderIsResolved()
-        {
-            ConfigureTerraOptions();
-
-            startup.ConfigureServices(services);
-
-            var serviceProvider = services.BuildServiceProvider();
-
-            var terraActionIdentityProvider = serviceProvider.GetService<IActionIdentityProvider>();
-
-            Assert.IsNotNull(terraActionIdentityProvider);
-            Assert.IsInstanceOfType(terraActionIdentityProvider, typeof(TerraActionIdentityProvider));
-        }
-
-        [TestMethod]
-        public void ConfigureServices_TerraOptionsAreNotConfigured_DefaultActionIdentityProviderIsResolved()
-        {
-            startup.ConfigureServices(services);
-
-            var serviceProvider = services.BuildServiceProvider();
-
-            var actionIdentityProvider = serviceProvider.GetService<IActionIdentityProvider>();
-
-            Assert.IsNotNull(actionIdentityProvider);
-            Assert.IsInstanceOfType(actionIdentityProvider, typeof(DefaultActionIdentityProvider));
-        }
-
-        [TestMethod]
         public void ConfigureServices_TerraOptionsAreConfigured_TerraBatchPoolManagerIsResolved()
         {
             ConfigureTerraOptions();
