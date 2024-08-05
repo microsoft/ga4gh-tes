@@ -72,7 +72,7 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
         Logger.LogInformation("MD5 hash calculated for file: {filePath}.", filePath);
 
-        return BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant();
+        return Convert.ToBase64String(hash);
     }
 
     protected async Task<long> ExecutePipelineAsync(List<BlobOperationInfo> operations)
