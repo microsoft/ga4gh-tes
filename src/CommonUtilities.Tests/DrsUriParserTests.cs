@@ -1,26 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-/*
-DrsUriParser.Register();
-var uri = new Uri($"https://hostname/abc123");
-Console.WriteLine($"'{uri.OriginalString}' {uri.AbsoluteUri} {uri.Scheme} {uri.Host} {uri.AbsolutePath} {uri.IsWellFormedOriginalString()}");
-Console.WriteLine(uri.GetComponents(UriComponents.Path, UriFormat.SafeUnescaped));
-uri = new Uri($"{DrsUriParser.UriSchemeDrs}://hostname/abc123");
-Console.WriteLine($"'{uri.OriginalString}' {uri.AbsoluteUri} {uri.Scheme} {uri.Host} {uri.AbsolutePath} {uri.IsWellFormedOriginalString()}");
-Console.WriteLine(uri.GetComponents(UriComponents.Path, UriFormat.SafeUnescaped));
-uri = new Uri($"{DrsUriParser.UriSchemeDrs}://provider/namespace:abc123");
-Console.WriteLine($"'{uri.OriginalString}' {uri.AbsoluteUri} {uri.Scheme} {uri.Host} {uri.AbsolutePath} {uri.IsWellFormedOriginalString()}");
-Console.WriteLine(uri.GetComponents(UriComponents.Path, UriFormat.SafeUnescaped));
-uri = new Uri($"{DrsUriParser.UriSchemeDrs}://prefix:abc123");
-Console.WriteLine($"'{uri.OriginalString}' {uri.AbsoluteUri} {uri.Scheme} {uri.Host} {uri.AbsolutePath} {uri.IsWellFormedOriginalString()}");
-Console.WriteLine(uri.GetComponents(UriComponents.Path, UriFormat.SafeUnescaped));
-//uri = new Uri($"{DrsUriParser.SchemeName}://hostname/path/to/abc123");
-//uri = new Uri($"{DrsUriParser.SchemeName}://hostname/abc;123");
-uri = new Uri($"{DrsUriParser.UriSchemeDrs}:no-one@example.com");
-
- */
-
 namespace CommonUtilities.Tests
 {
     [TestClass]
@@ -65,6 +45,8 @@ namespace CommonUtilities.Tests
         }
 
         [DataTestMethod]
+        [DataRow(@"drs://foo")]
+        [DataRow(@"drs://foo-bar:baz")]
         [DataRow(@"drs://hostname/abc&123")]
         [DataRow(@"drs://hostname/abc/123")]
         [DataRow(@"drs://hostname/abc:123")]

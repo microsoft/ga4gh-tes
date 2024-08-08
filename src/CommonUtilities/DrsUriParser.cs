@@ -1,7 +1,8 @@
-﻿
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 using System.Text;
 using System.Text.RegularExpressions;
-
 
 namespace CommonUtilities
 {
@@ -230,45 +231,5 @@ namespace CommonUtilities
         // https://ga4gh.github.io/data-repository-service-schemas/docs/more-background-on-compact-identifiers.html#tag/Background-on-Compact-Identifier-Based-URIs
         [GeneratedRegex("\\A(?<provider_code>[\\._a-z]+?/)?(?<namespace>[\\._a-z]+?):(?<accession>[%-\\.0-9A-Z_a-z~]+?)\\Z", RegexOptions.ExplicitCapture | RegexOptions.CultureInvariant)]
         private static partial Regex DrsCompactId();
-    }
-
-    static partial class EnumerableExtensions
-    {
-        /// <summary>
-        /// Determines whether the number of elements in the input sequence is in the allowed counts.
-        /// </summary>
-        /// <typeparam name="TSource">Type of the elements of <paramref name="source"/>.</typeparam>
-        /// <param name="source">The input sequence.</param>
-        /// <param name="counts">The allowed counts.</param>
-        /// <returns>
-        ///   <c>true</c> if the number of elements in <paramref name="source"/> is in <paramref name="counts"/>; otherwise, <c>false</c>.
-        /// </returns>
-        /// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="counts"/> is <c>null</c>.</exception>
-        /// <exception cref="OverflowException">The number of elements in <paramref name="source"/> is larger than <seealso cref="Int32.MaxValue"/>.</exception>
-        public static bool IsCountIn<TSource>(this IEnumerable<TSource> source, params int[] counts)
-        {
-            ArgumentNullException.ThrowIfNull(source);
-            ArgumentNullException.ThrowIfNull(counts);
-            return counts.Contains(source.Count());
-        }
-
-        /// <summary>
-        /// Determines whether the number of elements in the input sequence is in the allowed counts.
-        /// </summary>
-        /// <typeparam name="TSource">Type of the elements of <paramref name="source"/>.</typeparam>
-        /// <param name="source">The input sequence.</param>
-        /// <param name="predicate">A function to test each element for a condition.</param>
-        /// <param name="counts">The allowed counts.</param>
-        /// <returns>
-        ///   <c>true</c> if the number of elements that satisfy the condition in <paramref name="predicate"> in <paramref name="source"/> is in <paramref name="counts"/>; otherwise, <c>false</c>.
-        /// </returns>
-        /// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="counts"/> is <c>null</c>.</exception>
-        /// <exception cref="OverflowException">The number of elements in <paramref name="source"/> is larger than <seealso cref="Int32.MaxValue"/>.</exception>
-        public static bool IsCountIn<TSource>(this IEnumerable<TSource> source, Func<TSource, bool> predicate, params int[] counts)
-        {
-            ArgumentNullException.ThrowIfNull(source);
-            ArgumentNullException.ThrowIfNull(counts);
-            return counts.Contains(source.Count(predicate));
-        }
     }
 }
