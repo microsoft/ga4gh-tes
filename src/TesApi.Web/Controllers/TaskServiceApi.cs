@@ -361,11 +361,19 @@ namespace TesApi.Controllers
                     {
                         tags = zippedTags;
                     }
-                    else if (tagKeys.Length == tagValues?.Length)
+                    else if (tagKeys.Length >= tagValues?.Length)
                     {
                         logger.LogWarning("Using backup method to parse tag filters.");
-                        tags = tagKeys.Zip(tagValues, (Key, Value) => (Key, Value))
-                            .ToDictionary(x => x.Key, x => x.Value ?? string.Empty, StringComparer.Ordinal);
+                        try
+                        {
+                            tags = tagKeys.Zip(tagValues.Concat(Enumerable.Repeat(string.Empty, tagKeys.Length - (tagValues?.Length ?? 0))), (Key, Value) => (Key, Value))
+                                .ToDictionary(x => x.Key, x => x.Value ?? string.Empty, StringComparer.Ordinal);
+                        }
+                        catch (ArgumentException ex)
+                        {
+                            logger.LogError(ex, "Duplicated tag_key");
+                            return BadRequest("Duplicated tag_key");
+                        }
                     }
                     else
                     {
@@ -375,7 +383,8 @@ namespace TesApi.Controllers
                 }
                 else
                 {
-                    logger.LogWarning("Ignoring tag_value query arguments found without tag_key query arguments.");
+                    logger.LogError("tag_value query arguments found without tag_key query arguments.");
+                    return BadRequest("Invalid tag_value parameter value. Only valid with paired tag_key parameter values.");
                 }
             }
 
