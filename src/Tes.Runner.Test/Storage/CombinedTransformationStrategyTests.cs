@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using Azure.Storage.Sas;
+using CommonUtilities;
 using Moq;
 using Tes.Runner.Storage;
 
@@ -17,6 +18,11 @@ namespace Tes.Runner.Test.Storage
         [TestInitialize]
         public void SetUp()
         {
+            if (!UriParser.IsKnownScheme(DrsUriParser.UriSchemeDrs))
+            {
+                DrsUriParser.Register();
+            }
+
             mockStrategy1 = new();
             mockStrategy2 = new();
 
@@ -50,11 +56,11 @@ namespace Tes.Runner.Test.Storage
         [TestMethod]
         public async Task CombinedTransformationStrategy_CompactDrsUri()
         {
-            var sourceUrl = "drs://my-uri:456_abc";
+            var sourceUrl = "drs://my.uri:456_abc";
             var transformation = "https://first.foo/";
 
             mockStrategy1.Setup(s => s.TransformUrlWithStrategyAsync(sourceUrl, It.IsAny<BlobSasPermissions>()))
-                .Throws(new UriFormatException());
+                .ReturnsAsync(() => new Uri(sourceUrl));
             mockStrategy2.Setup(s => s.TransformUrlWithStrategyAsync(sourceUrl, It.IsAny<BlobSasPermissions>()))
                 .ReturnsAsync(() => new Uri(transformation));
 

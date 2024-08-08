@@ -14,6 +14,14 @@ namespace Tes.ApiClients
         private const string DrsHubApiSegments = "/api/v4/drs";
         private static readonly IMemoryCache SharedMemoryCache = new MemoryCache(new MemoryCacheOptions());
 
+        static DrsHubApiClient()
+        {
+            if (!UriParser.IsKnownScheme(DrsUriParser.UriSchemeDrs))
+            {
+                DrsUriParser.Register();
+            }
+        }
+
         /// <summary>
         /// Parameterless constructor for mocking
         /// </summary>
@@ -40,7 +48,7 @@ namespace Tes.ApiClients
             return CreateTerraApiClient<DrsHubApiClient>(apiUrl, SharedMemoryCache, tokenCredential, azureCloudIdentityConfig);
         }
 
-        public virtual async Task<DrsResolveApiResponse> ResolveDrsUriAsync(string drsUri, CancellationToken cancellationToken = default)
+        public virtual async Task<DrsResolveApiResponse> ResolveDrsUriAsync(Uri drsUri, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(drsUri);
 
@@ -74,13 +82,13 @@ namespace Tes.ApiClients
             return apiResponse;
         }
 
-        public HttpContent GetDrsResolveRequestContent(String drsUri)
+        public HttpContent GetDrsResolveRequestContent(Uri drsUri)
         {
             ArgumentNullException.ThrowIfNull(drsUri);
 
             var drsResolveApiRequestBody = new DrsResolveRequestContent
             {
-                Url = drsUri,
+                Url = drsUri.AbsoluteUri,
                 CloudPlatform = CloudPlatform.Azure,
                 Fields = ["accessUrl"]
             };

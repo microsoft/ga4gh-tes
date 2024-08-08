@@ -44,7 +44,8 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetDrsResolveRequestContent_ValidDrsUri_ReturnsValidRequestContentWithExpectedValues()
         {
-            var drsUri = "drs://drs.foo";
+            var drsUriString = "drs://drs.foo/bar";
+            Uri drsUri = new(drsUriString);
             var content = await apiClient.GetDrsResolveRequestContent(drsUri).ReadAsStringAsync();
 
             Assert.IsNotNull(ExpectedDrsResolveRequestJson, content);
@@ -53,7 +54,8 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetDrsResolveRequestContent_ValidCompactDrsUri_ReturnsValidRequestContentWithExpectedValues()
         {
-            var drsUri = "drs://drs-things:foo";
+            var drsUriString = "drs://drs_things:foo";
+            Uri drsUri = new(drsUriString);
             var content = await apiClient.GetDrsResolveRequestContent(drsUri).ReadAsStringAsync();
 
             Assert.IsNotNull(ExpectedDrsResolveRequestJson, content);
@@ -82,7 +84,7 @@ namespace Tes.ApiClients.Tests
         }";
 
         private const string ExpectedDrsResolveRequestJson = @"{
-            ""url"": ""drs://drs.foo"",
+            ""url"": ""drs://drs.foo/bar"",
             ""cloudPlatform"": ""azure"",
             ""fields"":[""accessUrl""]
         }";

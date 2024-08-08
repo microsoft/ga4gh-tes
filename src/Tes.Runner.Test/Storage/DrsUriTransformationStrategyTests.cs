@@ -35,7 +35,7 @@ namespace Tes.Runner.Test.Storage
         [TestMethod]
         public async Task TransformUriWithStrategyAsync_DrsUri_CallsResolveApiAndReturnsResolvedUrl()
         {
-            var drsUri = "drs://drs-uri";
+            var drsUri = "drs://drs.uri/foo";
             var resolvedUrl = "https://resolved-url";
             var response = new DrsResolveApiResponse()
             {
@@ -44,7 +44,7 @@ namespace Tes.Runner.Test.Storage
                     Url = resolvedUrl
                 },
             };
-            drsHubApiClientMock.Setup(x => x.ResolveDrsUriAsync(drsUri, CancellationToken.None)).ReturnsAsync(response);
+            drsHubApiClientMock.Setup(x => x.ResolveDrsUriAsync(new Uri(drsUri), CancellationToken.None)).ReturnsAsync(response);
 
             var transformedUri = await drsUriTransformationStrategy.TransformUrlWithStrategyAsync(drsUri);
 
@@ -54,7 +54,7 @@ namespace Tes.Runner.Test.Storage
         [TestMethod]
         public async Task TransformUriWithStrategyAsync_CompactDrsUri_CallsResolveApiAndReturnsResolvedUrl()
         {
-            var drsUri = "drs://drs-uri:v4_abc";
+            var drsUri = "drs://drs.uri:v4_abc";
             var resolvedUrl = "https://resolved-url";
             var response = new DrsResolveApiResponse()
             {
@@ -63,7 +63,7 @@ namespace Tes.Runner.Test.Storage
                     Url = resolvedUrl
                 },
             };
-            drsHubApiClientMock.Setup(x => x.ResolveDrsUriAsync(drsUri, CancellationToken.None)).ReturnsAsync(response);
+            drsHubApiClientMock.Setup(x => x.ResolveDrsUriAsync(new Uri(drsUri), CancellationToken.None)).ReturnsAsync(response);
 
             var transformedUri = await drsUriTransformationStrategy.TransformUrlWithStrategyAsync(drsUri);
 
