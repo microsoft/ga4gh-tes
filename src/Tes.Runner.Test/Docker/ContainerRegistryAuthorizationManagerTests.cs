@@ -29,9 +29,13 @@ public class ContainerRegistryAuthorizationManagerTests
         //mockContainerRegistryContentClient.Setup(c => c.GetManifestAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
         //    .ReturnsAsync(mockResponseManifest.Object);
 
+        //var mockContainerRegistryContentClient = new Mock<ContainerRegistryContentClient>();
+        //mockContainerRegistryContentClient.Setup(c => c.GetManifestAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        //    .ReturnsAsync(mockResponseManifest.Object);
+
         //mockCredentialsManager = new Mock<CredentialsManager>();
         //mockCredentials = new Mock<TokenCredential>();
-        //mockCredentialsManager.Setup(c => c.GetTokenCredential(It.IsAny<RuntimeOptions>(), It.IsAny<string>()))
+        //mockCredentialsManager.Setup(c => c.GetAcrPullTokenCredential(It.IsAny<RuntimeOptions>(), It.IsAny<string>()))
         //    .Returns(mockCredentials.Object);
 
 

@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using CommonUtilities;
-using CommonUtilities.AzureCloud;
 using CommonUtilities.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -23,10 +22,9 @@ namespace Tes.ApiClients.Tests.TerraIntegration
 
             var retryOptions = Microsoft.Extensions.Options.Options.Create(new RetryPolicyOptions());
             var memoryCache = new MemoryCache(new MemoryCacheOptions());
-            var config = ExpensiveObjectTestUtility.AzureCloudConfig.AzureEnvironmentConfig;
+            var config = AzureEnvironmentConfig.FromArmEnvironmentEndpoints(CommonUtilities.AzureCloud.AzureCloudConfig.FromKnownCloudNameAsync(retryPolicyOptions: retryOptions).Result);
             wsmApiClient = new TerraWsmApiClient(envInfo.WsmApiHost, new TestEnvTokenCredential(),
                 new CachingRetryPolicyBuilder(memoryCache, retryOptions), config, TestLoggerFactory.Create<TerraWsmApiClient>());
-
         }
 
         [TestMethod]

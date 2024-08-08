@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -88,6 +90,22 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
         ArgumentNullException.ThrowIfNull(blobAbsoluteUrl);
 
         await AzureProxy.UploadBlobAsync(blobAbsoluteUrl, content, cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IList<Uri>> GetBlobUrlsAsync(Uri blobVirtualDirectory, CancellationToken cancellationToken)
+    {
+        Azure.Storage.Blobs.BlobUriBuilder blobBuilder = new(blobVirtualDirectory) { Sas = null };
+        return (await AzureProxy.ListBlobsAsync(blobVirtualDirectory, cancellationToken)).Select(GetBlobUri).ToList();
+
+        Uri GetBlobUri(Azure.Storage.Blobs.Models.BlobItem blob)
+        {
+            // This implementation reuses the BlobUriBuilder in the parent method, so GetBlobUri cannot be called in parallel with the same instance of BlobUriBuilder.
+            // It is safe for concurrent instances of GetBlobUrlsAsync to run simultaneously, however.
+            // Refactor if the ListBlobsAsync enumeration is ever parallelized at the stage of calling this converter method.
+            blobBuilder.BlobName = blob.Name;
+            return blobBuilder.ToUri();
+        }
     }
 
     /// <inheritdoc />

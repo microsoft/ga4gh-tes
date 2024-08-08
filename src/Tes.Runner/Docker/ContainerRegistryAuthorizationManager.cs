@@ -3,8 +3,11 @@
 
 using Azure.Containers.ContainerRegistry;
 using Azure.Core;
+using CommonUtilities;
+using CommonUtilities.AzureCloud;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
+using Tes.ApiClients;
 using Tes.Runner.Authentication;
 using Tes.Runner.Models;
 
@@ -79,7 +82,7 @@ namespace Tes.Runner.Docker
             // Use a pipeline policy to get access to the ACR access token we will need to pass to Docker.
             var clientOptions = new ContainerRegistryClientOptions();
             clientOptions.AddPolicy(new AcquireDockerAuthTokenPipelinePolicy(onCapture), HttpPipelinePosition.PerCall);
-            return new ContainerRegistryContentClient(endpoint, repositoryName, tokenCredentialsManager.GetTokenCredential(runtimeOptions), clientOptions);
+            return new ContainerRegistryContentClient(endpoint, repositoryName, tokenCredentialsManager.GetAcrPullTokenCredential(runtimeOptions), clientOptions);
         }
 
         private sealed class AcquireDockerAuthTokenPipelinePolicy : Azure.Core.Pipeline.HttpPipelinePolicy

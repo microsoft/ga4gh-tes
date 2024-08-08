@@ -18,6 +18,7 @@ namespace Tes.Runner.Authentication
         private readonly ILogger logger;
         private readonly RetryPolicy retryPolicy;
         private readonly ConcurrentDictionary<byte[], TokenCredential> cachedCredentals = new();
+        private readonly ConcurrentDictionary<byte[], object> inflightLocks = new();
 
         private const int MaxRetryCount = 7;
         private const int ExponentialBackOffExponent = 2;
@@ -49,43 +50,64 @@ namespace Tes.Runner.Authentication
 
         public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions, string? tokenScope = default)
         {
-            try
-            {
-                return retryPolicy.Execute(() => GetTokenCredentialImpl(runtimeOptions, tokenScope));
-            }
-            catch
-            {
-                throw new IdentityUnavailableException();
-            }
+            return GetTokenCredential(runtimeOptions, runtimeOptions.NodeManagedIdentityResourceId, tokenScope);
         }
 
-        private TokenCredential GetTokenCredentialImpl(RuntimeOptions runtimeOptions, string? tokenScope)
+        public virtual TokenCredential GetAcrPullTokenCredential(RuntimeOptions runtimeOptions, string? tokenScope = default)
+        {
+            var managedIdentity = runtimeOptions.NodeManagedIdentityResourceId;
+
+            if (!string.IsNullOrWhiteSpace(runtimeOptions.AcrPullManagedIdentityResourceId))
+            {
+                managedIdentity = runtimeOptions.AcrPullManagedIdentityResourceId;
+            }
+
+            return GetTokenCredential(runtimeOptions, managedIdentity, tokenScope);
+        }
+
+        public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions, string? managedIdentityResourceId, string? tokenScope = default)
         {
             tokenScope ??= runtimeOptions.AzureEnvironmentConfig!.TokenScope!;
             var key = MakeKey(new(runtimeOptions, tokenScope));
 
-            if (cachedCredentals.TryGetValue(key, out var tokenCredential))
+            lock (inflightLocks.GetOrAdd(key, _ => new()))
             {
-                return tokenCredential;
-            }
+                if (cachedCredentals.TryGetValue(key, out var tokenCredential))
+                {
+                    return tokenCredential;
+                }
 
+                try
+                {
+                    Uri azureAuthorityHost = new(runtimeOptions.AzureEnvironmentConfig!.AzureAuthorityHostUrl!);
+                    return retryPolicy.Execute(() => GetTokenCredentialImpl(key, managedIdentityResourceId, tokenScope, azureAuthorityHost));
+                }
+                catch
+                {
+                    throw new IdentityUnavailableException();
+                }
+            }
+        }
+
+        private TokenCredential GetTokenCredentialImpl(byte[] key, string? managedIdentityResourceId, string tokenScope, Uri azureAuthorityHost)
+        {
             try
             {
-                Uri authorityHost = new(runtimeOptions.AzureEnvironmentConfig!.AzureAuthorityHostUrl!);
+                TokenCredential tokenCredential;
 
-                if (!string.IsNullOrWhiteSpace(runtimeOptions.NodeManagedIdentityResourceId))
+                if (!string.IsNullOrWhiteSpace(managedIdentityResourceId))
                 {
-                    logger.LogInformation("Token credentials with Managed Identity and resource ID: {NodeManagedIdentityResourceId}", runtimeOptions.NodeManagedIdentityResourceId);
-                    var tokenCredentialOptions = new TokenCredentialOptions { AuthorityHost = authorityHost };
+                    logger.LogInformation("Token credentials with Managed Identity and resource ID: {NodeManagedIdentityResourceId}", managedIdentityResourceId);
+                    var tokenCredentialOptions = new TokenCredentialOptions { AuthorityHost = azureAuthorityHost };
 
                     tokenCredential = new ManagedIdentityCredential(
-                        new ResourceIdentifier(runtimeOptions.NodeManagedIdentityResourceId),
+                        new ResourceIdentifier(managedIdentityResourceId),
                         tokenCredentialOptions);
                 }
                 else
                 {
                     logger.LogInformation("Token credentials with DefaultAzureCredential");
-                    var defaultAzureCredentialOptions = new DefaultAzureCredentialOptions { AuthorityHost = authorityHost };
+                    var defaultAzureCredentialOptions = new DefaultAzureCredentialOptions { AuthorityHost = azureAuthorityHost };
                     tokenCredential = new DefaultAzureCredential(defaultAzureCredentialOptions);
                 }
 
@@ -101,7 +123,7 @@ namespace Tes.Runner.Authentication
             }
         }
 
-        private byte[] MakeKey(CredentialsManagerKeyType key)
+        private static byte[] MakeKey(CredentialsManagerKeyType key)
         {
             return System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(key, KeyTypeContext.Default.CredentialsManagerKeyType));
         }
@@ -109,6 +131,7 @@ namespace Tes.Runner.Authentication
         private record struct CredentialsManagerKeyType(RuntimeOptions runtimeOptions, string tokenScope);
 
         [JsonSerializable(typeof(CredentialsManagerKeyType))]
+        [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault)]
         private partial class KeyTypeContext : JsonSerializerContext { }
     }
 }

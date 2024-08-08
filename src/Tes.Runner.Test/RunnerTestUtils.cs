@@ -89,6 +89,12 @@ public class RunnerTestUtils
         return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
     }
 
+    public static string CalculateBase64Md5Hash(byte[] data)
+    {
+        var hash = MD5.HashData(data);
+        return Convert.ToBase64String(hash);
+    }
+
     public static string GetRootHashFromSortedHashList(List<string> hashList)
     {
         var hashListContent = string.Join("", hashList);

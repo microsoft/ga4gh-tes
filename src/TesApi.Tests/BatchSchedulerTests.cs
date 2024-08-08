@@ -9,13 +9,15 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.ResourceManager.Batch;
+using Azure.ResourceManager.Batch.Models;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
-using Microsoft.Azure.Management.Batch.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Microsoft.WindowsAzure.Storage.Blob;
 using Moq;
 using Newtonsoft.Json;
 using Tes.Extensions;
@@ -23,6 +25,7 @@ using Tes.Models;
 using Tes.TaskSubmitters;
 using TesApi.Web;
 using TesApi.Web.Management;
+using TesApi.Web.Management.Batch;
 using TesApi.Web.Management.Models.Quotas;
 using TesApi.Web.Storage;
 
@@ -43,7 +46,7 @@ namespace TesApi.Tests
             Assert.IsTrue(batchScheduler.RemovePoolFromList(pool));
             Assert.AreEqual(0, batchScheduler.GetPoolGroupKeys().Count());
 
-            pool = (BatchPool)await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(new Pool(name: id)), System.Threading.CancellationToken.None);
+            pool = (BatchPool)await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(BatchPoolTests.CreatePoolData(name: id)), CancellationToken.None);
 
             Assert.IsNotNull(pool);
             Assert.AreEqual(1, batchScheduler.GetPoolGroupKeys().Count());
@@ -61,16 +64,16 @@ namespace TesApi.Tests
             var keyCount = batchScheduler.GetPoolGroupKeys().Count();
             var key = batchScheduler.GetPoolGroupKeys().First();
             var count = batchScheduler.GetPools().Count();
-            serviceProvider.AzureProxy.Verify(mock => mock.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<System.Threading.CancellationToken>()), Times.Once);
+            serviceProvider.BatchPoolManager.Verify(mock => mock.CreateBatchPoolAsync(It.IsAny<BatchAccountPoolData>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Once);
 
-            var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(new Pool(name: id)), System.Threading.CancellationToken.None);
+            var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(BatchPoolTests.CreatePoolData(name: id)), CancellationToken.None);
             await pool.ServicePoolAsync();
 
             Assert.AreEqual(count, batchScheduler.GetPools().Count());
             Assert.AreEqual(keyCount, batchScheduler.GetPoolGroupKeys().Count());
             //Assert.AreSame(info, pool);
             Assert.AreEqual(info.PoolId, pool.PoolId);
-            serviceProvider.AzureProxy.Verify(mock => mock.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<System.Threading.CancellationToken>()), Times.Once);
+            serviceProvider.BatchPoolManager.Verify(mock => mock.CreateBatchPoolAsync(It.IsAny<BatchAccountPoolData>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [TestCategory("Batch Pools")]
@@ -86,7 +89,7 @@ namespace TesApi.Tests
             var key = batchScheduler.GetPoolGroupKeys().First();
             var count = batchScheduler.GetPools().Count();
 
-            var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(new Pool(name: id)), System.Threading.CancellationToken.None);
+            var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(BatchPoolTests.CreatePoolData(name: id)), CancellationToken.None);
             await pool.ServicePoolAsync();
 
             Assert.AreNotEqual(count, batchScheduler.GetPools().Count());
@@ -221,15 +224,17 @@ namespace TesApi.Tests
             task.Resources.BackendParameters = new() { { "vm_size", vmSize } };
 
             var config = GetMockConfig()();
+            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
             using var serviceProvider = GetServiceProvider(
                 config,
-                GetMockAzureProxy(AzureProxyReturnValues.Defaults),
-                GetMockQuotaProvider(AzureProxyReturnValues.Defaults),
-                GetMockSkuInfoProvider(AzureProxyReturnValues.Defaults),
+                GetMockAzureProxy(azureProxyReturnValues),
+                GetMockBatchPoolManager(azureProxyReturnValues),
+                GetMockQuotaProvider(azureProxyReturnValues),
+                GetMockSkuInfoProvider(azureProxyReturnValues),
                 GetMockAllowedVms(config));
             var batchScheduler = serviceProvider.GetT();
 
-            var size = await ((BatchScheduler)batchScheduler).GetVmSizeAsync(task, System.Threading.CancellationToken.None);
+            var size = await ((BatchScheduler)batchScheduler).GetVmSizeAsync(task, CancellationToken.None);
             GuardAssertsWithTesTask(task, () => Assert.AreEqual(vmSize, size.VmSize));
         }
 
@@ -262,7 +267,7 @@ namespace TesApi.Tests
             Assert.AreEqual(TesState.SYSTEM_ERROR, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 2, RamGb = 1, Preemptible = false }, azureProxyReturnValues));
             Assert.AreEqual(TesState.SYSTEM_ERROR, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 11, RamGb = 1, Preemptible = true }, azureProxyReturnValues));
 
-            var dedicatedCoreQuotaPerVMFamily = new List<VirtualMachineFamilyCoreQuota> { new("VmFamily2", 1) };
+            List<BatchVmFamilyCoreQuota> dedicatedCoreQuotaPerVMFamily = [CreateBatchVmFamilyCoreQuota("VmFamily2", 1)];
             azureProxyReturnValues.BatchQuotas = new()
             {
                 ActiveJobAndJobScheduleQuota = 1,
@@ -292,16 +297,22 @@ namespace TesApi.Tests
             });
         }
 
-        private async Task AddBatchTaskHandlesExceptions(TesState newState, Func<AzureProxyReturnValues, (Action<IServiceCollection>, Action<Mock<IAzureProxy>>)> testArranger, Action<TesTask, IEnumerable<(LogLevel, Exception)>> resultValidator)
+        private async Task AddBatchTaskHandlesExceptions(TesState newState, Func<AzureProxyReturnValues, (Action<IServiceCollection>, Action<Mock<IAzureProxy>>, Action<Mock<IBatchPoolManager>>)> testArranger, Action<TesTask, IEnumerable<(LogLevel, Exception)>> resultValidator)
         {
             var logger = new Mock<ILogger<BatchScheduler>>();
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
-            var (providerModifier, azureProxyModifier) = testArranger?.Invoke(azureProxyReturnValues) ?? (default, default);
+            var (providerModifier, azureProxyModifier, batchPoolManagerModifier) = testArranger?.Invoke(azureProxyReturnValues) ?? (default, default, default);
             var azureProxy = new Action<Mock<IAzureProxy>>(mock =>
             {
                 GetMockAzureProxy(azureProxyReturnValues)(mock);
                 azureProxyModifier?.Invoke(mock);
             });
+            var batchPoolManager = new Action<Mock<IBatchPoolManager>>(mock =>
+            {
+                GetMockBatchPoolManager(azureProxyReturnValues)(mock);
+                batchPoolManagerModifier?.Invoke(mock);
+            });
+
             var task = GetTesTask();
             task.State = TesState.QUEUED;
 
@@ -309,6 +320,7 @@ namespace TesApi.Tests
                 task,
                 GetMockConfig()(),
                 azureProxy,
+                batchPoolManager,
                 azureProxyReturnValues,
                 s =>
                 {
@@ -328,10 +340,12 @@ namespace TesApi.Tests
         {
             return AddBatchTaskHandlesExceptions(TesState.QUEUED, Arranger, Validator);
 
-            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
-                => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchJobAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
-                    .Callback<string, string, System.Threading.CancellationToken>((_, _, _)
-                        => throw new Microsoft.Rest.Azure.CloudException("No job for you.") { Body = new() { Code = BatchErrorCodeStrings.OperationTimedOut } }));
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>, Action<Mock<IBatchPoolManager>>) Arranger(AzureProxyReturnValues _1)
+                => (default,
+                    azureProxy => azureProxy.Setup(b => b.CreateBatchJobAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                    .Callback<string, string, CancellationToken>((_, _, _)
+                        => throw new Microsoft.Rest.Azure.CloudException("No job for you.") { Body = new() { Code = BatchErrorCodeStrings.OperationTimedOut } }),
+                    default);
 
             void Validator(TesTask tesTask, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
             {
@@ -351,10 +365,12 @@ namespace TesApi.Tests
         {
             return AddBatchTaskHandlesExceptions(TesState.QUEUED, Arranger, Validator);
 
-            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
-                => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<System.Threading.CancellationToken>()))
-                    .Callback<Pool, bool, System.Threading.CancellationToken>((poolInfo, isPreemptible, cancellationToken)
-                        => throw new Microsoft.Rest.Azure.CloudException("No job for you.") { Body = new() { Code = BatchErrorCodeStrings.OperationTimedOut } }));
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>, Action<Mock<IBatchPoolManager>>) Arranger(AzureProxyReturnValues _1)
+                => (default,
+                    default,
+                    azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<BatchAccountPoolData>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                        .Callback<BatchAccountPoolData, bool, CancellationToken>((poolInfo, isPreemptible, cancellationToken)
+                            => throw new Microsoft.Rest.Azure.CloudException("No pool for you.") { Body = new() { Code = BatchErrorCodeStrings.OperationTimedOut } }));
 
             void Validator(TesTask tesTask, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
             {
@@ -375,8 +391,10 @@ namespace TesApi.Tests
             var quotaVerifier = new Mock<IBatchQuotaVerifier>();
             return AddBatchTaskHandlesExceptions(TesState.QUEUED, Arranger, Validator);
 
-            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
-                => (services => services.AddSingleton<IBatchQuotaVerifier, TestBatchQuotaVerifierQuotaMaxedOut>(), default);
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>, Action<Mock<IBatchPoolManager>>) Arranger(AzureProxyReturnValues _1)
+                => (services => services.AddSingleton<IBatchQuotaVerifier, TestBatchQuotaVerifierQuotaMaxedOut>(),
+                    default,
+                    default);
 
             void Validator(TesTask tesTask, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
             {
@@ -395,8 +413,10 @@ namespace TesApi.Tests
             var quotaVerifier = new Mock<IBatchQuotaVerifier>();
             return AddBatchTaskHandlesExceptions(TesState.SYSTEM_ERROR, Arranger, Validator);
 
-            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
-                => (services => services.AddSingleton<IBatchQuotaVerifier, TestBatchQuotaVerifierLowQuota>(), default);
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>, Action<Mock<IBatchPoolManager>>) Arranger(AzureProxyReturnValues _1)
+                => (services => services.AddSingleton<IBatchQuotaVerifier, TestBatchQuotaVerifierLowQuota>(),
+                    default,
+                    default);
 
             void Validator(TesTask tesTask, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
             {
@@ -416,10 +436,10 @@ namespace TesApi.Tests
         {
             return AddBatchTaskHandlesExceptions(TesState.SYSTEM_ERROR, Arranger, Validator);
 
-            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues proxy)
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>, Action<Mock<IBatchPoolManager>>) Arranger(AzureProxyReturnValues proxy)
             {
                 proxy.VmSizesAndPrices = Enumerable.Empty<VirtualMachineInformation>().ToList();
-                return (default, default);
+                return (default, default, default);
             }
 
             void Validator(TesTask tesTask, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
@@ -440,9 +460,11 @@ namespace TesApi.Tests
         {
             return AddBatchTaskHandlesExceptions(TesState.SYSTEM_ERROR, Arranger, Validator);
 
-            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
-                => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<System.Threading.CancellationToken>()))
-                    .Callback<Pool, bool, System.Threading.CancellationToken>((poolInfo, isPreemptible, cancellationToken)
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>, Action<Mock<IBatchPoolManager>>) Arranger(AzureProxyReturnValues _1)
+                => (default,
+                    default,
+                    azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<BatchAccountPoolData>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                        .Callback<BatchAccountPoolData, bool, CancellationToken>((poolInfo, isPreemptible, cancellationToken)
                         => throw new TesException("TestFailureReason")));
 
             void Validator(TesTask tesTask, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
@@ -463,10 +485,12 @@ namespace TesApi.Tests
         {
             return AddBatchTaskHandlesExceptions(TesState.SYSTEM_ERROR, Arranger, Validator);
 
-            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
-                => (default, azureProxy => azureProxy.Setup(b => b.AddBatchTaskAsync(It.IsAny<string>(), It.IsAny<CloudTask>(), It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
-                    .Callback<string, CloudTask, string, System.Threading.CancellationToken>((_, _, _, _)
-                        => throw typeof(BatchClientException)
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>, Action<Mock<IBatchPoolManager>>) Arranger(AzureProxyReturnValues _1)
+                => (default,
+                    default,
+                    azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<BatchAccountPoolData>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                        .Callback<BatchAccountPoolData, bool, CancellationToken>((poolInfo, isPreemptible, cancellationToken)
+                            => throw typeof(BatchClientException)
                                 .GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
                                     [typeof(string), typeof(Exception)])
                                 .Invoke([null, null]) as Exception));
@@ -489,13 +513,15 @@ namespace TesApi.Tests
         {
             return AddBatchTaskHandlesExceptions(TesState.QUEUED, Arranger, Validator);
 
-            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
-                => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchJobAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
-                    .Callback<string, string, System.Threading.CancellationToken>((_, _, _)
-                        => throw new BatchException(
-                            new Mock<RequestInformation>().Object,
-                            default,
-                            new Microsoft.Azure.Batch.Protocol.Models.BatchErrorException() { Body = new() { Code = "ActiveJobAndScheduleQuotaReached", Message = new(value: "No job for you.") } })));
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>, Action<Mock<IBatchPoolManager>>) Arranger(AzureProxyReturnValues _1)
+                => (default,
+                    default,
+                    azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<BatchAccountPoolData>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                        .Callback<BatchAccountPoolData, bool, CancellationToken>((poolInfo, isPreemptible, cancellationToken)
+                            => throw new BatchException(
+                                new Mock<RequestInformation>().Object,
+                                default,
+                                new Microsoft.Azure.Batch.Protocol.Models.BatchErrorException() { Body = new() { Code = "ActiveJobAndScheduleQuotaReached", Message = new(value: "No job for you.") } })));
 
             void Validator(TesTask task, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
             {
@@ -514,13 +540,15 @@ namespace TesApi.Tests
         {
             return AddBatchTaskHandlesExceptions(TesState.QUEUED, Arranger, Validator);
 
-            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
-                => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<System.Threading.CancellationToken>()))
-                    .Callback<Pool, bool, System.Threading.CancellationToken>((poolInfo, isPreemptible, cancellationToken)
-                        => throw new BatchException(
-                            new Mock<RequestInformation>().Object,
-                            default,
-                            new Microsoft.Azure.Batch.Protocol.Models.BatchErrorException() { Body = new() { Code = "PoolQuotaReached", Message = new(value: "No pool for you.") } })));
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>, Action<Mock<IBatchPoolManager>>) Arranger(AzureProxyReturnValues _1)
+                => (default,
+                    default,
+                    azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<BatchAccountPoolData>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                        .Callback<BatchAccountPoolData, bool, CancellationToken>((poolInfo, isPreemptible, cancellationToken)
+                            => throw new BatchException(
+                                new Mock<RequestInformation>().Object,
+                                default,
+                                new Microsoft.Azure.Batch.Protocol.Models.BatchErrorException() { Body = new() { Code = "PoolQuotaReached", Message = new(value: "No pool for you.") } })));
 
             void Validator(TesTask task, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
             {
@@ -539,10 +567,12 @@ namespace TesApi.Tests
         {
             return AddBatchTaskHandlesExceptions(TesState.QUEUED, Arranger, Validator);
 
-            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
-                => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<System.Threading.CancellationToken>()))
-                    .Callback<Pool, bool, System.Threading.CancellationToken>((poolInfo, isPreemptible, cancellationToken)
-                        => throw new Microsoft.Rest.Azure.CloudException() { Body = new() { Code = "AutoPoolCreationFailedWithQuotaReached", Message = "No autopool for you." } }));
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>, Action<Mock<IBatchPoolManager>>) Arranger(AzureProxyReturnValues _1)
+                => (default,
+                    default,
+                    azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<BatchAccountPoolData>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                        .Callback<BatchAccountPoolData, bool, CancellationToken>((poolInfo, isPreemptible, cancellationToken)
+                            => throw new Microsoft.Rest.Azure.CloudException() { Body = new() { Code = "AutoPoolCreationFailedWithQuotaReached", Message = "No autopool for you." } }));
 
             void Validator(TesTask task, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
             {
@@ -561,11 +591,11 @@ namespace TesApi.Tests
         {
             var exceptionMsg = "Successful Test";
             var batchQuotaProvider = new Mock<IBatchQuotaProvider>();
-            batchQuotaProvider.Setup(p => p.GetVmCoreQuotaAsync(It.IsAny<bool>(), It.IsAny<System.Threading.CancellationToken>())).Callback<bool, System.Threading.CancellationToken>((lowPriority, _1) => throw new InvalidOperationException(exceptionMsg));
+            batchQuotaProvider.Setup(p => p.GetVmCoreQuotaAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>())).Callback<bool, CancellationToken>((lowPriority, _1) => throw new InvalidOperationException(exceptionMsg));
             return AddBatchTaskHandlesExceptions(TesState.SYSTEM_ERROR, Arranger, Validator);
 
-            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
-                => (services => services.AddTransient(p => batchQuotaProvider.Object), default);
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>, Action<Mock<IBatchPoolManager>>) Arranger(AzureProxyReturnValues _1)
+                => (services => services.AddTransient(p => batchQuotaProvider.Object), default, default);
 
             void Validator(TesTask tesTask, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
             {
@@ -587,24 +617,26 @@ namespace TesApi.Tests
         {
             var tesTask = GetTesTask();
             var config = GetMockConfig()();
+            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
             using var serviceProvider = GetServiceProvider(
                 config,
-                GetMockAzureProxy(AzureProxyReturnValues.Defaults),
-                GetMockQuotaProvider(AzureProxyReturnValues.Defaults),
-                GetMockSkuInfoProvider(AzureProxyReturnValues.Defaults),
+                GetMockAzureProxy(azureProxyReturnValues),
+                GetMockBatchPoolManager(azureProxyReturnValues),
+                GetMockQuotaProvider(azureProxyReturnValues),
+                GetMockSkuInfoProvider(azureProxyReturnValues),
                 GetMockAllowedVms(config));
             var batchScheduler = serviceProvider.GetT();
 
-            await batchScheduler.ProcessTesTaskAsync(tesTask, System.Threading.CancellationToken.None);
+            await batchScheduler.ProcessTesTaskAsync(tesTask, CancellationToken.None);
 
-            var createBatchPoolAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.CreateBatchPoolAsync));
-            var pool = createBatchPoolAsyncInvocation?.Arguments[0] as Pool;
+            var createBatchPoolAsyncInvocation = serviceProvider.BatchPoolManager.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IBatchPoolManager.CreateBatchPoolAsync));
+            var pool = createBatchPoolAsyncInvocation?.Arguments[0] as BatchAccountPoolData;
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual("TES-hostname-edicated1-rpsd645merzfkqmdnj7pkqrase2ancnh-", pool.Name[0..^8]);
+                Assert.AreEqual("TES-hostname-edicated1-obkfufnroslrzwlitqbrmjeowu7iuhfm-", tesTask.PoolId[0..^8]);
                 Assert.AreEqual("VmSizeDedicated1", pool.VmSize);
-                Assert.IsTrue(((BatchScheduler)batchScheduler).TryGetPool(pool.Name, out _));
+                Assert.IsTrue(((BatchScheduler)batchScheduler).TryGetPool(tesTask.PoolId, out _));
             });
         }
 
@@ -618,15 +650,16 @@ namespace TesApi.Tests
             {
                 { "workflow_execution_identity", identity }
             };
+            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
 
-            (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(task, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
+            (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(task, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), GetMockBatchPoolManager(azureProxyReturnValues), azureProxyReturnValues);
 
             GuardAssertsWithTesTask(task, () =>
             {
                 Assert.AreEqual("VmSizeDedicated1", poolSpec.VmSize);
                 Assert.IsTrue(poolSpec.ScaleSettings.AutoScale.Formula.Contains("TargetDedicated"));
-                Assert.AreEqual(1, poolSpec.Identity.UserAssignedIdentities.Count);
-                Assert.AreEqual(identity, poolSpec.Identity.UserAssignedIdentities.Keys.First());
+                Assert.AreEqual(2, poolSpec.Identity.UserAssignedIdentities.Count);
+                Assert.AreEqual(identity, poolSpec.Identity.UserAssignedIdentities.Keys.Skip(1).First());
             });
         }
 
@@ -634,8 +667,9 @@ namespace TesApi.Tests
         public async Task NewTesTaskGetsScheduledSuccessfully()
         {
             var tesTask = GetTesTask();
+            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
 
-            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
+            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), GetMockBatchPoolManager(azureProxyReturnValues), azureProxyReturnValues);
 
             GuardAssertsWithTesTask(tesTask, () => Assert.AreEqual(TesState.INITIALIZING, tesTask.State));
         }
@@ -645,8 +679,9 @@ namespace TesApi.Tests
         {
             var tesTask = GetTesTask();
             tesTask.Resources.Preemptible = true;
+            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
 
-            (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
+            (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), GetMockBatchPoolManager(azureProxyReturnValues), azureProxyReturnValues);
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
@@ -661,8 +696,9 @@ namespace TesApi.Tests
         {
             var tesTask = GetTesTask();
             tesTask.Resources.Preemptible = false;
+            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
 
-            (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
+            (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), GetMockBatchPoolManager(azureProxyReturnValues), azureProxyReturnValues);
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
@@ -677,8 +713,9 @@ namespace TesApi.Tests
         {
             var tesTask = GetTesTask();
             tesTask.Resources.Preemptible = true;
+            var azureProxyReturnValues = AzureProxyReturnValues.DefaultsPerVMFamilyEnforced;
 
-            (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.DefaultsPerVMFamilyEnforced), AzureProxyReturnValues.DefaultsPerVMFamilyEnforced);
+            (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), GetMockBatchPoolManager(azureProxyReturnValues), azureProxyReturnValues);
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
@@ -693,8 +730,9 @@ namespace TesApi.Tests
         {
             var tesTask = GetTesTask();
             tesTask.Resources.Preemptible = false;
+            var azureProxyReturnValues = AzureProxyReturnValues.DefaultsPerVMFamilyEnforced;
 
-            (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.DefaultsPerVMFamilyEnforced), AzureProxyReturnValues.DefaultsPerVMFamilyEnforced);
+            (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), GetMockBatchPoolManager(azureProxyReturnValues), azureProxyReturnValues);
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
@@ -714,7 +752,7 @@ namespace TesApi.Tests
             var azureProxyReturnValues = AzureProxyReturnValues.DefaultsPerVMFamilyEnforced;
             azureProxyReturnValues.VmSizesAndPrices.First(vm => vm.VmSize.Equals("VmSize3", StringComparison.OrdinalIgnoreCase)).PricePerHour = 44;
 
-            (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), azureProxyReturnValues);
+            (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), GetMockBatchPoolManager(azureProxyReturnValues), azureProxyReturnValues);
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
@@ -731,8 +769,9 @@ namespace TesApi.Tests
 
             var config = GetMockConfig()()
                 .Append(("BatchScheduling:UsePreemptibleVmsOnly", "true"));
+            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
 
-            (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, config, GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
+            (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, config, GetMockAzureProxy(azureProxyReturnValues), GetMockBatchPoolManager(azureProxyReturnValues), azureProxyReturnValues);
 
             GuardAssertsWithTesTask(tesTask, () => Assert.IsTrue(poolSpec.ScaleSettings.AutoScale.Formula.Contains("$TargetLowPriorityNodes")));
         }
@@ -747,8 +786,9 @@ namespace TesApi.Tests
 
                 var config = GetMockConfig()()
                     .Append(("AllowedVmSizes", allowedVmSizes));
+                var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
 
-                (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, config, GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
+                (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, config, GetMockAzureProxy(azureProxyReturnValues), GetMockBatchPoolManager(azureProxyReturnValues), azureProxyReturnValues);
 
                 GuardAssertsWithTesTask(tesTask, () =>
                 {
@@ -883,13 +923,13 @@ namespace TesApi.Tests
                 azureProxy = mock;
             });
 
-            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxySetter, azureProxyReturnValues);
+            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxySetter, GetMockBatchPoolManager(azureProxyReturnValues), azureProxyReturnValues);
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
                 Assert.AreEqual(TesState.CANCELED, tesTask.State);
                 Assert.IsFalse(tesTask.IsCancelRequested);
-                azureProxy.Verify(i => i.DeleteBatchTaskAsync(tesTask.Id, It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()));
+                azureProxy.Verify(i => i.DeleteBatchTaskAsync(tesTask.Id, It.IsAny<string>(), It.IsAny<CancellationToken>()));
             });
         }
 
@@ -919,7 +959,7 @@ namespace TesApi.Tests
             azureProxyReturnValues.BatchJobAndTaskState = BatchJobAndTaskStates.TaskCompletedSuccessfully;
             azureProxyReturnValues.DownloadedBlobContent = metricsFileContent;
 
-            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), azureProxyReturnValues);
+            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), GetMockBatchPoolManager(azureProxyReturnValues), azureProxyReturnValues);
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
@@ -955,105 +995,15 @@ namespace TesApi.Tests
             azureProxyReturnValues.BatchJobAndTaskState = BatchJobAndTaskStates.TaskCompletedSuccessfully;
             azureProxyReturnValues.DownloadedBlobContent = "2";
             var azureProxy = GetMockAzureProxy(azureProxyReturnValues);
+            var batchPoolManager = GetMockBatchPoolManager(azureProxyReturnValues);
 
-            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxy, azureProxyReturnValues);
+            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxy, batchPoolManager, azureProxyReturnValues);
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
                 Assert.AreEqual(TesState.COMPLETE, tesTask.State);
                 Assert.AreEqual(2, tesTask.GetOrAddTesTaskLog().CromwellResultCode);
                 Assert.AreEqual(2, tesTask.CromwellResultCode);
-            });
-        }
-
-        [TestMethod]
-        public async Task TesInputFilePathMustStartWithCromwellExecutions()
-        {
-            var tesTask = GetTesTask();
-
-            tesTask.Inputs.Add(new()
-            {
-                Path = "xyz/path"
-            });
-
-            (var failureReason, var systemLog) = await ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(tesTask);
-
-            GuardAssertsWithTesTask(tesTask, () =>
-            {
-                Assert.AreEqual(TesState.SYSTEM_ERROR, tesTask.State);
-                Assert.AreEqual($"InvalidInputFilePath", failureReason);
-                Assert.AreEqual($"InvalidInputFilePath", systemLog[0]);
-                Assert.AreEqual($"Unsupported input path 'xyz/path' for task Id {tesTask.Id}. Must start with '/'.", systemLog[1]);
-            });
-        }
-
-        [TestMethod]
-        public async Task TesInputFileMustHaveEitherUrlOrContent()
-        {
-            var tesTask = GetTesTask();
-
-            tesTask.Inputs.Add(new()
-            {
-                Url = null,
-                Content = null,
-                Path = "/file1.txt"
-            });
-
-            (var failureReason, var systemLog) = await ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(tesTask);
-
-            GuardAssertsWithTesTask(tesTask, () =>
-            {
-                Assert.AreEqual(TesState.SYSTEM_ERROR, tesTask.State);
-                Assert.AreEqual($"InvalidInputFilePath", failureReason);
-                Assert.AreEqual($"InvalidInputFilePath", systemLog[0]);
-                Assert.AreEqual($"One of Input Url or Content must be set", systemLog[1]);
-            });
-        }
-
-        [TestMethod]
-        public async Task TesInputFileMustNotHaveBothUrlAndContent()
-        {
-            var tesTask = GetTesTask();
-
-            tesTask.Inputs.Add(new()
-            {
-                Url = "/storageaccount1/container1/file1.txt",
-                Content = "test content",
-                Path = "/file1.txt"
-            });
-
-            (var failureReason, var systemLog) = await ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(tesTask);
-
-            GuardAssertsWithTesTask(tesTask, () =>
-            {
-                Assert.AreEqual(TesState.SYSTEM_ERROR, tesTask.State);
-                Assert.AreEqual($"InvalidInputFilePath", failureReason);
-                Assert.AreEqual($"InvalidInputFilePath", systemLog[0]);
-                Assert.AreEqual($"Input Url and Content cannot be both set", systemLog[1]);
-            });
-        }
-
-        [TestMethod]
-        [Ignore("Not applicable in the new design")]
-        public async Task TesInputFileTypeMustNotBeDirectory()
-        {
-            var tesTask = GetTesTask();
-
-            tesTask.Inputs.Add(new()
-            {
-                Url = "/storageaccount1/container1/directory",
-                Type = TesFileType.DIRECTORY,
-                Path = "/directory"
-            });
-
-            (var failureReason, var systemLog) = await ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(tesTask);
-
-            GuardAssertsWithTesTask(tesTask, () =>
-            {
-                Assert.AreEqual(TesState.SYSTEM_ERROR, tesTask.State);
-                Assert.AreEqual($"InvalidInputFilePath", failureReason);
-                Assert.AreEqual($"InvalidInputFilePath", systemLog[0]);
-                Assert.AreEqual($"Directory input is not supported.", systemLog[1]);
             });
         }
 
@@ -1096,14 +1046,14 @@ namespace TesApi.Tests
 
             Uri executionDirectoryUri = default;
 
-            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxySetter, azureProxyReturnValues, serviceProviderActions: serviceProvider =>
+            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxySetter, GetMockBatchPoolManager(azureProxyReturnValues), azureProxyReturnValues, serviceProviderActions: serviceProvider =>
             {
                 var storageAccessProvider = serviceProvider.GetServiceOrCreateInstance<IStorageAccessProvider>();
 
                 var commandScriptDir = new UriBuilder(commandScriptUri) { Path = Path.GetDirectoryName(commandScriptUri.AbsolutePath).Replace('\\', '/') }.Uri;
                 executionDirectoryUri = UrlMutableSASEqualityComparer.TrimUri(storageAccessProvider.MapLocalPathToSasUrlAsync(commandScriptDir.IsFile ? commandScriptDir.AbsolutePath : commandScriptDir.AbsoluteUri, CancellationToken.None, getContainerSas: true).Result);
 
-                serviceProvider.AzureProxy.Setup(p => p.ListBlobsAsync(It.Is(executionDirectoryUri, new UrlMutableSASEqualityComparer()), It.IsAny<CancellationToken>())).Returns(Task.FromResult<IEnumerable<CloudBlob>>(executionDirectoryBlobs));
+                serviceProvider.AzureProxy.Setup(p => p.ListBlobsAsync(It.Is(executionDirectoryUri, new UrlMutableSASEqualityComparer()), It.IsAny<CancellationToken>())).Returns(Task.FromResult<IEnumerable<BlobItem>>(executionDirectoryBlobs));
 
                 var uri = new UriBuilder(executionDirectoryUri);
                 uri.Path = uri.Path.TrimEnd('/') + $"/{fileName}";
@@ -1126,8 +1076,11 @@ namespace TesApi.Tests
                 Assert.AreEqual(2, filesToDownload.Length);
             });
 
-            static CloudBlob CloudBlobFromTesInput(TesInput input)
-                => new(UriFromTesInput(input));
+            static BlobItem CloudBlobFromTesInput(TesInput input)
+            {
+                BlobUriBuilder builder = new(UriFromTesInput(input));
+                return BlobsModelFactory.BlobItem(name: builder.BlobName);
+            }
 
             static Uri UriFromTesInput(TesInput input)
             {
@@ -1185,15 +1138,17 @@ namespace TesApi.Tests
                 .Append(("BatchNodes:SubnetId", "subnet1"));
 
             var tesTask = GetTesTask();
-            var azureProxy = GetMockAzureProxy(AzureProxyReturnValues.Defaults);
+            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
+            var azureProxy = GetMockAzureProxy(azureProxyReturnValues);
+            var batchPoolManager = GetMockBatchPoolManager(azureProxyReturnValues);
 
-            (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, config, azureProxy, AzureProxyReturnValues.Defaults);
+            (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, config, azureProxy, batchPoolManager, azureProxyReturnValues);
 
             var poolNetworkConfiguration = poolSpec.NetworkConfiguration;
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual(Microsoft.Azure.Management.Batch.Models.IPAddressProvisioningType.BatchManaged, poolNetworkConfiguration?.PublicIPAddressConfiguration?.Provision);
+                Assert.AreEqual(BatchIPAddressProvisioningType.BatchManaged, poolNetworkConfiguration?.PublicIPAddressConfiguration?.Provision);
                 Assert.AreEqual("subnet1", poolNetworkConfiguration?.SubnetId);
             });
         }
@@ -1206,15 +1161,17 @@ namespace TesApi.Tests
                 .Append(("BatchNodes:DisablePublicIpAddress", "true"));
 
             var tesTask = GetTesTask();
-            var azureProxy = GetMockAzureProxy(AzureProxyReturnValues.Defaults);
+            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
+            var azureProxy = GetMockAzureProxy(azureProxyReturnValues);
+            var batchPoolManager = GetMockBatchPoolManager(azureProxyReturnValues);
 
-            (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, config, azureProxy, AzureProxyReturnValues.Defaults);
+            (_, _, var poolSpec) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, config, azureProxy, batchPoolManager, azureProxyReturnValues);
 
             var poolNetworkConfiguration = poolSpec.NetworkConfiguration;
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual(Microsoft.Azure.Management.Batch.Models.IPAddressProvisioningType.NoPublicIPAddresses, poolNetworkConfiguration?.PublicIPAddressConfiguration?.Provision);
+                Assert.AreEqual(BatchIPAddressProvisioningType.NoPublicIPAddresses, poolNetworkConfiguration?.PublicIPAddressConfiguration?.Provision);
                 Assert.AreEqual("subnet1", poolNetworkConfiguration?.SubnetId);
             });
         }
@@ -1224,16 +1181,17 @@ namespace TesApi.Tests
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
             azureProxyReturnValues.BatchJobAndTaskState = azureBatchJobAndTaskState ?? azureProxyReturnValues.BatchJobAndTaskState;
 
-            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), azureProxyReturnValues);
+            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), GetMockBatchPoolManager(azureProxyReturnValues), azureProxyReturnValues);
 
             return (tesTask.Logs?.LastOrDefault()?.FailureReason, tesTask.Logs?.LastOrDefault()?.SystemLogs?.ToArray());
         }
 
-        private static async Task<(string JobId, CloudTask CloudTask, Pool batchModelsPool)> ProcessTesTaskAndGetBatchJobArgumentsAsync(TesTask tesTask, IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, AzureProxyReturnValues azureProxyReturnValues, Action<IServiceCollection> additionalActions = default, Action<TestServices.TestServiceProvider<IBatchScheduler>> serviceProviderActions = default)
+        private static async Task<(string JobId, CloudTask CloudTask, BatchAccountPoolData batchModelsPool)> ProcessTesTaskAndGetBatchJobArgumentsAsync(TesTask tesTask, IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, Action<Mock<IBatchPoolManager>> batchPoolManager, AzureProxyReturnValues azureProxyReturnValues, Action<IServiceCollection> additionalActions = default, Action<TestServices.TestServiceProvider<IBatchScheduler>> serviceProviderActions = default)
         {
             using var serviceProvider = GetServiceProvider(
                 configuration,
                 azureProxy,
+                batchPoolManager,
                 GetMockQuotaProvider(azureProxyReturnValues),
                 GetMockSkuInfoProvider(azureProxyReturnValues),
                 GetMockAllowedVms(configuration),
@@ -1241,14 +1199,14 @@ namespace TesApi.Tests
             var batchScheduler = serviceProvider.GetT();
             serviceProviderActions?.Invoke(serviceProvider);
 
-            await batchScheduler.ProcessTesTaskAsync(tesTask, System.Threading.CancellationToken.None);
+            await batchScheduler.ProcessTesTaskAsync(tesTask, CancellationToken.None);
 
-            var createBatchPoolAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.CreateBatchPoolAsync));
+            var createBatchPoolAsyncInvocation = serviceProvider.BatchPoolManager.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IBatchPoolManager.CreateBatchPoolAsync));
             var addBatchTaskAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.AddBatchTaskAsync));
 
             var jobId = addBatchTaskAsyncInvocation?.Arguments[2] as string;
             var cloudTask = addBatchTaskAsyncInvocation?.Arguments[1] as CloudTask;
-            var batchPoolsModel = createBatchPoolAsyncInvocation?.Arguments[0] as Pool;
+            var batchPoolsModel = createBatchPoolAsyncInvocation?.Arguments[0] as BatchAccountPoolData;
 
             return (jobId, cloudTask, batchPoolsModel);
         }
@@ -1262,14 +1220,14 @@ namespace TesApi.Tests
                 {
                     allowedVms = [.. allowedVmsConfig.Split(",")];
                 }
-                proxy.Setup(p => p.GetAllowedVmSizes(It.IsAny<System.Threading.CancellationToken>()))
+                proxy.Setup(p => p.GetAllowedVmSizes(It.IsAny<CancellationToken>()))
                     .ReturnsAsync(allowedVms);
             });
 
 
         private static Action<Mock<IBatchSkuInformationProvider>> GetMockSkuInfoProvider(AzureProxyReturnValues azureProxyReturnValues)
             => new(proxy =>
-                proxy.Setup(p => p.GetVmSizesAndPricesAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
+                proxy.Setup(p => p.GetVmSizesAndPricesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                     .ReturnsAsync(azureProxyReturnValues.VmSizesAndPrices));
 
         private static Action<Mock<IBatchQuotaProvider>> GetMockQuotaProvider(AzureProxyReturnValues azureProxyReturnValues)
@@ -1279,14 +1237,14 @@ namespace TesApi.Tests
                 var vmFamilyQuota = batchQuotas.DedicatedCoreQuotaPerVMFamily?.FirstOrDefault(v => string.Equals(v.Name, "VmFamily1", StringComparison.InvariantCultureIgnoreCase))?.CoreQuota ?? 0;
 
                 quotaProvider.Setup(p =>
-                        p.GetQuotaForRequirementAsync(It.IsAny<string>(), It.Is<bool>(p => p == false), It.IsAny<int?>(), It.IsAny<System.Threading.CancellationToken>()))
+                        p.GetQuotaForRequirementAsync(It.IsAny<string>(), It.Is<bool>(p => p == false), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
                     .ReturnsAsync(() => new BatchVmFamilyQuotas(batchQuotas.DedicatedCoreQuota,
                         vmFamilyQuota,
                         batchQuotas.PoolQuota,
                         batchQuotas.ActiveJobAndJobScheduleQuota,
                         batchQuotas.DedicatedCoreQuotaPerVMFamilyEnforced, "VmSize1"));
                 quotaProvider.Setup(p =>
-                        p.GetQuotaForRequirementAsync(It.IsAny<string>(), It.Is<bool>(p => p == true), It.IsAny<int?>(), It.IsAny<System.Threading.CancellationToken>()))
+                        p.GetQuotaForRequirementAsync(It.IsAny<string>(), It.Is<bool>(p => p == true), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
                     .ReturnsAsync(() => new BatchVmFamilyQuotas(batchQuotas.LowPriorityCoreQuota,
                         vmFamilyQuota,
                         batchQuotas.PoolQuota,
@@ -1294,27 +1252,27 @@ namespace TesApi.Tests
                         batchQuotas.DedicatedCoreQuotaPerVMFamilyEnforced, "VmSize1"));
 
                 quotaProvider.Setup(p =>
-                        p.GetVmCoreQuotaAsync(It.Is<bool>(l => l == true), It.IsAny<System.Threading.CancellationToken>()))
+                        p.GetVmCoreQuotaAsync(It.Is<bool>(l => l == true), It.IsAny<CancellationToken>()))
                     .ReturnsAsync(new BatchVmCoreQuota(batchQuotas.LowPriorityCoreQuota,
                         true,
                         batchQuotas.DedicatedCoreQuotaPerVMFamilyEnforced,
-                        batchQuotas.DedicatedCoreQuotaPerVMFamily?.Select(v => new BatchVmCoresPerFamily(v.Name, v.CoreQuota)).ToList(),
+                        batchQuotas.DedicatedCoreQuotaPerVMFamily?.Select(v => new BatchVmCoresPerFamily(v.Name, v.CoreQuota ?? 0)).ToList(),
                         new(batchQuotas.ActiveJobAndJobScheduleQuota, batchQuotas.PoolQuota, batchQuotas.DedicatedCoreQuota, batchQuotas.LowPriorityCoreQuota)));
                 quotaProvider.Setup(p =>
-                        p.GetVmCoreQuotaAsync(It.Is<bool>(l => l == false), It.IsAny<System.Threading.CancellationToken>()))
+                        p.GetVmCoreQuotaAsync(It.Is<bool>(l => l == false), It.IsAny<CancellationToken>()))
                     .ReturnsAsync(new BatchVmCoreQuota(batchQuotas.DedicatedCoreQuota,
                         false,
                         batchQuotas.DedicatedCoreQuotaPerVMFamilyEnforced,
-                        batchQuotas.DedicatedCoreQuotaPerVMFamily?.Select(v => new BatchVmCoresPerFamily(v.Name, v.CoreQuota)).ToList(),
+                        batchQuotas.DedicatedCoreQuotaPerVMFamily?.Select(v => new BatchVmCoresPerFamily(v.Name, v.CoreQuota ?? 0)).ToList(),
                         new(batchQuotas.ActiveJobAndJobScheduleQuota, batchQuotas.PoolQuota, batchQuotas.DedicatedCoreQuota, batchQuotas.LowPriorityCoreQuota)));
             });
 
-        private static TestServices.TestServiceProvider<IBatchScheduler> GetServiceProvider(IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, Action<Mock<IBatchQuotaProvider>> quotaProvider, Action<Mock<IBatchSkuInformationProvider>> skuInfoProvider, Action<Mock<IAllowedVmSizesService>> allowedVmSizesServiceSetup, Action<IServiceCollection> additionalActions = default)
-            => new(wrapAzureProxy: true, configuration: configuration, azureProxy: azureProxy, batchQuotaProvider: quotaProvider, batchSkuInformationProvider: skuInfoProvider, accountResourceInformation: GetNewBatchResourceInfo(), allowedVmSizesServiceSetup: allowedVmSizesServiceSetup, additionalActions: additionalActions);
+        private static TestServices.TestServiceProvider<IBatchScheduler> GetServiceProvider(IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, Action<Mock<IBatchPoolManager>> batchPoolManager, Action<Mock<IBatchQuotaProvider>> quotaProvider, Action<Mock<IBatchSkuInformationProvider>> skuInfoProvider, Action<Mock<IAllowedVmSizesService>> allowedVmSizesServiceSetup, Action<IServiceCollection> additionalActions = default)
+            => new(wrapAzureProxy: true, configuration: configuration, azureProxy: azureProxy, batchPoolManager: batchPoolManager, batchQuotaProvider: quotaProvider, batchSkuInformationProvider: skuInfoProvider, accountResourceInformation: GetNewBatchResourceInfo(), allowedVmSizesServiceSetup: allowedVmSizesServiceSetup, additionalActions: additionalActions);
 
         private static async Task<TesState> GetNewTesTaskStateAsync(TesTask tesTask, AzureProxyReturnValues azureProxyReturnValues)
         {
-            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), azureProxyReturnValues);
+            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), GetMockBatchPoolManager(azureProxyReturnValues), azureProxyReturnValues);
 
             return tesTask.State;
         }
@@ -1345,25 +1303,38 @@ namespace TesApi.Tests
             return task;
         }
 
+        private static Action<Mock<IBatchPoolManager>> GetMockBatchPoolManager(AzureProxyReturnValues azureProxyReturnValues)
+            => azureProxy =>
+            {
+                azureProxy.Setup(a => a.CreateBatchPoolAsync(It.IsAny<BatchAccountPoolData>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                    .Returns((BatchAccountPoolData p, bool _1, CancellationToken _2) => Task.FromResult(azureProxyReturnValues.CreateBatchPoolImpl(p)));
+                azureProxy.Setup(a => a.DeleteBatchPoolAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                    .Callback<string, CancellationToken>((poolId, cancellationToken) => azureProxyReturnValues.DeleteBatchPoolImpl(poolId, cancellationToken))
+                    .Returns(Task.CompletedTask);
+            };
+
         private static Action<Mock<IAzureProxy>> GetMockAzureProxy(AzureProxyReturnValues azureProxyReturnValues)
             => azureProxy =>
             {
+                azureProxy.Setup(a => a.GetManagedIdentityInBatchAccountResourceGroup(It.IsAny<string>()))
+                    .Returns<string>(name => $"/subscriptions/defaultsubscription/resourceGroups/defaultresourcegroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{name}");
+
                 azureProxy.Setup(a => a.BlobExistsAsync(It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
                     .ReturnsAsync(true);
 
                 azureProxy.Setup(a => a.GetActivePoolsAsync(It.IsAny<string>()))
                     .Returns(AsyncEnumerable.Empty<CloudPool>());
 
-                azureProxy.Setup(a => a.GetBatchJobAndTaskStateAsync(It.IsAny<TesTask>(), It.IsAny<System.Threading.CancellationToken>()))
+                azureProxy.Setup(a => a.GetBatchJobAndTaskStateAsync(It.IsAny<TesTask>(), It.IsAny<CancellationToken>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.BatchJobAndTaskState));
 
-                azureProxy.Setup(a => a.GetStorageAccountInfoAsync("defaultstorageaccount", It.IsAny<System.Threading.CancellationToken>()))
+                azureProxy.Setup(a => a.GetStorageAccountInfoAsync("defaultstorageaccount", It.IsAny<CancellationToken>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.StorageAccountInfos["defaultstorageaccount"]));
 
-                azureProxy.Setup(a => a.GetStorageAccountInfoAsync("storageaccount1", It.IsAny<System.Threading.CancellationToken>()))
+                azureProxy.Setup(a => a.GetStorageAccountInfoAsync("storageaccount1", It.IsAny<CancellationToken>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.StorageAccountInfos["storageaccount1"]));
 
-                azureProxy.Setup(a => a.GetStorageAccountKeyAsync(It.IsAny<StorageAccountInfo>(), It.IsAny<System.Threading.CancellationToken>()))
+                azureProxy.Setup(a => a.GetStorageAccountKeyAsync(It.IsAny<StorageAccountInfo>(), It.IsAny<CancellationToken>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.StorageAccountKey));
 
                 azureProxy.Setup(a => a.GetBatchActiveNodeCountByVmSize())
@@ -1375,16 +1346,13 @@ namespace TesApi.Tests
                 azureProxy.Setup(a => a.GetBatchActivePoolCount())
                     .Returns(azureProxyReturnValues.ActivePoolCount);
 
-                azureProxy.Setup(a => a.GetBatchPoolAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>(), It.IsAny<DetailLevel>()))
-                    .Returns((string id, System.Threading.CancellationToken cancellationToken, DetailLevel detailLevel) => Task.FromResult(azureProxyReturnValues.GetBatchPoolImpl(id)));
+                azureProxy.Setup(a => a.GetBatchPoolAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<DetailLevel>()))
+                    .Returns((string id, CancellationToken cancellationToken, DetailLevel detailLevel) => Task.FromResult(azureProxyReturnValues.GetBatchPoolImpl(id)));
 
-                azureProxy.Setup(a => a.DownloadBlobAsync(It.IsAny<Uri>(), It.IsAny<System.Threading.CancellationToken>()))
+                azureProxy.Setup(a => a.DownloadBlobAsync(It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.DownloadedBlobContent));
 
-                azureProxy.Setup(a => a.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<System.Threading.CancellationToken>()))
-                    .Returns((Pool p, bool _1, System.Threading.CancellationToken _2) => Task.FromResult(azureProxyReturnValues.CreateBatchPoolImpl(p)));
-
-                azureProxy.Setup(a => a.GetFullAllocationStateAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
+                azureProxy.Setup(a => a.GetFullAllocationStateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.AzureProxyGetFullAllocationState?.Invoke() ?? new(null, null, null, null, null, null, null)));
 
                 azureProxy.Setup(a => a.ListComputeNodesAsync(It.IsAny<string>(), It.IsAny<DetailLevel>()))
@@ -1392,33 +1360,27 @@ namespace TesApi.Tests
                         => AsyncEnumerable.Empty<ComputeNode>()
                             .Append(BatchPoolTests.GenerateNode(poolId, "ComputeNodeDedicated1", true, true))));
 
-                azureProxy.Setup(a => a.DeleteBatchPoolAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
-                    .Callback<string, System.Threading.CancellationToken>((poolId, cancellationToken) => azureProxyReturnValues.AzureProxyDeleteBatchPoolImpl(poolId, cancellationToken))
-                    .Returns(Task.CompletedTask);
-
                 azureProxy.Setup(a => a.ListTasksAsync(It.IsAny<string>(), It.IsAny<DetailLevel>()))
                     .Returns(azureProxyReturnValues.AzureProxyListTasks);
             };
 
         private static Func<IEnumerable<(string Key, string Value)>> GetMockConfig()
             => new(() =>
-            {
-                var config = Enumerable.Empty<(string Key, string Value)>()
-                .Append(("Storage:DefaultAccountName", "defaultstorageaccount"))
-                .Append(("BatchScheduling:Prefix", "hostname"))
-                .Append(("BatchImageGen1:Offer", "ubuntu-server-container"))
-                .Append(("BatchImageGen1:Publisher", "microsoft-azure-batch"))
-                .Append(("BatchImageGen1:Sku", "20-04-lts"))
-                .Append(("BatchImageGen1:Version", "latest"))
-                .Append(("BatchImageGen1:NodeAgentSkuId", "batch.node.ubuntu 20.04"))
-                .Append(("BatchImageGen2:Offer", "ubuntu-hpc"))
-                .Append(("BatchImageGen2:Publisher", "microsoft-dsvm"))
-                .Append(("BatchImageGen2:Sku", "2004"))
-                .Append(("BatchImageGen2:Version", "latest"))
-                .Append(("BatchImageGen2:NodeAgentSkuId", "batch.node.ubuntu 20.04"));
-
-                return config;
-            });
+            [
+                ("Storage:DefaultAccountName", "defaultstorageaccount"),
+                ("BatchNodes:GlobalManagedIdentity", "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/SomeResourceGroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/GlobalManagedIdentity"),
+                ("BatchScheduling:Prefix", "hostname"),
+                ("BatchImageGen1:Offer", "ubuntu-server-container"),
+                ("BatchImageGen1:Publisher", "microsoft-azure-batch"),
+                ("BatchImageGen1:Sku", "20-04-lts"),
+                ("BatchImageGen1:Version", "latest"),
+                ("BatchImageGen1:NodeAgentSkuId", "batch.node.ubuntu 20.04"),
+                ("BatchImageGen2:Offer", "ubuntu-hpc"),
+                ("BatchImageGen2:Publisher", "microsoft-dsvm"),
+                ("BatchImageGen2:Sku", "2004"),
+                ("BatchImageGen2:Version", "latest"),
+                ("BatchImageGen2:NodeAgentSkuId", "batch.node.ubuntu 20.04"),
+            ]);
 
         private static IEnumerable<FileToDownload> GetFilesToDownload(Mock<IAzureProxy> azureProxy)
         {
@@ -1444,13 +1406,14 @@ namespace TesApi.Tests
                 accountResourceInformation: new("defaultbatchaccount", "defaultresourcegroup", "defaultsubscription", "defaultregion", "defaultendpoint"),
                 configuration: config,
                 azureProxy: GetMockAzureProxy(azureProxyReturn),
+                batchPoolManager: GetMockBatchPoolManager(azureProxyReturn),
                 batchQuotaProvider: GetMockQuotaProvider(azureProxyReturn),
                 batchSkuInformationProvider: GetMockSkuInfoProvider(azureProxyReturn),
                 allowedVmSizesServiceSetup: GetMockAllowedVms(config));
         }
 
         private static async Task<BatchPool> AddPool(BatchScheduler batchScheduler)
-            => (BatchPool)await batchScheduler.GetOrAddPoolAsync("key1", false, (id, cancellationToken) => ValueTask.FromResult<Pool>(new(name: id, displayName: "display1", vmSize: "vmSize1")), System.Threading.CancellationToken.None);
+            => (BatchPool)await batchScheduler.GetOrAddPoolAsync("key1", false, (id, _1) => ValueTask.FromResult(BatchPoolTests.CreatePoolData(id, "display1", "vmSize1")), CancellationToken.None);
 
         internal static void GuardAssertsWithTesTask(TesTask tesTask, Action assertBlock)
         {
@@ -1512,8 +1475,8 @@ namespace TesApi.Tests
         private class AzureProxyReturnValues
         {
             internal Func<FullBatchPoolAllocationState> AzureProxyGetFullAllocationState { get; set; }
-            internal Action<string, System.Threading.CancellationToken> AzureProxyDeleteBatchPoolIfExists { get; set; }
-            internal Action<string, System.Threading.CancellationToken> AzureProxyDeleteBatchPool { get; set; }
+            internal Action<string, CancellationToken> AzureProxyDeleteBatchPoolIfExists { get; set; }
+            internal Action<string, CancellationToken> AzureProxyDeleteBatchPool { get; set; }
             internal Func<string, ODATADetailLevel, IAsyncEnumerable<CloudTask>> AzureProxyListTasks { get; set; } = (jobId, detail) => AsyncEnumerable.Empty<CloudTask>();
             public Dictionary<string, StorageAccountInfo> StorageAccountInfos { get; set; }
             public List<VirtualMachineInformation> VmSizesAndPrices { get; set; }
@@ -1527,7 +1490,7 @@ namespace TesApi.Tests
 
             public static AzureProxyReturnValues Defaults => new()
             {
-                AzureProxyGetFullAllocationState = () => new(Microsoft.Azure.Batch.Common.AllocationState.Steady, DateTime.MinValue.ToUniversalTime(), true, 0, 0, 0, 0),
+                AzureProxyGetFullAllocationState = () => new(AllocationState.Steady, DateTime.MinValue.ToUniversalTime(), true, 0, 0, 0, 0),
                 AzureProxyDeleteBatchPoolIfExists = (poolId, cancellationToken) => { },
                 AzureProxyDeleteBatchPool = (poolId, cancellationToken) => { },
                 StorageAccountInfos = new() {
@@ -1559,7 +1522,7 @@ namespace TesApi.Tests
                 proxy.BatchQuotas = new()
                 {
                     DedicatedCoreQuotaPerVMFamilyEnforced = true,
-                    DedicatedCoreQuotaPerVMFamily = [new("VmFamily1", proxy.BatchQuotas.DedicatedCoreQuota), new("VmFamily2", 0), new("VmFamily3", 4)],
+                    DedicatedCoreQuotaPerVMFamily = [CreateBatchVmFamilyCoreQuota("VmFamily1", proxy.BatchQuotas.DedicatedCoreQuota), CreateBatchVmFamilyCoreQuota("VmFamily2", 0), CreateBatchVmFamilyCoreQuota("VmFamily3", 4)],
                     DedicatedCoreQuota = proxy.BatchQuotas.DedicatedCoreQuota,
                     ActiveJobAndJobScheduleQuota = proxy.BatchQuotas.ActiveJobAndJobScheduleQuota,
                     LowPriorityCoreQuota = proxy.BatchQuotas.LowPriorityCoreQuota,
@@ -1568,22 +1531,24 @@ namespace TesApi.Tests
                 return proxy;
             }
 
-            private readonly Dictionary<string, IList<Microsoft.Azure.Batch.MetadataItem>> poolMetadata = [];
+            private readonly Dictionary<string, IList<MetadataItem>> poolMetadata = [];
 
-            internal void AzureProxyDeleteBatchPoolImpl(string poolId, System.Threading.CancellationToken cancellationToken)
+            internal void DeleteBatchPoolImpl(string poolId, CancellationToken cancellationToken)
             {
                 _ = poolMetadata.Remove(poolId);
                 AzureProxyDeleteBatchPool(poolId, cancellationToken);
             }
 
-            internal string CreateBatchPoolImpl(Pool pool)
+            internal string CreateBatchPoolImpl(BatchAccountPoolData pool)
             {
-                var poolId = pool.Name;
+                var poolNameItem = pool.Metadata.Single(i => string.IsNullOrEmpty(i.Name));
+                pool.Metadata.Remove(poolNameItem);
+                var poolId = poolNameItem.Value;
 
                 poolMetadata.Add(poolId, pool.Metadata?.Select(Convert).ToList());
                 return poolId;
 
-                static Microsoft.Azure.Batch.MetadataItem Convert(Microsoft.Azure.Management.Batch.Models.MetadataItem item)
+                static MetadataItem Convert(BatchAccountPoolMetadataItem item)
                     => new(item.Name, item.Value);
             }
 
@@ -1598,6 +1563,11 @@ namespace TesApi.Tests
             }
         }
 
+        private static BatchVmFamilyCoreQuota CreateBatchVmFamilyCoreQuota(string name, int? quota)
+        {
+            return ArmBatchModelFactory.BatchVmFamilyCoreQuota(name, quota);
+        }
+
         private class TestBatchQuotaVerifierQuotaMaxedOut(IBatchQuotaProvider batchQuotaProvider) : TestBatchQuotaVerifierBase(batchQuotaProvider)
         {
             public override Task CheckBatchAccountQuotasAsync(VirtualMachineInformation _1, bool _2, System.Threading.CancellationToken cancellationToken)
@@ -1606,7 +1576,7 @@ namespace TesApi.Tests
 
         private class TestBatchQuotaVerifierLowQuota(IBatchQuotaProvider batchQuotaProvider) : TestBatchQuotaVerifierBase(batchQuotaProvider)
         {
-            public override Task CheckBatchAccountQuotasAsync(VirtualMachineInformation _1, bool _2, System.Threading.CancellationToken cancellationToken)
+            public override Task CheckBatchAccountQuotasAsync(VirtualMachineInformation _1, bool _2, CancellationToken cancellationToken)
                 => throw new AzureBatchLowQuotaException("Test AzureBatchLowQuotaException");
         }
 
@@ -1614,7 +1584,7 @@ namespace TesApi.Tests
         {
             private readonly IBatchQuotaProvider batchQuotaProvider = batchQuotaProvider;
 
-            public abstract Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck, System.Threading.CancellationToken cancellationToken);
+            public abstract Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck, CancellationToken cancellationToken);
 
             public IBatchQuotaProvider GetBatchQuotaProvider()
                 => batchQuotaProvider;

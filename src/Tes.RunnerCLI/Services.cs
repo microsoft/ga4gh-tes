@@ -54,13 +54,7 @@ namespace Tes.RunnerCLI
 
             static CommonUtilities.AzureEnvironmentConfig GetDefaultEnvironmentConfig()
             {
-                var env = Microsoft.Azure.Management.ResourceManager.Fluent.AzureEnvironment.AzureGlobalCloud;
-                return new()
-                {
-                    AzureAuthorityHostUrl = env.AuthenticationEndpoint,
-                    StorageUrlSuffix = env.StorageEndpointSuffix,
-                    TokenScope = Azure.ResourceManager.ArmEnvironment.AzurePublicCloud.DefaultScope
-                };
+                return CommonUtilities.AzureEnvironmentConfig.FromArmEnvironmentEndpoints(CommonUtilities.AzureCloud.AzureCloudConfig.FromKnownCloudNameAsync().GetAwaiter().GetResult());
             }
         }
 

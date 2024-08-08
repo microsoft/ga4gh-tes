@@ -5,6 +5,7 @@ using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
 using CommonUtilities;
+using CommonUtilities.Options;
 using Moq;
 using Tes.Runner.Models;
 using Tes.Runner.Storage;
@@ -26,7 +27,7 @@ namespace Tes.Runner.Test.Storage
             mockBlobServiceClient = new Mock<BlobServiceClient>();
             RuntimeOptions options = new()
             {
-                AzureEnvironmentConfig = ExpensiveObjectTestUtility.AzureCloudConfig.AzureEnvironmentConfig
+                AzureEnvironmentConfig = AzureEnvironmentConfig.FromArmEnvironmentEndpoints(CommonUtilities.AzureCloud.AzureCloudConfig.FromKnownCloudNameAsync().Result)
             };
 
             armUrlTransformationStrategy = new(_ => mockBlobServiceClient.Object, options);

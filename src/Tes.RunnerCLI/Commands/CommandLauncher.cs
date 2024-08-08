@@ -63,10 +63,10 @@ namespace Tes.RunnerCLI.Commands
         {
             var exitCode = ex switch
             {
+                CommandExecutionException e => e.ExitCode,
                 IdentityUnavailableException => (int)ProcessExitCode.IdentityUnavailable,
                 _ => (int)ProcessExitCode.UncategorizedError
             };
-
 
             throw new CommandExecutionException(exitCode, $"Failed to launch command: {command}", ex);
         }

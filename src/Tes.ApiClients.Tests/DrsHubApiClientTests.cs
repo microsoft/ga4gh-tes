@@ -29,10 +29,7 @@ namespace Tes.ApiClients.Tests
             cachingRetryPolicyBuilder = new CachingRetryPolicyBuilder(appCache, Options.Create(retryPolicyOptions));
 
             tokenCredentialsMock = new Mock<TokenCredential>();
-            azureEnvironmentConfig = new CommonUtilities.AzureEnvironmentConfig()
-            {
-                TokenScope = "https://management.azure.com/.default"
-            };
+            azureEnvironmentConfig = new CommonUtilities.AzureEnvironmentConfig(default, "https://management.azure.com/.default", default);
             apiClient = new DrsHubApiClient(DrsApiHost, tokenCredentialsMock.Object, cachingRetryPolicyBuilder, azureEnvironmentConfig, NullLogger<DrsHubApiClient>.Instance);
         }
 
@@ -47,8 +44,18 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetDrsResolveRequestContent_ValidDrsUri_ReturnsValidRequestContentWithExpectedValues()
         {
-            var drsUriString = "drs://drs.foo";
-            var drsUri = new Uri(drsUriString);
+            var drsUriString = "drs://drs.foo/bar";
+            Uri drsUri = new(drsUriString);
+            var content = await apiClient.GetDrsResolveRequestContent(drsUri).ReadAsStringAsync();
+
+            Assert.IsNotNull(ExpectedDrsResolveRequestJson, content);
+        }
+
+        [TestMethod]
+        public async Task GetDrsResolveRequestContent_ValidCompactDrsUri_ReturnsValidRequestContentWithExpectedValues()
+        {
+            var drsUriString = "drs://drs_things:foo";
+            Uri drsUri = new(drsUriString);
             var content = await apiClient.GetDrsResolveRequestContent(drsUri).ReadAsStringAsync();
 
             Assert.IsNotNull(ExpectedDrsResolveRequestJson, content);
@@ -57,8 +64,10 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetDrsResolveApiResponse_ResponseWithAccessUrl_CanDeserializeJSon()
         {
-            var httpResponse = new HttpResponseMessage(System.Net.HttpStatusCode.OK);
-            httpResponse.Content = new StringContent(ExpectedRsResolveResponseJson);
+            HttpResponseMessage httpResponse = new(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(ExpectedRsResolveResponseJson)
+            };
 
             var drsResolveResponse = await DrsHubApiClient.GetDrsResolveApiResponseAsync(httpResponse, CancellationToken.None);
 
@@ -75,9 +84,9 @@ namespace Tes.ApiClients.Tests
         }";
 
         private const string ExpectedDrsResolveRequestJson = @"{
-                        ""url"": ""drs://drs.foo"",
-                        ""cloudPlatform"": ""azure"",
-                        ""fields"":[""accessUrl""]
+            ""url"": ""drs://drs.foo/bar"",
+            ""cloudPlatform"": ""azure"",
+            ""fields"":[""accessUrl""]
         }";
     }
 }

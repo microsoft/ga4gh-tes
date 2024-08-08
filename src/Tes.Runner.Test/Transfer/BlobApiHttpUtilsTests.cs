@@ -145,15 +145,14 @@ namespace Tes.Runner.Test.Transfer
         [TestMethod]
         public void CreatePutBlockRequestAsyncTest_ContentMd5IsSet_IncludesContentMd5HeaderBase64Encoded()
         {
-            var contentMd5 = "1234567890";
-            var base64StringContentMd5 = Convert.ToBase64String(Encoding.UTF8.GetBytes(contentMd5));
+            var contentMd5 = "iXMWkpF2Rk68mtCF8x5yhA==";
             var request = BlobApiHttpUtils.CreateBlobBlockListRequest(
                 BlobSizeUtils.MiB * 10, new Uri(blobUrlWithSasToken),
                 BlobSizeUtils.DefaultBlockSizeBytes, BlobPipelineOptions.DefaultApiVersion, default, contentMd5);
 
             Assert.IsTrue(request.Headers.Contains("x-ms-blob-content-md5"));
             Assert.IsTrue(request.Headers.TryGetValues("x-ms-blob-content-md5", out var values));
-            Assert.IsTrue(values.Contains(base64StringContentMd5));
+            Assert.IsTrue(values.Contains(contentMd5));
         }
 
         [TestMethod]

@@ -113,7 +113,8 @@ namespace Tes.Runner.Transfer
                 NumberOfReaders: readers,
                 FileHandlerPoolCapacity: options.FileHandlerPoolCapacity,
                 ApiVersion: options.ApiVersion,
-                MemoryBufferCapacity: memoryBufferCapacity);
+                MemoryBufferCapacity: memoryBufferCapacity,
+                CalculateFileContentMd5: options.CalculateFileContentMd5);
         }
 
         private int GetOptimizedWorkers()

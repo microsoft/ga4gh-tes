@@ -28,6 +28,7 @@ using Tes.Repository;
 using Tes.TaskSubmitters;
 using TesApi.Attributes;
 using TesApi.Web;
+using TesApi.Web.Storage;
 
 namespace TesApi.Controllers
 {
@@ -38,13 +39,15 @@ namespace TesApi.Controllers
     /// Contruct a <see cref="TaskServiceApiController"/>
     /// </remarks>
     /// <param name="repository">The main <see cref="TesTask"/> database repository</param>
+    /// <param name="storageAccessProvider">The storage access provider</param>
     /// <param name="logger">The logger instance</param>
     /// <param name="serviceInfo">The GA4GH TES service information</param>
-    public class TaskServiceApiController(IRepository<TesTask> repository, ILogger<TaskServiceApiController> logger, TesServiceInfo serviceInfo)
+    public class TaskServiceApiController(IRepository<TesTask> repository, IStorageAccessProvider storageAccessProvider, ILogger<TaskServiceApiController> logger, TesServiceInfo serviceInfo)
         : ControllerBase
     {
         //private const string rootExecutionPath = "/cromwell-executions";
         private readonly IRepository<TesTask> repository = repository;
+        private readonly IStorageAccessProvider storageAccessProvider = storageAccessProvider;
         private readonly ILogger<TaskServiceApiController> logger = logger;
         private readonly TesServiceInfo serviceInfo = serviceInfo;
 
@@ -126,14 +129,14 @@ namespace TesApi.Controllers
                 return BadRequest("Id should not be included by the client in the request; the server is responsible for generating a unique Id.");
             }
 
-            if (string.IsNullOrWhiteSpace(tesTask.Executors?.FirstOrDefault()?.Image))
+            if ((tesTask.Executors ?? []).Select(executor => executor.Image).Any(string.IsNullOrWhiteSpace))
             {
                 return BadRequest("Docker container image name is required.");
             }
 
-            foreach (var input in tesTask.Inputs ?? Enumerable.Empty<TesInput>())
+            foreach (var input in tesTask.Inputs ?? [])
             {
-                if (!input.Path.StartsWith('/'))
+                if (string.IsNullOrWhiteSpace(input.Path) || !input.Path.StartsWith('/'))
                 {
                     return BadRequest("Input paths in the container must be absolute paths.");
                 }
@@ -142,11 +145,31 @@ namespace TesApi.Controllers
                 {
                     return BadRequest("Input URLs to the local file system are not supported.");
                 }
+
+                if (input.Url is not null && input.Content is not null)
+                {
+                    return BadRequest("Input URL and Content cannot be both set");
+                }
+
+                if (input.Url is null && input.Content is null)
+                {
+                    return BadRequest("One of Input URL or Content must be set");
+                }
+
+                if (input.Content is not null && input.Type == TesFileType.DIRECTORY)
+                {
+                    return BadRequest("Content inputs cannot be directories.");
+                }
+
+                if (input.Type == default)
+                {
+                    await ResolveInputType(input);
+                }
             }
 
             foreach (var output in tesTask.Outputs ?? Enumerable.Empty<TesOutput>())
             {
-                if (!output.Path.StartsWith('/'))
+                if (string.IsNullOrWhiteSpace(output.Path) || !output.Path.StartsWith('/'))
                 {
                     return BadRequest("Output paths in the container must be absolute paths.");
                 }
@@ -216,6 +239,16 @@ namespace TesApi.Controllers
             logger.LogDebug("Creating task with id {TesTask} state {TesTaskState}", tesTask.Id, tesTask.State);
             await repository.CreateItemAsync(tesTask, cancellationToken);
             return StatusCode(200, new TesCreateTaskResponse { Id = tesTask.Id });
+
+            async Task ResolveInputType(TesInput input)
+            {
+                input.Type = (await storageAccessProvider.GetBlobUrlsAsync(
+                        await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, default, default, getContainerSas: true),
+                        default))
+                    .Any()
+                    ? TesFileType.DIRECTORY
+                    : TesFileType.FILE;
+            }
         }
 
         /// <summary>
@@ -328,11 +361,19 @@ namespace TesApi.Controllers
                     {
                         tags = zippedTags;
                     }
-                    else if (tagKeys.Length == tagValues?.Length)
+                    else if (tagKeys.Length >= tagValues?.Length)
                     {
                         logger.LogWarning("Using backup method to parse tag filters.");
-                        tags = tagKeys.Zip(tagValues, (Key, Value) => (Key, Value))
-                            .ToDictionary(x => x.Key, x => x.Value ?? string.Empty, StringComparer.Ordinal);
+                        try
+                        {
+                            tags = tagKeys.Zip(tagValues.Concat(Enumerable.Repeat(string.Empty, tagKeys.Length - (tagValues?.Length ?? 0))), (Key, Value) => (Key, Value))
+                                .ToDictionary(x => x.Key, x => x.Value ?? string.Empty, StringComparer.Ordinal);
+                        }
+                        catch (ArgumentException ex)
+                        {
+                            logger.LogError(ex, "Duplicated tag_key");
+                            return BadRequest("Duplicated tag_key");
+                        }
                     }
                     else
                     {
@@ -342,7 +383,8 @@ namespace TesApi.Controllers
                 }
                 else
                 {
-                    logger.LogWarning("Ignoring tag_value query arguments found without tag_key query arguments.");
+                    logger.LogError("tag_value query arguments found without tag_key query arguments.");
+                    return BadRequest("Invalid tag_value parameter value. Only valid with paired tag_key parameter values.");
                 }
             }
 

@@ -28,7 +28,7 @@ namespace TesApi.Web.Storage
     {
         private readonly TerraOptions terraOptions;
         private readonly BatchSchedulingOptions batchSchedulingOptions;
-        private readonly TerraWsmApiClient terraWsmApiClient;
+        private readonly Lazy<TerraWsmApiClient> terraWsmApiClient;
         private readonly AzureEnvironmentConfig azureEnvironmentConfig;
         private const string SasBlobPermissions = "racw";
         private const string SasContainerPermissions = "racwl";
@@ -44,7 +44,7 @@ namespace TesApi.Web.Storage
         /// <param name="batchSchedulingOptions"><see cref="BatchSchedulingOptions"/>></param>
         /// <param name="azureEnvironmentConfig"></param>
         /// <param name="logger">Logger <see cref="ILogger"/></param>
-        public TerraStorageAccessProvider(TerraWsmApiClient terraWsmApiClient, IAzureProxy azureProxy,
+        public TerraStorageAccessProvider(Lazy<TerraWsmApiClient> terraWsmApiClient, IAzureProxy azureProxy,
             IOptions<TerraOptions> terraOptions, IOptions<BatchSchedulingOptions> batchSchedulingOptions, AzureEnvironmentConfig azureEnvironmentConfig,
             ILogger<TerraStorageAccessProvider> logger) : base(
             logger, azureProxy)
@@ -252,7 +252,7 @@ namespace TesApi.Web.Storage
             {
                 //the goal is to get all containers, therefore the limit is set to 10000 which is a reasonable unreachable number of storage containers in a workspace.
                 var response =
-                    await terraWsmApiClient.GetContainerResourcesAsync(workspaceId, offset: 0, limit: 10000, cancellationToken);
+                    await terraWsmApiClient.Value.GetContainerResourcesAsync(workspaceId, offset: 0, limit: 10000, cancellationToken);
 
                 var metadata = response.Resources.Single(r =>
                     r.ResourceAttributes.AzureStorageContainer.StorageContainerName.Equals(containerName,
@@ -345,7 +345,7 @@ namespace TesApi.Web.Storage
             Logger.LogInformation(
                 "Getting Sas Url from Terra. Wsm workspace id:{WorkspaceId}", blobInfo.WorkspaceId);
 
-            return await terraWsmApiClient.GetSasTokenAsync(
+            return await terraWsmApiClient.Value.GetSasTokenAsync(
                 blobInfo.WorkspaceId,
                 blobInfo.WsmContainerResourceId,
                 tokenParams, cancellationToken);
@@ -359,7 +359,7 @@ namespace TesApi.Web.Storage
             Logger.LogInformation(
                 "Getting Sas container Url from Terra. Wsm workspace id:{WorkspaceId}", blobInfo.WorkspaceId);
 
-            return await terraWsmApiClient.GetSasTokenAsync(
+            return await terraWsmApiClient.Value.GetSasTokenAsync(
                 blobInfo.WorkspaceId,
                 blobInfo.WsmContainerResourceId,
                 tokenParams, cancellationToken);
