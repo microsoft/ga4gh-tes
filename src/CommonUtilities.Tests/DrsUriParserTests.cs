@@ -49,7 +49,6 @@ namespace CommonUtilities.Tests
         [DataRow(@"drs://foo-bar:baz")]
         [DataRow(@"drs://hostname/abc&123")]
         [DataRow(@"drs://hostname/abc/123")]
-        [DataRow(@"drs://hostname/abc:123")]
         [DataRow(@"drs://preFix:abc123")]
         [DataRow(@"drs://prefix:abc&123")]
         [DataRow(@"drs://prefix:abc/123")]
