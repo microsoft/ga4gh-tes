@@ -133,6 +133,30 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
+        public async Task CreateBatchPoolAsync_EndpointInboundNatPoolsProvided_InboundNatPoolsIsMapped()
+        {
+            BatchAccountPoolData poolInfo = new()
+            {
+                DeploymentConfiguration = new()
+                {
+                    VmConfiguration = new BatchVmConfiguration(new BatchImageReference(), "batchNodeAgent"),
+                },
+                NetworkConfiguration = new()
+                {
+                    EndpointInboundNatPools = [new("testNat", BatchInboundEndpointProtocol.Tcp, 500, 1000, 2000)],
+                },
+            };
+            poolInfo.Metadata.Add(new(string.Empty, terraApiStubData.PoolId));
+
+            await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
+
+            Assert.IsNotNull(capturedApiCreateBatchPoolRequest.AzureBatchPool.NetworkConfiguration);
+            Assert.IsNotNull(capturedApiCreateBatchPoolRequest.AzureBatchPool.NetworkConfiguration.EndpointConfiguration);
+            Assert.IsNotNull(capturedApiCreateBatchPoolRequest.AzureBatchPool.NetworkConfiguration.EndpointConfiguration.InboundNatPools);
+            Assert.AreEqual(1, capturedApiCreateBatchPoolRequest.AzureBatchPool.NetworkConfiguration.EndpointConfiguration.InboundNatPools.Length);
+        }
+
+        [TestMethod]
         public async Task CreateBatchPoolAsync_ValidUserIdentityResourceIdProvided_UserIdentityNameIsMapped()
         {
             var identityName = @"bar-identity";

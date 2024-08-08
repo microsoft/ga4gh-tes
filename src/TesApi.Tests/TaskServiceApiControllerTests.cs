@@ -3,11 +3,16 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Net;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Batch;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.Models;
@@ -439,8 +444,8 @@ namespace TesApi.Tests
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo
-                // string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString predicate, Expression<Func<T, bool>> predicate
-                .GetItemsAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<FormattableString>(), It.IsAny<IEnumerable<Expression<Func<TesTask, bool>>>>()))
+                    // string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString predicate, Expression<Func<T, bool>> predicate
+                    .GetItemsAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<FormattableString>(), It.IsAny<IEnumerable<Expression<Func<TesTask, bool>>>>()))
                 .ReturnsAsync((string _1, int pageSize, CancellationToken _2, FormattableString _3, IEnumerable<Expression<Func<TesTask, bool>>> predicates) =>
                     new("continuation-token=1", tesTasks.Where(i => predicates.All(p => p.Compile().Invoke(i))).Take(pageSize))));
             var controller = services.GetT();
@@ -451,6 +456,228 @@ namespace TesApi.Tests
             Assert.IsNotNull(result);
             Assert.AreEqual(1, listOfTesTasks.Tasks.Count);
             Assert.AreEqual(200, result.StatusCode);
+        }
+
+        private static readonly System.Collections.ObjectModel.ReadOnlyDictionary<string, IEnumerable<(bool IsKey, string Value)>> TagQueries = new Dictionary<string, IEnumerable<(bool IsKey, string Value)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "empty", [] },
+            { "singleKey",
+            [
+                (true, "key"),
+            ] },
+            { "singleValue",
+            [
+                (false, "value"),
+            ] },
+            { "singlePairInOrder",
+            [
+                (true, "key"),
+                (false, "value"),
+            ] },
+            { "singlePairOutOfOrder",
+            [
+                (false, "key"),
+                (true, "value"),
+            ] },
+            { "noValueInMiddle",
+            [
+                (true, "key1"),
+                (false, "value1"),
+                (true, "key2"),
+                (true, "key3"),
+                (false, "value3"),
+            ] },
+            { "groupedByKind",
+            [
+                (true, "key1"),
+                (true, "key2"),
+                (true, "key3"),
+                (false, "value1"),
+                (false, "value2"),
+            ] },
+            { "noKeyInMiddle",
+            [
+                (true, "key1"),
+                (false, "value1"),
+                (false, "value2"),
+                (true, "key3"),
+                (false, "value3"),
+            ] },
+            { "repeatedTag",
+            [
+                (true, "key1"),
+                (false, "value1"),
+                (true, "key2"),
+                (false, "value2"),
+                (true, "key1"),
+            ] },
+            { "groupedRepeatedTag",
+            [
+                (false, "value1"),
+                (false, "value2"),
+                (true, "key1"),
+                (true, "key2"),
+                (true, "key1"),
+            ] },
+        }.AsReadOnly();
+
+        [DataTestMethod]
+        [DataRow("empty", HttpStatusCode.OK, DisplayName = "No tags")]
+        [DataRow("singleKey", HttpStatusCode.OK, DisplayName = "Single key")]
+        [DataRow("singleValue", HttpStatusCode.BadRequest, DisplayName = "Single value")]
+        [DataRow("singlePairInOrder", HttpStatusCode.OK, DisplayName = "Single pair in order")]
+        [DataRow("singlePairOutOfOrder", HttpStatusCode.OK, DisplayName = "Single pair out of order")]
+        [DataRow("noValueInMiddle", HttpStatusCode.OK, DisplayName = "No value in middle")]
+        [DataRow("groupedByKind", HttpStatusCode.OK, DisplayName = "Grouped by kind")]
+        [DataRow("noKeyInMiddle", HttpStatusCode.BadRequest, DisplayName = "No key in middle")]
+        [DataRow("repeatedTag", HttpStatusCode.BadRequest, DisplayName = "Repeated tag")]
+        [DataRow("groupedRepeatedTag", HttpStatusCode.BadRequest, DisplayName = "Grouped by kind repeated tag")]
+        public async Task ListTasks_ReturnsBadRequest_ForInvalidTagArguments(string query, HttpStatusCode statusCode)
+        {
+            using var services = SetupTagArgumentsTest();
+            var controller = services.GetT();
+
+            var result = await ListTasksWithTagArgumentsAsync(controller, query);
+
+            switch (result)
+            {
+                case JsonResult jsonResult:
+                    Assert.AreEqual((int)statusCode, jsonResult.StatusCode);
+                    break;
+
+                case BadRequestObjectResult badRequest:
+                    Assert.AreEqual((int)statusCode, badRequest.StatusCode);
+                    break;
+
+                default:
+                    Assert.Fail();
+                    break;
+            }
+        }
+
+        [DataTestMethod]
+#pragma warning disable CA1861 // Avoid constant arrays as arguments
+        [DataRow("empty", null, null, DisplayName = "No tags")]
+        [DataRow("singleKey", "Tags: ? {0}", new[] { "key" }, DisplayName = "Single key")]
+        [DataRow("singlePairInOrder", "Tags:->>{0} = {1}", new[] { "key", "value" }, DisplayName = "Single pair in order")]
+        [DataRow("singlePairOutOfOrder", "Tags:->>{0} = {1}", new[] { "value", "key" }, DisplayName = "Single pair out of order")]
+        [DataRow("noValueInMiddle", "Tags:->>{0} = {1} AND Tags: ? {2} AND Tags:->>{3} = {4}", new[] { "key1", "value1", "key2", "key3", "value3" }, DisplayName = "No value in middle")]
+        [DataRow("groupedByKind", "Tags:->>{0} = {1} AND Tags:->>{2} = {3} AND Tags: ? {4}", new[] { "key1", "value1", "key2", "value2", "key3" }, DisplayName = "Grouped by kind")]
+#pragma warning restore CA1861 // Avoid constant arrays as arguments
+        public async Task ListTasks_CreatesCorrectQueryCorrectPairs_ForTagArguments(string query, string format, object[] args)
+        {
+            using var services = SetupTagArgumentsTest();
+            var controller = services.GetT();
+
+            var querystring = format is null ? null : FormattableStringFactory.Create(format, args);
+
+            var result = await ListTasksWithTagArgumentsAsync(controller, query) as JsonResult;
+
+            Assert.IsNotNull(result);
+            Assert.AreEqual(200, result.StatusCode);
+            Assert.AreEqual(querystring, services.TesTaskRepository.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IRepository<TesTask>.GetItemsAsync)).Arguments.Skip(3).Cast<FormattableString>().First(), new FormattableStringEqualityComparer());
+            //services.TesTaskRepository.Verify(x => x.GetItemsAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), querystring, It.IsAny<IEnumerable<Expression<Func<TesTask, bool>>>>()));
+        }
+
+        private static TestServices.TestServiceProvider<TaskServiceApiController> SetupTagArgumentsTest()
+            => new(tesTaskRepository: r =>
+            {
+                r.Setup(repo => repo
+                    // string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString predicate, Expression<Func<T, bool>> predicate
+                    .GetItemsAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<FormattableString>(), It.IsAny<IEnumerable<Expression<Func<TesTask, bool>>>>()))
+                .ReturnsAsync((string _1, int pageSize, CancellationToken _2, FormattableString _3, IEnumerable<Expression<Func<TesTask, bool>>> predicates) =>
+                    new(null, []));
+                r.Setup(repo => repo
+                    .JsonFormattableRawString(It.IsAny<string>(), It.IsAny<FormattableString>()))
+                .Returns((string property, FormattableString sql) => new Tes.Utilities.PrependableFormattableString($"{property}:", sql));
+            });
+
+        private static Task<IActionResult> ListTasksWithTagArgumentsAsync(TaskServiceApiController controller, string query)
+        {
+            controller.ControllerContext.HttpContext = new DebugHttpContext();
+            controller.Request.QueryString = QueryString.Create("view", "BASIC");
+            controller.Request.QueryString += QueryString.Create(TagQueries[query].Select(e => new KeyValuePair<string, string>(e.IsKey ? "tag_key" : "tag_value", e.Value)));
+
+            return controller.ListTasksAsync(null, null, TagQueries[query].Where(e => e.IsKey).Select(e => e.Value).ToArray(), TagQueries[query].Where(e => !e.IsKey).Select(e => e.Value).ToArray(), null, null, "BASIC", CancellationToken.None);
+        }
+
+        private struct FormattableStringEqualityComparer : IEqualityComparer<FormattableString>
+        {
+            readonly bool IEqualityComparer<FormattableString>.Equals(FormattableString x, FormattableString y)
+            {
+                if (x is null && y is null)
+                {
+                    return true;
+                }
+
+                if (x is null || y is null)
+                {
+                    return false;
+                }
+
+                return x.Format.Equals(y.Format, StringComparison.Ordinal)
+                    && x.ArgumentCount == y.ArgumentCount
+                    && x.GetArguments().SequenceEqual(y.GetArguments());
+            }
+
+            readonly int IEqualityComparer<FormattableString>.GetHashCode(FormattableString obj)
+                => obj.GetHashCode();
+        }
+
+        private class DebugHttpRequest : HttpRequest
+        {
+            public override HttpContext HttpContext => throw new NotImplementedException();
+
+            public override string Method { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+            public override string Scheme { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+            public override bool IsHttps { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+            public override HostString Host { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+            public override PathString PathBase { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+            public override PathString Path { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+            public override QueryString QueryString { get; set; }
+            public override IQueryCollection Query { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+            public override string Protocol { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+
+            public override IHeaderDictionary Headers => throw new NotImplementedException();
+
+            public override IRequestCookieCollection Cookies { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+            public override long? ContentLength { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+            public override string ContentType { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+            public override Stream Body { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+
+            public override bool HasFormContentType => throw new NotImplementedException();
+
+            public override IFormCollection Form { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+
+            public override Task<IFormCollection> ReadFormAsync(CancellationToken cancellationToken = default)
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+        private class DebugHttpContext : HttpContext
+        {
+            public override Microsoft.AspNetCore.Http.Features.IFeatureCollection Features => throw new NotImplementedException();
+
+            public override HttpRequest Request { get; } = new DebugHttpRequest();
+
+            public override HttpResponse Response => throw new NotImplementedException();
+
+            public override ConnectionInfo Connection => throw new NotImplementedException();
+
+            public override WebSocketManager WebSockets => throw new NotImplementedException();
+
+            public override System.Security.Claims.ClaimsPrincipal User { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+            public override IDictionary<object, object> Items { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+            public override IServiceProvider RequestServices { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+            public override CancellationToken RequestAborted { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+            public override string TraceIdentifier { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+            public override ISession Session { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+
+            public override void Abort()
+            {
+                throw new NotImplementedException();
+            }
         }
 
         [TestMethod]

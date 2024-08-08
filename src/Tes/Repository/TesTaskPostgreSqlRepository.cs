@@ -220,7 +220,7 @@ namespace Tes.Repository
             {
                 return new(
                     Id ?? long.MinValue,
-                    RawQuery?.Format,
+                    RawQuery?.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     EfQuery is null ? null : string.Join(EfSeparator, EfQuery.Select(p => System.Web.HttpUtility.UrlEncode(p.ToString()))));
             }
 
@@ -374,5 +374,4 @@ namespace Tes.Repository
     internal partial class SourceGenerationContext : JsonSerializerContext
     {
     }
-
 }

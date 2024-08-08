@@ -124,7 +124,7 @@ namespace Tes.Repository
 
             var tableQuery = rawPredicate is null
                 ? dbSet.AsQueryable()
-                : dbSet.FromSql(new PrependableFormattableString($"SELECT *\r\nFROM {dbSet.EntityType.GetTableName()}\r\nWHERE ", rawPredicate));
+                : dbSet.FromSql(new Utilities.PrependableFormattableString($"SELECT *\r\nFROM {dbSet.EntityType.GetTableName()}\r\nWHERE ", rawPredicate));
 
             tableQuery = efPredicates.Any()
                 ? efPredicates.Aggregate(tableQuery, (query, efPredicate) => query.Where(efPredicate))
@@ -268,40 +268,6 @@ namespace Tes.Repository
         {
             Dispose(disposing: true);
             GC.SuppressFinalize(this);
-        }
-
-        internal class PrependableFormattableString : FormattableString
-        {
-            private readonly FormattableString source;
-            private readonly string prefix;
-
-            public PrependableFormattableString(string prefix, FormattableString formattableString)
-            {
-                ArgumentNullException.ThrowIfNull(formattableString);
-                ArgumentException.ThrowIfNullOrEmpty(prefix);
-
-                source = formattableString;
-                this.prefix = prefix;
-            }
-
-            public override int ArgumentCount => source.ArgumentCount;
-
-            public override string Format => prefix + source.Format;
-
-            public override object GetArgument(int index)
-            {
-                return source.GetArgument(index);
-            }
-
-            public override object[] GetArguments()
-            {
-                return source.GetArguments();
-            }
-
-            public override string ToString(IFormatProvider formatProvider)
-            {
-                return prefix + source.ToString(formatProvider);
-            }
         }
     }
 }
