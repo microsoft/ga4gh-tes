@@ -305,15 +305,15 @@ namespace TesApi.Web
         */
         {
             var targetVariable = preemptable ? "TargetLowPriorityNodes" : "TargetDedicated";
-            return string.Join(Environment.NewLine, new[]
-            {
+            return string.Join(Environment.NewLine,
+            [
                 "$NodeDeallocationOption = taskcompletion;",
                 $"""lifespan = time() - time("{DateTime.UtcNow:r}");""",
                 "span = TimeInterval_Second * 90;",
                 "startup = TimeInterval_Minute * 2;",
                 "ratio = 10;",
                 $"${targetVariable} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {initialTarget});"
-            });
+            ]);
         }
 
         private async ValueTask ServicePoolManagePoolScalingAsync(CancellationToken cancellationToken)
@@ -690,7 +690,7 @@ namespace TesApi.Web
                 // In the extremely unlikely event that there are no innerexceptions, we don't want to change the existing code flow nor do we want to complicate the (less than 2) path.
                 if (exception.InnerExceptions?.Count != 1)
                 {
-                    throw new AggregateException(exception.Message, exception.InnerExceptions?.Select(HandleException) ?? Enumerable.Empty<Exception>());
+                    throw new AggregateException(exception.Message, exception.InnerExceptions?.Select(HandleException) ?? []);
                 }
 
                 throw HandleException(exception.InnerException);

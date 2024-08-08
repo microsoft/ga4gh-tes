@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Tes.Runner.Models;
 using Tes.Runner.Transfer;
 
@@ -15,27 +16,25 @@ namespace Tes.Runner.Storage
         private readonly NodeTask nodeTask = null!;
         private readonly ResolutionPolicyHandler resolutionPolicyHandler = null!;
         private readonly IFileInfoProvider fileInfoProvider = null!;
-        private readonly ILogger logger = PipelineLoggerFactory.Create<FileOperationResolver>();
-
-        public FileOperationResolver(NodeTask nodeTask, string apiVersion)
-            : this(nodeTask, new(nodeTask.RuntimeOptions, apiVersion), new DefaultFileInfoProvider())
-        { }
+        private readonly ILogger logger;
 
         /// <summary>
         /// Parameter-less constructor for mocking
         /// </summary>
-        protected FileOperationResolver() { }
+        protected FileOperationResolver() { logger = NullLogger.Instance; }
 
         public FileOperationResolver(NodeTask nodeTask, ResolutionPolicyHandler resolutionPolicyHandler,
-            IFileInfoProvider fileInfoProvider)
+            IFileInfoProvider fileInfoProvider, ILogger<FileOperationResolver> logger)
         {
             ArgumentNullException.ThrowIfNull(nodeTask);
             ArgumentNullException.ThrowIfNull(resolutionPolicyHandler);
             ArgumentNullException.ThrowIfNull(fileInfoProvider);
+            ArgumentNullException.ThrowIfNull(logger);
 
             this.nodeTask = nodeTask;
             this.resolutionPolicyHandler = resolutionPolicyHandler;
             this.fileInfoProvider = fileInfoProvider;
+            this.logger = logger;
         }
 
         public virtual async Task<List<DownloadInfo>?> ResolveInputsAsync()

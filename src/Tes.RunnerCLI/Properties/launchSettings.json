@@ -2,7 +2,10 @@
   "profiles": {
     "Tes.RunnerCLI": {
       "commandName": "Project",
-      "commandLineArgs": "upload --file TesTask.yml"
+      "commandLineArgs": "upload -i https://localhost/TesTask.yml",
+      "environmentVariables": {
+        "NodeTaskResolverOptions": "{\"RuntimeOptions\":{\"AzureEnvironmentConfig\":{}}, \"TransformationStrategy\": \"CombinedAzureResourceManager\"}"
+      }
     }
   }
 }

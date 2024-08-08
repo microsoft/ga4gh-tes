@@ -8,10 +8,10 @@ using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Logs
 {
-    public abstract class StreamLogReader : IStreamLogReader
+    public abstract class StreamLogReader(ILogger logger) : IStreamLogReader
     {
         const int KiB = 1024;
-        private readonly ILogger logger = PipelineLoggerFactory.Create<StreamLogReader>();
+        protected readonly ILogger Logger = logger ?? throw new ArgumentNullException(nameof(logger));
         protected Task? Reader;
 
         public abstract Task AppendStandardOutputAsync(string data);
@@ -89,7 +89,7 @@ namespace Tes.Runner.Logs
 
             catch (Exception e)
             {
-                logger.LogError(e, "Failed read form the multiplexed stream");
+                Logger.LogError(e, "Failed read form the multiplexed stream");
             }
         }
 
@@ -122,7 +122,7 @@ namespace Tes.Runner.Logs
             }
             catch (Exception e)
             {
-                logger.LogError(e, "Failed read and process stream");
+                Logger.LogError(e, "Failed read and process stream");
             }
         }
     }

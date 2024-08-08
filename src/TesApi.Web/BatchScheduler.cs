@@ -93,6 +93,8 @@ namespace TesApi.Web
 
         private HashSet<string> onlyLogBatchTaskStateOnce = [];
 
+        private static readonly System.Text.Json.JsonSerializerOptions JsonLogsListSerializerOptions = new(System.Text.Json.JsonSerializerOptions.Default) { WriteIndented = true };
+
         /// <summary>
         /// Orchestrates <see cref="Tes.Models.TesTask"/>s on Azure Batch
         /// </summary>
@@ -222,14 +224,14 @@ namespace TesApi.Web
             async Task SetTaskCompleted(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
                 SetTaskStateAndLog(tesTask, TesState.COMPLETE, batchInfo);
-                await DeleteBatchTaskAsync(azureProxy, tesTask, batchInfo, cancellationToken);
+                await DeleteBatchTaskAsync(tesTask, batchInfo, cancellationToken);
             }
 
             async Task SetTaskExecutorError(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
                 await AddProcessLogsIfAvailable(tesTask, cancellationToken);
                 SetTaskStateAndLog(tesTask, TesState.EXECUTOR_ERROR, batchInfo);
-                await DeleteBatchTaskAsync(azureProxy, tesTask, batchInfo, cancellationToken);
+                await DeleteBatchTaskAsync(tesTask, batchInfo, cancellationToken);
             }
 
             async Task DeleteBatchTaskAndSetTaskStateAsync(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
@@ -336,7 +338,7 @@ namespace TesApi.Web
 #pragma warning restore IDE0305 // Simplify collection initialization
 
                 static string JsonArray(IEnumerable<string> items)
-                    => System.Text.Json.JsonSerializer.Serialize(items.ToArray(), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerOptions.Default) { WriteIndented = true });
+                    => System.Text.Json.JsonSerializer.Serialize(items.ToArray(), JsonLogsListSerializerOptions);
             }
             catch (Exception ex)
             {
@@ -347,7 +349,7 @@ namespace TesApi.Web
         private Task DeleteBatchTaskAsync(TesTask tesTask, string poolId, CancellationToken cancellationToken)
             => azureProxy.DeleteBatchTaskAsync(tesTask.Id, poolId, cancellationToken);
 
-        private async Task DeleteBatchTaskAsync(IAzureProxy azureProxy, TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
+        private async Task DeleteBatchTaskAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
         {
             var batchDeletionExceptions = new List<Exception>();
 
@@ -357,7 +359,7 @@ namespace TesApi.Web
             }
             catch (Exception exc)
             {
-                logger.LogError(exc, $"Exception deleting batch task with tesTask.Id: {tesTask?.Id}");
+                logger.LogError(exc, "Exception deleting batch task with tesTask.Id: {TesTask}", tesTask?.Id);
                 batchDeletionExceptions.Add(exc);
             }
 
@@ -451,7 +453,7 @@ namespace TesApi.Web
         {
             if (onlyLogBatchTaskStateOnce.Count > 0)
             {
-                onlyLogBatchTaskStateOnce = new();
+                onlyLogBatchTaskStateOnce = [];
             }
         }
 
@@ -563,7 +565,7 @@ namespace TesApi.Web
 
                 tesTask.PoolId = poolId;
                 var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(jobOrTaskId, tesTask, acrPullIdentity, cancellationToken);
-                logger.LogInformation($"Creating batch task for TES task {tesTask.Id}. Using VM size {virtualMachineInfo.VmSize}.");
+                logger.LogInformation("Creating batch task for TES task {TesTask}. Using VM size {VmSize}.", tesTask.Id, virtualMachineInfo.VmSize);
                 await azureProxy.AddBatchTaskAsync(tesTask.Id, cloudTask, poolId, cancellationToken);
 
                 tesTaskLog.StartTime = DateTimeOffset.UtcNow;
@@ -605,7 +607,7 @@ namespace TesApi.Web
                                 var e when e is BatchException batchException && batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException => batchErrorException.Body.Message.Value,
                                 _ => "Unknown reason",
                             },
-                                Array.Empty<string>());
+                            []);
                         }
 
                         break;
@@ -642,19 +644,19 @@ namespace TesApi.Web
                         break;
 
                     case BatchException batchException when batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException && AzureBatchPoolCreationException.IsJobQuotaException(batchErrorException.Body.Code):
-                        tesTask.SetWarning(batchErrorException.Body.Message.Value, Array.Empty<string>());
+                        tesTask.SetWarning(batchErrorException.Body.Message.Value, []);
                         logger.LogInformation("Not enough job quota available for task Id {TesTask}. Reason: {BodyMessage}. Task will remain in queue.", tesTask.Id, batchErrorException.Body.Message.Value);
                         break;
 
                     case BatchException batchException when batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException && AzureBatchPoolCreationException.IsPoolQuotaException(batchErrorException.Body.Code):
                         neededPools.Add(poolKey);
-                        tesTask.SetWarning(batchErrorException.Body.Message.Value, Array.Empty<string>());
+                        tesTask.SetWarning(batchErrorException.Body.Message.Value, []);
                         logger.LogInformation("Not enough pool quota available for task Id {TesTask}. Reason: {BodyMessage}. Task will remain in queue.", tesTask.Id, batchErrorException.Body.Message.Value);
                         break;
 
                     case Microsoft.Rest.Azure.CloudException cloudException when AzureBatchPoolCreationException.IsPoolQuotaException(cloudException.Body.Code):
                         neededPools.Add(poolKey);
-                        tesTask.SetWarning(cloudException.Body.Message, Array.Empty<string>());
+                        tesTask.SetWarning(cloudException.Body.Message, []);
                         logger.LogInformation("Not enough pool quota available for task Id {TesTask}. Reason: {BodyMessage}. Task will remain in queue.", tesTask.Id, cloudException.Body.Message);
                         break;
 
@@ -673,7 +675,6 @@ namespace TesApi.Web
         /// <param name="tesTask"><see cref="TesTask"/></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>A higher-level abstraction of the current state of the Azure Batch task</returns>
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1826:Do not use Enumerable methods on indexable collections", Justification = "FirstOrDefault() is straightforward, the alternative is less clear.")]
         private async ValueTask<CombinedBatchTaskInfo> GetBatchTaskStateAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
             var azureBatchJobAndTaskState = await azureProxy.GetBatchJobAndTaskStateAsync(tesTask, cancellationToken);
@@ -739,7 +740,7 @@ namespace TesApi.Web
                         {
                             azureBatchJobAndTaskState.NodeAllocationFailed = true;
                             azureBatchJobAndTaskState.NodeErrorCode = resizeError.Code;
-                            azureBatchJobAndTaskState.NodeErrorDetails = Enumerable.Repeat(resizeError.Message, string.IsNullOrWhiteSpace(resizeError.Message) ? 1 : 0).Concat(resizeError.Values?.Select(d => d.Value) ?? Enumerable.Empty<string>());
+                            azureBatchJobAndTaskState.NodeErrorDetails = Enumerable.Repeat(resizeError.Message, string.IsNullOrWhiteSpace(resizeError.Message) ? 1 : 0).Concat(resizeError.Values?.Select(d => d.Value) ?? []);
                         }
                     }
                 }
@@ -760,7 +761,7 @@ namespace TesApi.Web
 
             if (TaskFailureInformationCodes.DiskFull.Equals(azureBatchJobAndTaskState.NodeErrorCode, StringComparison.OrdinalIgnoreCase))
             {
-                azureBatchJobAndTaskState.NodeErrorDetails = (azureBatchJobAndTaskState.NodeErrorDetails ?? Enumerable.Empty<string>())
+                azureBatchJobAndTaskState.NodeErrorDetails = (azureBatchJobAndTaskState.NodeErrorDetails ?? [])
                     .Append($"Compute Node Error: {TaskFailureInformationCodes.DiskFull} Id: {azureBatchJobAndTaskState.NodeId}");
             }
 
@@ -891,7 +892,7 @@ namespace TesApi.Web
                             BatchTaskEndTime = azureBatchJobAndTaskState.TaskEndTime,
                             SystemLogItems = Enumerable.Empty<string>()
                                 .Append($"Batch task ExitCode: {azureBatchJobAndTaskState.TaskExitCode}, Failure message: {azureBatchJobAndTaskState.TaskFailureInformation?.Message}")
-                                .Concat(azureBatchJobAndTaskState.TaskFailureInformation?.Details?.Select(d => $"{d.Name}: {d.Value}") ?? Enumerable.Empty<string>()),
+                                .Concat(azureBatchJobAndTaskState.TaskFailureInformation?.Details?.Select(d => $"{d.Name}: {d.Value}") ?? []),
                             Pool = azureBatchJobAndTaskState.PoolId
                         };
                     }

@@ -9,15 +9,9 @@ namespace Tes.Runner.Transfer;
 /// <summary>
 /// Handles the creation of tasks that perform read operations on the pipeline. 
 /// </summary>
-public class PartsReader : PartsProcessor
+public class PartsReader(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel, IScalingStrategy scalingStrategy, ILogger<PartsReader> logger)
+    : PartsProcessor(blobPipeline, blobPipelineOptions, memoryBufferChannel, scalingStrategy, logger)
 {
-    private readonly ILogger logger = PipelineLoggerFactory.Create<PartsReader>();
-
-    public PartsReader(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel, IScalingStrategy scalingStrategy) :
-        base(blobPipeline, blobPipelineOptions, memoryBufferChannel, scalingStrategy)
-    {
-    }
-
     /// <summary>
     /// Starts tasks that perform read operations on the pipeline and writes the part to the write buffer channel.
     /// Once all the parts are read, the write buffer channel is marked as complete.
@@ -45,7 +39,7 @@ public class PartsReader : PartsProcessor
         }
         catch (Exception e)
         {
-            logger.LogError(e, "Error reading parts from the pipeline.");
+            Logger.LogError(e, "Error reading parts from the pipeline.");
             throw;
         }
         finally
@@ -53,6 +47,6 @@ public class PartsReader : PartsProcessor
             writeBufferChannel.Writer.Complete();
         }
 
-        logger.LogInformation("All part read operations completed successfully.");
+        Logger.LogInformation("All part read operations completed successfully.");
     }
 }

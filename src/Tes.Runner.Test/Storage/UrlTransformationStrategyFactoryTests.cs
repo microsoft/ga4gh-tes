@@ -3,6 +3,7 @@
 
 using Azure.Core;
 using CommonUtilities;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Tes.Runner.Models;
 using Tes.Runner.Storage;
@@ -15,6 +16,7 @@ namespace Tes.Runner.Test.Storage
     {
         private RuntimeOptions runtimeOptions = null!;
         private Mock<TokenCredential> tokenCredentialMock = null!;
+        private UrlTransformationStrategyFactory urlTransformationStrategyFactory = null!;
         const string? DrsHubHost = "https://drsHub.bio";
 
         [TestInitialize]
@@ -23,6 +25,12 @@ namespace Tes.Runner.Test.Storage
             runtimeOptions = CreateRuntimeOptions();
 
             tokenCredentialMock = new Mock<TokenCredential>();
+
+            urlTransformationStrategyFactory = new(runtimeOptions, Runner.Transfer.BlobPipelineOptions.DefaultApiVersion,
+                new(() => new PassThroughUrlTransformationStrategy()), new(() => new CloudProviderSchemeConverter()),
+                new(() => new ArmUrlTransformationStrategy((_, _) => tokenCredentialMock.Object, runtimeOptions, Runner.Transfer.BlobPipelineOptions.DefaultApiVersion, NullLogger<ArmUrlTransformationStrategy>.Instance)),
+                new(() => new TerraUrlTransformationStrategy(runtimeOptions, _ => tokenCredentialMock.Object, runtimeOptions.AzureEnvironmentConfig!, NullLogger<TerraUrlTransformationStrategy>.Instance)),
+                new(() => new DrsUriTransformationStrategy(runtimeOptions, _ => tokenCredentialMock.Object, runtimeOptions.AzureEnvironmentConfig!, NullLogger<DrsUriTransformationStrategy>.Instance)));
         }
 
         [TestMethod]
@@ -30,7 +38,7 @@ namespace Tes.Runner.Test.Storage
         {
             runtimeOptions.Terra = CreateTerraRuntimeOptions(DrsHubHost);
 
-            var combinedStrategy = UrlTransformationStrategyFactory.CreateCombinedArmTransformationStrategy(runtimeOptions, _ => tokenCredentialMock.Object, Runner.Transfer.BlobPipelineOptions.DefaultApiVersion);
+            var combinedStrategy = urlTransformationStrategyFactory.CreateCombinedArmTransformationStrategy(runtimeOptions);
 
             var internalStrategy = combinedStrategy.GetStrategies();
 
@@ -43,7 +51,7 @@ namespace Tes.Runner.Test.Storage
         [TestMethod]
         public void CreateCombinedArmTransformationStrategy_WithOutDrsHubSettings_ReturnsExpectedStrategies()
         {
-            var combinedStrategy = UrlTransformationStrategyFactory.CreateCombinedArmTransformationStrategy(runtimeOptions, _ => tokenCredentialMock.Object, Runner.Transfer.BlobPipelineOptions.DefaultApiVersion);
+            var combinedStrategy = urlTransformationStrategyFactory.CreateCombinedArmTransformationStrategy(runtimeOptions);
 
             var internalStrategy = combinedStrategy.GetStrategies();
 
@@ -57,7 +65,7 @@ namespace Tes.Runner.Test.Storage
         {
             runtimeOptions.Terra = CreateTerraRuntimeOptions();
 
-            var combinedStrategy = UrlTransformationStrategyFactory.CreateCombineTerraTransformationStrategy(runtimeOptions, _ => tokenCredentialMock.Object);
+            var combinedStrategy = urlTransformationStrategyFactory.CreateCombineTerraTransformationStrategy(runtimeOptions);
 
             var internalStrategy = combinedStrategy.GetStrategies();
 
@@ -71,7 +79,7 @@ namespace Tes.Runner.Test.Storage
         {
             runtimeOptions.Terra = CreateTerraRuntimeOptions(DrsHubHost);
 
-            var combinedStrategy = UrlTransformationStrategyFactory.CreateCombineTerraTransformationStrategy(runtimeOptions, _ => tokenCredentialMock.Object);
+            var combinedStrategy = urlTransformationStrategyFactory.CreateCombineTerraTransformationStrategy(runtimeOptions);
 
             var internalStrategy = combinedStrategy.GetStrategies();
 

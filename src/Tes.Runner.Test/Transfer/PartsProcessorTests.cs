@@ -17,7 +17,7 @@ namespace Tes.Runner.Test.Transfer
         private readonly long fileSize = BlobSizeUtils.MiB * 100;
         private readonly string fileName = "tempFile";
         private readonly string blobUri = "https://foo.bar/cont/blob";
-        private readonly Random random = new Random();
+        private readonly Random random = new();
         private Mock<IScalingStrategy> strategyMock = null!;
 
         [TestInitialize]
@@ -109,15 +109,14 @@ namespace Tes.Runner.Test.Transfer
     {
         internal PipelineBuffer BufferArg { get; private set; } = null!;
         internal CancellationToken CancellationTokenArg { get; private set; }
-        private readonly ILogger logger = PipelineLoggerFactory.Create<TestPartsProcessor>();
-        private readonly SemaphoreSlim semaphore = new SemaphoreSlim(1, 1);
-        private readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
+        private readonly SemaphoreSlim semaphore = new(1, 1);
+        private readonly CancellationTokenSource cancellationTokenSource = new();
         internal int ProcessedCount { get; private set; }
         private int? throwOnOrdinal;
         private TimeSpan? partDelay;
 
         internal TestPartsProcessor(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions,
-            Channel<byte[]> memoryBufferChannel, IScalingStrategy scalingStrategy) : base(blobPipeline, blobPipelineOptions, memoryBufferChannel, scalingStrategy)
+            Channel<byte[]> memoryBufferChannel, IScalingStrategy scalingStrategy) : base(blobPipeline, blobPipelineOptions, memoryBufferChannel, scalingStrategy, Microsoft.Extensions.Logging.Abstractions.NullLogger<TestPartsProcessor>.Instance)
         {
         }
 
@@ -138,24 +137,24 @@ namespace Tes.Runner.Test.Transfer
 
         private async Task ProcessorAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
         {
-            await semaphore.WaitAsync();
+            await semaphore.WaitAsync(cancellationToken);
 
             try
             {
                 BufferArg = buffer;
                 CancellationTokenArg = cancellationToken;
 
-                logger.LogInformation($"Doing:{buffer.Ordinal}: ThrowOnOrdinal {throwOnOrdinal}");
+                Logger.LogInformation("Doing:{Ordinal}: ThrowOnOrdinal {ThrowOnOrdinal}", buffer.Ordinal, throwOnOrdinal);
 
                 if (buffer.Ordinal == throwOnOrdinal)
                 {
-                    logger.LogInformation($"ProcessorAsync: {buffer.Ordinal} throwing");
+                    Logger.LogInformation("ProcessorAsync: {Ordinal} throwing", buffer.Ordinal);
                     throw new InvalidOperationException();
                 }
 
                 if (partDelay is not null)
                 {
-                    logger.LogInformation($"ProcessorAsync: {buffer.Ordinal} delaying by  {partDelay}");
+                    Logger.LogInformation("ProcessorAsync: {Ordinal} delaying by {Delay}", buffer.Ordinal, partDelay);
                     await Task.Delay(partDelay.Value, cancellationToken);
                 }
 
