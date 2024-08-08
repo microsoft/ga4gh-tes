@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using Azure.Storage.Sas;
+using CommonUtilities;
 using Moq;
 using Tes.Runner.Storage;
 
@@ -17,6 +18,11 @@ namespace Tes.Runner.Test.Storage
         [TestInitialize]
         public void SetUp()
         {
+            if (!UriParser.IsKnownScheme(DrsUriParser.UriSchemeDrs))
+            {
+                DrsUriParser.Register();
+            }
+
             mockStrategy1 = new();
             mockStrategy2 = new();
 
@@ -45,6 +51,25 @@ namespace Tes.Runner.Test.Storage
             mockStrategy2.Verify(s => s.TransformUrlWithStrategyAsync(firstTransformation, It.IsAny<BlobSasPermissions>()), Times.Once);
 
             Assert.AreEqual(secondTransformation, result.ToString());
+        }
+
+        [TestMethod]
+        public async Task CombinedTransformationStrategy_CompactDrsUri()
+        {
+            var sourceUrl = "drs://my.uri:456_abc";
+            var transformation = "https://first.foo/";
+
+            mockStrategy1.Setup(s => s.TransformUrlWithStrategyAsync(sourceUrl, It.IsAny<BlobSasPermissions>()))
+                .ReturnsAsync(() => new Uri(sourceUrl));
+            mockStrategy2.Setup(s => s.TransformUrlWithStrategyAsync(sourceUrl, It.IsAny<BlobSasPermissions>()))
+                .ReturnsAsync(() => new Uri(transformation));
+
+            var result = await strategy.TransformUrlWithStrategyAsync(sourceUrl, new BlobSasPermissions());
+
+            mockStrategy1.Verify(s => s.TransformUrlWithStrategyAsync(sourceUrl, It.IsAny<BlobSasPermissions>()), Times.Once);
+            mockStrategy2.Verify(s => s.TransformUrlWithStrategyAsync(sourceUrl, It.IsAny<BlobSasPermissions>()), Times.Once);
+
+            Assert.AreEqual(transformation, result.ToString());
         }
 
         [TestMethod]

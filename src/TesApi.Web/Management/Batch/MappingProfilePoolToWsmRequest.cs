@@ -66,7 +66,7 @@ namespace TesApi.Web.Management.Batch
         }
 
         /// <summary>
-        /// Gets name of the managed identity if the resource ID is a valid Azure MI resource ID.        
+        /// Gets name of the managed identity if the resource ID is a valid Azure MI resource ID.
         /// If the resource ID is not a valid Resource ID, returns the value provided.
         /// </summary>
         /// <param name="resourceId"></param>
