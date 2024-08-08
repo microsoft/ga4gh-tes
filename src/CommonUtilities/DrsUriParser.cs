@@ -1,13 +1,21 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 
 namespace CommonUtilities
 {
+    /// <summary>
+    /// Uri parser for DRS scheme
+    /// </summary>
+    /// <seealso cref="GenericUriParser" />
     public partial class DrsUriParser : GenericUriParser
     {
+        /// <summary>
+        /// The URI scheme DRS
+        /// </summary>
         public const string UriSchemeDrs = "drs";
 
         private static readonly int _prefixLength = UriSchemeDrs.Length + Uri.SchemeDelimiter.Length;
@@ -16,11 +24,17 @@ namespace CommonUtilities
 
         private static readonly Regex _drsCompactId = DrsCompactId();
 
+        /// <summary>
+        /// Registers this parser with the runtime.
+        /// </summary>
         public static void Register()
         {
             Register(new DrsUriParser(), UriSchemeDrs, defaultPort: -1);
         }
 
+        /// <summary>
+        /// Constructor
+        /// </summary>
         public DrsUriParser() : base(
             GenericUriParserOptions.GenericAuthority |
             GenericUriParserOptions.NoFragment |
@@ -29,6 +43,7 @@ namespace CommonUtilities
         {
         }
 
+        /// <inheritdoc/>
         protected override bool IsWellFormedOriginalString(Uri uri)
         {
             if (!_prefix.AsSpan().Equals(uri.OriginalString.AsSpan(0, _prefixLength), StringComparison.Ordinal))
@@ -61,6 +76,13 @@ namespace CommonUtilities
             }
         }
 
+        /// <summary>
+        /// Determines whether the value is a legal DRS ID.
+        /// </summary>
+        /// <param name="accession">The accession/id.</param>
+        /// <returns>
+        ///   <c>true</c> if the value matches the spec; otherwise, <c>false</c>.
+        /// </returns>
         private static bool IsAccessionValid(ReadOnlySpan<char> accession)
         {
             foreach (var ch in accession)
@@ -77,24 +99,37 @@ namespace CommonUtilities
             return true;
         }
 
+        /// <inheritdoc/>
         protected override string GetComponents(Uri uri, UriComponents components, UriFormat format)
         {
+            // -------------------------------------------------------------------------------------------------------------
+            // DRS URI style |     Host     |    Path    | Description
+            // -------------------------------------------------------------------------------------------------------------
+            // Compact       | Prefix       | Accession  | If prefix contains a '/', it is provider_code/namespace.
+            // Hostname      | Host[:Port]  | ID         | Per the spec, ID and Accession are the same thing.
+            // -------------------------------------------------------------------------------------------------------------
+
+            // Hostname style are like HTTP, except they don't have fragments and the Path is limited to one level.
+            // Spec is silent on Query, it's not currently implemented here.
+
+            // Compact style are not IETL-valid, which is the raison d'être of this implementation.
+
+            var keepDelimiter = IsComponentIn(UriComponents.KeepDelimiter, components);
+
             if (IsCompactIdUri(uri))
             {
-                var keepDelimiter = IsComponent(components, UriComponents.KeepDelimiter);
-
                 // This is a compact id
                 StringBuilder builder = new();
                 var match = _drsCompactId.Match(uri.OriginalString[(_prefixLength)..]);
 
                 if (match.Success)
                 {
-                    if (IsComponent(components, UriComponents.Scheme))
+                    if (IsComponentIn(UriComponents.Scheme, components))
                     {
                         builder.Append(UriSchemeDrs);
                     }
 
-                    if (IsComponent(components, UriComponents.Host))
+                    if (IsComponentIn(UriComponents.Host, components))
                     {
                         if (builder.Length > 0)
                         {
@@ -105,7 +140,7 @@ namespace CommonUtilities
                         builder.Append(match.Groups["provider_code"].Value + match.Groups["namespace"].Value);
                     }
 
-                    if (IsComponent(components, UriComponents.Path))
+                    if (IsComponentIn(UriComponents.Path, components))
                     {
                         if (builder.Length > 0 || keepDelimiter)
                         {
@@ -136,9 +171,9 @@ namespace CommonUtilities
                 {
                     var path = GetModel(uri).LocalPath;
 
-                    if (path[0] == '/' && !IsComponent(components, UriComponents.KeepDelimiter))
+                    if (path[0] == '/' && !keepDelimiter)
                     {
-                        path = path.Substring(1);
+                        path = path[1..];
                     }
 
                     return path;
@@ -147,19 +182,30 @@ namespace CommonUtilities
                 return base.GetComponents(uri, components, format);
             }
 
+            // Gets an https version of the drs uri. Used to parse out the escaped Host, Port, and Path uri properties.
             static Uri GetModel(Uri uri)
                 => new($"{Uri.UriSchemeHttps}{uri.OriginalString[UriSchemeDrs.Length..]}");
         }
 
-        private static bool IsComponent(UriComponents components, UriComponents mask)
+        /// <summary>
+        /// Determines whether the specified components are included in the mask.
+        /// </summary>
+        /// <param name="mask">The mask.</param>
+        /// <param name="components">The components.</param>
+        /// <returns>
+        ///   <c>true</c> if any of the specified components is included in the mask; otherwise, <c>false</c>.
+        /// </returns>
+        private static bool IsComponentIn(UriComponents mask, UriComponents components)
             => (components & mask) != 0;
 
+        /// <inheritdoc/>
         protected override string? Resolve(Uri baseUri, Uri? relativeUri, out UriFormatException? parsingError)
         {
             // DRS relative URLs are simply not supported. Force an error.
             return base.Resolve(new Uri(".", UriKind.Relative), relativeUri, out parsingError);
         }
 
+        /// <inheritdoc/>
         protected override void InitializeAndValidate(Uri uri, out UriFormatException? parsingError)
         {
             // Hostname URIs are adequately processed by GenericUriParser.
@@ -224,6 +270,13 @@ namespace CommonUtilities
             }
         }
 
+        /// <summary>
+        /// Determines whether a URI is a DRS compact identifier URI.
+        /// </summary>
+        /// <param name="uri">The URI.</param>
+        /// <returns>
+        ///   <c>true</c> if the URI is a DRS compact id URI; otherwise, <c>false</c>.
+        /// </returns>
         private static bool IsCompactIdUri(Uri uri)
             => uri.OriginalString.StartsWith(_prefix, StringComparison.OrdinalIgnoreCase) && _drsCompactId.IsMatch(uri.OriginalString.AsSpan(_prefixLength));
 
