@@ -11,7 +11,7 @@ using Tes.Runner.Transfer;
 
 namespace Tes.Runner
 {
-    public class Executor : IAsyncDisposable
+    public sealed class Executor : IAsyncDisposable
     {
         public const long ZeroBytesTransferred = 0;
         public const long DefaultErrorExitCode = 1;
@@ -116,6 +116,8 @@ namespace Tes.Runner
             var bytesTransferred = ZeroBytesTransferred;
             var numberOfOutputs = 0;
             var errorMessage = string.Empty;
+            IEnumerable<CompletedUploadFile>? completedFiles = default;
+
             try
             {
                 await eventsPublisher.PublishUploadStartEventAsync(tesNodeTask);
@@ -139,7 +141,7 @@ namespace Tes.Runner
 
                 var optimizedOptions = OptimizeBlobPipelineOptionsForUpload(blobPipelineOptions, outputs);
 
-                bytesTransferred = await UploadOutputsAsync(optimizedOptions, outputs);
+                (bytesTransferred, completedFiles) = await UploadOutputsAsync(optimizedOptions, outputs);
 
                 await AppendMetrics(tesNodeTask.OutputsMetricsFormat, bytesTransferred);
 
@@ -150,23 +152,24 @@ namespace Tes.Runner
                 logger.LogError(e, "Upload operation failed");
                 statusMessage = EventsPublisher.FailedStatus;
                 errorMessage = e.Message;
+                completedFiles = default;
                 throw;
             }
             finally
             {
-                await eventsPublisher.PublishUploadEndEventAsync(tesNodeTask, numberOfOutputs, bytesTransferred, statusMessage, errorMessage);
+                await eventsPublisher.PublishUploadEndEventAsync(tesNodeTask, numberOfOutputs, bytesTransferred, statusMessage, errorMessage, completedFiles);
             }
         }
 
-        private async Task<long> UploadOutputsAsync(BlobPipelineOptions blobPipelineOptions, List<UploadInfo> outputs)
+        private async Task<UploadResults> UploadOutputsAsync(BlobPipelineOptions blobPipelineOptions, List<UploadInfo> outputs)
         {
             var uploader = await transferOperationFactory.CreateBlobUploaderAsync(blobPipelineOptions);
 
             var executionResult = await TimedExecutionAsync(async () => await uploader.UploadAsync(outputs));
 
-            logger.LogInformation("Executed Upload. Time elapsed: {ElapsedTime} Bandwidth: {Bandwidth} MiB/s", executionResult.Elapsed, BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds));
+            logger.LogInformation("Executed Upload. Time elapsed: {ElapsedTime} Bandwidth: {BandwidthMiBpS} MiB/s", executionResult.Elapsed, BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds));
 
-            return executionResult.Result;
+            return new(executionResult.Result, uploader.CompletedFiles);
         }
 
         private async Task<List<UploadInfo>?> CreateUploadOutputsAsync()
@@ -255,7 +258,7 @@ namespace Tes.Runner
 
             var executionResult = await TimedExecutionAsync(async () => await downloader.DownloadAsync(inputs));
 
-            logger.LogInformation("Executed Download. Time elapsed: {ElapsedTime} Bandwidth: {Bandwidth} MiB/s", executionResult.Elapsed, BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds));
+            logger.LogInformation("Executed Download. Time elapsed: {ElapsedTime} Bandwidth: {BandwidthMiBpS} MiB/s", executionResult.Elapsed, BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds));
 
             return executionResult.Result;
         }
@@ -298,9 +301,10 @@ namespace Tes.Runner
             return new(sw.Elapsed, result);
         }
 
-        private record TimedExecutionResult<T>(TimeSpan Elapsed, T Result);
+        private record struct UploadResults(long BytesTransferred, IEnumerable<CompletedUploadFile> CompletedFiles);
+        private record struct TimedExecutionResult<T>(TimeSpan Elapsed, T Result);
 
-        public async ValueTask DisposeAsync()
+        async ValueTask IAsyncDisposable.DisposeAsync()
         {
             await eventsPublisher.FlushPublishersAsync();
             GC.SuppressFinalize(this);

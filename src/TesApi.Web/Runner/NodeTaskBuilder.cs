@@ -377,6 +377,7 @@ namespace TesApi.Web.Runner
             {
                 return false;
             }
+
             //Ignore the case because constant segments could be lower case, pascal case or camel case.
             // e.g. /resourcegroup/ or /resourceGroup/
             return Regex.IsMatch(resourceId, ManagedIdentityResourceIdPattern, RegexOptions.IgnoreCase);

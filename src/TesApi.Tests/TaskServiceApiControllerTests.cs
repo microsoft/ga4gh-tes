@@ -12,6 +12,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Batch;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.Models;
@@ -306,12 +307,12 @@ namespace TesApi.Tests
             {
                 // Mock TryGetItemAsync to return true and provide a TesTask object
                 r.Setup(repo => repo.TryGetItemAsync(tesTaskId, It.IsAny<CancellationToken>(), It.IsAny<Action<TesTask>>()))
-                .Callback((string id, CancellationToken ct, Action<TesTask> action) => action(mockTesTask))
-                .ReturnsAsync(true);
+                    .Callback((string id, CancellationToken ct, Action<TesTask> action) => action(mockTesTask))
+                    .ReturnsAsync(true);
 
                 // Mock UpdateItemAsync to throw a RepositoryCollisionException
                 r.Setup(repo => repo.UpdateItemAsync(It.IsAny<TesTask>(), It.IsAny<CancellationToken>()))
-                .ThrowsAsync(new RepositoryCollisionException());
+                    .ThrowsAsync(new RepositoryCollisionException<TesTask>(Task.FromResult<TesTask>(default)));
             });
 
             var controller = services.GetT();
@@ -340,7 +341,7 @@ namespace TesApi.Tests
 
             Assert.IsNotNull(result);
             Assert.AreEqual(200, result.StatusCode);
-            Assert.AreEqual(TesState.CANCELED, tesTask.State);
+            Assert.AreEqual(TesState.CANCELING, tesTask.State);
             services.TesTaskRepository.Verify(x => x.UpdateItemAsync(tesTask, It.IsAny<CancellationToken>()));
         }
 
@@ -588,7 +589,7 @@ namespace TesApi.Tests
                     new(null, []));
                 r.Setup(repo => repo
                     .JsonFormattableRawString(It.IsAny<string>(), It.IsAny<FormattableString>()))
-                .Returns((string property, FormattableString sql) => new PostgreSqlCachingRepository<TesTaskDatabaseItem>.PrependableFormattableString($"{property}:", sql));
+                .Returns((string property, FormattableString sql) => new Tes.Utilities.PrependableFormattableString($"{property}:", sql));
             });
 
         private static Task<IActionResult> ListTasksWithTagArgumentsAsync(TaskServiceApiController controller, string query)

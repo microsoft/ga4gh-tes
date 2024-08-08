@@ -253,7 +253,7 @@ namespace TesApi.Web.Runner
                     inputs.AddRange(distinctAdditionalInputs);
                 }
 
-                await MapInputsAsync(inputs, pathParentDirectory, containerMountParentDirectory, builder);
+                await MapInputsAsync(inputs, pathParentDirectory, containerMountParentDirectory, builder, cancellationToken);
             }
         }
 
@@ -464,7 +464,7 @@ namespace TesApi.Web.Runner
         {
             var inputFileUrl =
                 await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, Guid.NewGuid().ToString(),
-                    cancellationToken);
+                    storageAccessProvider.BlobPermissionsWithWrite, cancellationToken);
 
             //return the URL without the SAS token, the runner will add it using the transformation strategy
             await storageAccessProvider.UploadBlobAsync(inputFileUrl, content, cancellationToken);
@@ -513,7 +513,7 @@ namespace TesApi.Web.Runner
         }
 
         private async Task MapInputsAsync(List<TesInput> inputs, string pathParentDirectory, string containerMountParentDirectory,
-            NodeTaskBuilder builder)
+            NodeTaskBuilder builder, CancellationToken cancellationToken)
         {
             if (inputs is null || inputs.Count == 0)
             {
@@ -531,9 +531,9 @@ namespace TesApi.Web.Runner
                     // Nextflow directory example
                     // input.Url = /storageaccount/work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
                     // input.Path = /work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
-                    var blobDirectoryUrlWithSasToken = await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, default, default, getContainerSas: true);
+                    var blobDirectoryUrlWithSasToken = await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, Azure.Storage.Sas.BlobSasPermissions.List, cancellationToken);
                     var blobDirectoryUrlWithoutSasToken = blobDirectoryUrlWithSasToken.GetLeftPart(UriPartial.Path);
-                    var blobAbsoluteUrls = await storageAccessProvider.GetBlobUrlsAsync(blobDirectoryUrlWithSasToken, default);
+                    var blobAbsoluteUrls = await storageAccessProvider.GetBlobUrlsAsync(blobDirectoryUrlWithSasToken, cancellationToken);
 
                     if (input.Type == default)
                     {

@@ -96,12 +96,13 @@ namespace TesApi.Web
                     .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryCache<TesTaskDatabaseItem>>()
                     .AddSingleton<TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()
+                    .AddSingleton<Events.RunnerEventsProcessor>()
                     .AddTransient<BatchPool>()
-                    .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
+                    .AddSingleton<Func<IBatchPool>>(services => () => services.GetService<BatchPool>())
                     .AddSingleton(CreateTerraApiClient)
                     .AddSingleton<IBatchPoolManager>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesBatchPoolManager>(sp, CreateBatchPoolManagerFromConfiguration(sp)))
 
-                    .AddControllers(options => options.Filters.Add<Controllers.OperationCancelledExceptionFilter>())
+                    .AddControllers(options => options.Filters.Add<OperationCancelledExceptionFilter>())
                         .AddNewtonsoftJson(opts =>
                         {
                             opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
@@ -298,8 +299,8 @@ namespace TesApi.Web
 
                     // Order is important for hosted services
                     .AddHostedService(sp => (AllowedVmSizesService)sp.GetRequiredService(typeof(IAllowedVmSizesService)))
-                    .AddHostedService<BatchPoolService>()
-                    .AddHostedService<Scheduler>();
+                    .AddHostedService<PoolScheduler>()
+                    .AddHostedService<TaskScheduler>();
             }
             catch (Exception exc)
             {

@@ -63,7 +63,7 @@ namespace TesApi.Tests.Runner
 
             storageAccessProviderMock = new();
             storageAccessProviderMock.Setup(x =>
-                    x.GetInternalTesTaskBlobUrlAsync(It.IsAny<TesTask>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                    x.GetInternalTesTaskBlobUrlAsync(It.IsAny<TesTask>(), It.IsAny<string>(), It.IsAny<Azure.Storage.Sas.BlobSasPermissions>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(InternalBlobUrlWithSas);
             storageAccessProviderMock.Setup(x =>
                     x.GetInternalTesBlobUrlWithoutSasToken(It.IsAny<string>()))
@@ -72,7 +72,7 @@ namespace TesApi.Tests.Runner
                     x.GetInternalTesTaskBlobUrlWithoutSasToken(It.IsAny<TesTask>(), It.IsAny<string>()))
                 .Returns(InternalBlobUrl);
             storageAccessProviderMock.Setup(x =>
-                    x.MapLocalPathToSasUrlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<TimeSpan?>(), It.IsAny<bool>()))
+                    x.MapLocalPathToSasUrlAsync(It.IsAny<string>(), It.IsAny<Azure.Storage.Sas.BlobSasPermissions>(), It.IsAny<CancellationToken>(), It.IsAny<TimeSpan?>()))
                 .Returns(Task.FromResult(new Uri("http://host")));
             storageAccessProviderMock.Setup(x =>
                     x.GetBlobUrlsAsync(It.IsAny<Uri>(), It.IsAny<CancellationToken>()))

@@ -20,14 +20,18 @@ namespace Tes.ApiClients
         private static readonly HttpClient HttpClient = new();
         private readonly TokenCredential tokenCredential = null!;
         private readonly SHA256 sha256 = SHA256.Create();
-        /// <summary>
-        /// Logger instance
-        /// </summary>
-        protected readonly ILogger Logger = null!;
         private readonly string tokenScope = null!;
         private readonly SemaphoreSlim semaphore = new(1, 1);
         private AccessToken accessToken;
 
+        /// <summary>
+        /// Logger instance
+        /// </summary>
+        protected readonly ILogger Logger = null!;
+
+        /// <summary>
+        /// <see cref="HttpResponseMessage"/> retry handler
+        /// </summary>
         protected readonly CachingRetryHandler.CachingAsyncRetryHandlerPolicy<HttpResponseMessage> cachingRetryHandler;
 
         /// <summary>
@@ -81,7 +85,8 @@ namespace Tes.ApiClients
         /// </summary>
         /// <returns><see cref="RetryHandler.OnRetryHandler{HttpResponseMessage}"/></returns>
         private RetryHandler.OnRetryHandler<HttpResponseMessage> LogRetryErrorOnRetryHttpResponseMessageHandler()
-            => (result, timeSpan, retryCount, correlationId, caller) =>
+        {
+            return new((result, timeSpan, retryCount, correlationId, caller) =>
             {
                 if (result.Exception is null)
                 {
@@ -93,7 +98,8 @@ namespace Tes.ApiClients
                     Logger?.LogError(result.Exception, @"Retrying in {Method} due to '{Message}': RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId}",
                         caller, result.Exception.Message, retryCount, timeSpan.ToString("c"), correlationId.ToString("D"));
                 }
-            };
+            });
+        }
 
         /// <summary>
         /// Sends request with a retry policy
@@ -105,7 +111,8 @@ namespace Tes.ApiClients
         /// <returns></returns>
         protected async Task<HttpResponseMessage> HttpSendRequestWithRetryPolicyAsync(
             Func<HttpRequestMessage> httpRequestFactory, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
-            => await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
+        {
+            return await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
             {
                 var request = httpRequestFactory();
 
@@ -116,6 +123,7 @@ namespace Tes.ApiClients
 
                 return await HttpClient.SendAsync(request, ct);
             }, cancellationToken);
+        }
 
         /// <summary>
         /// Sends a Http Get request to the URL and deserializes the body response to the specified type
@@ -159,7 +167,8 @@ namespace Tes.ApiClients
 
                 return await HttpClient.SendAsync(httpRequest, ct);
             },
-            (m, ct) => GetApiResponseContentAsync(m, typeInfo, ct), cancellationToken))!;
+            (m, ct) => GetApiResponseContentAsync(m, typeInfo, ct),
+            cancellationToken))!;
         }
 
         /// <summary>
@@ -199,14 +208,17 @@ namespace Tes.ApiClients
         /// <returns></returns>
         protected async Task<TResponse> HttpGetRequestWithRetryPolicyAsync<TResponse>(Uri requestUrl,
             JsonTypeInfo<TResponse> typeInfo, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
-            => await cachingRetryHandler.ExecuteWithRetryAndConversionAsync(async ct =>
+        {
+            return await cachingRetryHandler.ExecuteWithRetryAndConversionAsync(async ct =>
             {
                 //request must be recreated in every retry.
                 var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
 
                 return await HttpClient.SendAsync(httpRequest, ct);
             },
-            (m, ct) => GetApiResponseContentAsync(m, typeInfo, ct), cancellationToken);
+            (m, ct) => GetApiResponseContentAsync(m, typeInfo, ct),
+            cancellationToken);
+        }
 
         /// <summary>
         /// Returns an query string key-value, with the value escaped. If the value is null or empty returns an empty string
@@ -272,7 +284,8 @@ namespace Tes.ApiClients
 
                 return await HttpClient.SendAsync(request, ct);
             },
-            (m, ct) => GetApiResponseContentAsync(m, typeInfo, ct), cancellationToken);
+            (m, ct) => GetApiResponseContentAsync(m, typeInfo, ct),
+            cancellationToken);
         }
 
         private async Task AddAuthorizationHeaderToRequestAsync(HttpRequestMessage requestMessage, CancellationToken cancellationToken)
@@ -293,7 +306,7 @@ namespace Tes.ApiClients
             }
             catch (Exception e)
             {
-                Logger.LogError(e, @"Failed to set authentication header with the access token for scope:{TokenScope}",
+                Logger.LogError(e, @"Failed to set authentication header with the access token for scope: {TokenScope}",
                     tokenScope);
                 throw;
             }

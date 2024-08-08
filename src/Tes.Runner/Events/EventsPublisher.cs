@@ -11,8 +11,8 @@ namespace Tes.Runner.Events;
 
 public class EventsPublisher : IAsyncDisposable
 {
-    const string EventVersion = "1.0";
-    const string EventDataVersion = "1.0";
+    public const string EventVersion = "1.0";
+    public const string EventDataVersion = "1.0";
     public const string TesTaskRunnerEntityType = "TesRunnerTask";
     public const string DownloadStartEvent = "downloadStart";
     public const string DownloadEndEvent = "downloadEnd";
@@ -95,7 +95,7 @@ public class EventsPublisher : IAsyncDisposable
         await PublishAsync(eventMessage);
     }
 
-    public virtual async Task PublishUploadEndEventAsync(NodeTask nodeTask, int numberOfFiles, long totalSizeInBytes, string statusMessage, string? errorMessage = default)
+    public virtual async Task PublishUploadEndEventAsync(NodeTask nodeTask, int numberOfFiles, long totalSizeInBytes, string statusMessage, string? errorMessage = default, IEnumerable<CompletedUploadFile>? completedFiles = default)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, UploadEndEvent, statusMessage,
             nodeTask.WorkflowId);
@@ -104,8 +104,21 @@ public class EventsPublisher : IAsyncDisposable
         {
             { "numberOfFiles", numberOfFiles.ToString()},
             { "totalSizeInBytes", totalSizeInBytes.ToString()},
-            { "errorMessage", errorMessage??string.Empty}
+            { "errorMessage", errorMessage ?? string.Empty}
         };
+
+        if (completedFiles is not null)
+        {
+            completedFiles = completedFiles.ToList();
+            eventMessage.EventData.Add(@"fileLog-Count", completedFiles.Count().ToString("D"));
+
+            foreach (var (logEntry, index) in completedFiles.Select((logEntry, index) => (logEntry, index)))
+            {
+                eventMessage.EventData.Add($"fileSize-{index}", logEntry.Length.ToString("D"));
+                eventMessage.EventData.Add($"fileUri-{index}", logEntry.BlobUrl?.AbsoluteUri ?? string.Empty);
+                eventMessage.EventData.Add($"filePath-{index}", logEntry.FileName);
+            }
+        }
 
         await PublishAsync(eventMessage);
     }

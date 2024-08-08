@@ -25,7 +25,7 @@ namespace Tes.Repository
     /// A TesTask specific repository for storing the TesTask as JSON within an Entity Framework Postgres table
     /// </summary>
     /// <typeparam name="TesTask"></typeparam>
-    public sealed class TesTaskPostgreSqlRepository : PostgreSqlCachingRepository<TesTaskDatabaseItem>, IRepository<TesTask>
+    public sealed class TesTaskPostgreSqlRepository : PostgreSqlCachingRepository<TesTaskDatabaseItem, TesTask>, IRepository<TesTask>
     {
         // JsonSerializerOptions singleton factory
         private static readonly Lazy<JsonSerializerOptions> GetSerializerOptions = new(() =>
@@ -151,7 +151,7 @@ namespace Tes.Repository
                     var activeTasksCount = (await InternalGetItemsAsync(
                             ct,
                             orderBy: q => q.OrderBy(t => t.Json.CreationTime),
-                            efPredicates: Enumerable.Empty<Expression<Func<TesTask, bool>>>().Append(task => TesTask.ActiveStates.Contains(task.State))))
+                            efPredicates: Enumerable.Empty<Expression<Func<TesTask, bool>>>().Append(task => !TesTask.TerminalStates.Contains(task.State))))
                         .Count();
                     Logger?.LogInformation("Cache warmed successfully in {TotalSeconds:n3} seconds. Added {TasksAddedCount:n0} items to the cache.", sw.Elapsed.TotalSeconds, activeTasksCount);
                 }, cancellationToken);
@@ -183,7 +183,7 @@ namespace Tes.Repository
         public async Task<TesTask> CreateItemAsync(TesTask task, CancellationToken cancellationToken)
         {
             var item = new TesTaskDatabaseItem { Json = task };
-            item = await AddUpdateOrRemoveItemInDbAsync(item, WriteAction.Add, cancellationToken);
+            item = await AddUpdateOrRemoveItemInDbAsync(item, db => db.Json, WriteAction.Add, cancellationToken);
             return EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState(), CopyTesTask).TesTask;
         }
 
@@ -192,6 +192,7 @@ namespace Tes.Repository
         /// </summary>
         /// <param name="item">TesTask to store as JSON in the database</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
         public async Task<List<TesTask>> CreateItemsAsync(List<TesTask> items, CancellationToken cancellationToken)
              => [.. (await Task.WhenAll(items.Select(task => CreateItemAsync(task, cancellationToken))))];
 
@@ -200,14 +201,14 @@ namespace Tes.Repository
         {
             var item = await GetItemFromCacheOrDatabase(tesTask.Id, true, cancellationToken);
             item.Json = tesTask;
-            item = await AddUpdateOrRemoveItemInDbAsync(item, WriteAction.Update, cancellationToken);
+            item = await AddUpdateOrRemoveItemInDbAsync(item, db => db.Json, WriteAction.Update, cancellationToken);
             return EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState(), CopyTesTask).TesTask;
         }
 
         /// <inheritdoc/>
         public async Task DeleteItemAsync(string id, CancellationToken cancellationToken)
         {
-            _ = await AddUpdateOrRemoveItemInDbAsync(await GetItemFromCacheOrDatabase(id, true, cancellationToken), WriteAction.Delete, cancellationToken);
+            _ = await AddUpdateOrRemoveItemInDbAsync(await GetItemFromCacheOrDatabase(id, true, cancellationToken), db => db.Json, WriteAction.Delete, cancellationToken);
             _ = Cache?.TryRemove(id);
         }
 
@@ -314,7 +315,7 @@ namespace Tes.Repository
                 }
             }
 
-            return item;
+            return item.Clone();
         }
 
         /// <summary>
@@ -373,5 +374,4 @@ namespace Tes.Repository
     internal partial class SourceGenerationContext : JsonSerializerContext
     {
     }
-
 }
