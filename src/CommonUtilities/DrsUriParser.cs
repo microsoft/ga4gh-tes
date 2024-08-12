@@ -5,26 +5,28 @@ using System.Text.RegularExpressions;
 
 namespace CommonUtilities
 {
+    // ---------------------------------------------------------------------------------------------------------------
+    // DRS URI style |       Authority        |    Path    |                       Description
+    // ---------------------------------------------------------------------------------------------------------------
+    // Compact       | Prefix                 | Accession  | If prefix contains a '/', it is "provider_code/namespace".
+    // Hostname      | [UserInfo@]Host[:Port] | ID         | Per the spec, ID and Accession are the same thing.
+    // ---------------------------------------------------------------------------------------------------------------
+
+    // Hostname style are like HTTP, except they don't have fragments and the Path is limited to one level.
+    // Spec is silent on Query, it's currently not implemented for Compact style but is implemented for Hostname style.
+
+    // DRS Compact style is not IETL-valid, which is the raison d'être of this implementation. The DRS spec builds on
+    // the w3c definition of CURIE (with some changes).
+
     /// <summary>
     /// Uri parser for DRS scheme
     /// </summary>
     /// <seealso cref="GenericUriParser" />
-    // -------------------------------------------------------------------------------------------------------------
-    // DRS URI style |          Host          |    Path    | Description
-    // -------------------------------------------------------------------------------------------------------------
-    // Compact       | Prefix                 | Accession  | If prefix contains a '/', it is provider_code/namespace.
-    // Hostname      | [UserInfo@]Host[:Port] | ID         | Per the spec, ID and Accession are the same thing.
-    // -------------------------------------------------------------------------------------------------------------
-
-    // Hostname style are like HTTP, except they don't have fragments and the Path is limited to one level.
-    // Spec is silent on Query, it's not currently implemented here.
-
-    // Compact style are not IETL-valid, which is the raison d'être of this implementation.
     public sealed partial class DrsUriParser : GenericUriParser
     {
-        private static readonly int _prefixLength = UriSchemeDrs.Length + Uri.SchemeDelimiter.Length;
-        private static readonly string _prefix = UriSchemeDrs + Uri.SchemeDelimiter;
-        private static readonly char[] _allowedAccessionOthers = ['-', '.', '_', '~'];
+        private static readonly int _uriPrefixLength = UriSchemeDrs.Length + Uri.SchemeDelimiter.Length;
+        private static readonly string _uriPrefix = UriSchemeDrs + Uri.SchemeDelimiter; // drs://
+        private static readonly char[] _allowedAccessionOthers = ['-', '.', '_', '~']; // https://ga4gh.github.io/data-repository-service-schemas/docs/#tag/DRS-API-Principles/DRS-IDs
 
         private static readonly Regex _drsCompactId = DrsCompactId();
 
@@ -56,7 +58,7 @@ namespace CommonUtilities
         { }
 
         private static bool IsWellFormedSchemeAndDelimiter(Uri uri)
-            => _prefix.AsSpan().Equals(uri.OriginalString.AsSpan(0, _prefixLength), StringComparison.Ordinal);
+            => _uriPrefix.AsSpan().Equals(uri.OriginalString.AsSpan(0, _uriPrefixLength), StringComparison.Ordinal);
 
         private static bool IsWellFormedNamespaceOriginalString(Uri uri, IDrsParser parser)
         {
@@ -68,7 +70,7 @@ namespace CommonUtilities
             UriBuilder builder = new(new Uri($"{Uri.UriSchemeHttps}{uri.OriginalString[UriSchemeDrs.Length..]}"));
 
             var path = builder.Path ?? string.Empty;
-            builder.Path = string.Empty;
+            builder.Path = string.Empty; // ID will be checked separately
 
             if (!parser.IsWellFormedOriginalString(builder.Uri))
             {
@@ -90,7 +92,7 @@ namespace CommonUtilities
                 return false;
             }
 
-            return _drsCompactId.IsMatch(uri.OriginalString.AsSpan(_prefixLength)) &&
+            return _drsCompactId.IsMatch(uri.OriginalString.AsSpan(_uriPrefixLength)) &&
                 IsAccessionValid(uri.OriginalString.AsSpan(uri.OriginalString.LastIndexOf(':') + 1).ToString());
         }
 
@@ -126,27 +128,35 @@ namespace CommonUtilities
 
         protected override UriParser OnNewUri() => new DrsParser();
 
+        /// <summary>
+        /// Methods <see cref="DrsUriParser"/> calls on <see cref="DrsParser"/>.
+        /// </summary>
         private interface IDrsParser
         {
             bool IsWellFormedOriginalString(Uri uri);
         }
 
+        /// <summary>
+        /// Parser associated with each instance of a DRS Uri
+        /// </summary>
+        /// <seealso cref="UriParser" />
+        /// <seealso cref="IDrsParser" />
         private sealed partial class DrsParser : UriParser, IDrsParser
         {
             private static readonly Regex _parseDrsCompactId = ParseDrsCompactId();
 
-            // These objects hold the following parts of the URI as applicable according to uri style: UserInfo, Host, Port, Path, & Query.
-            // Only one of them should ever be non null.
+            // These fields hold the following parts of the URI as applicable according to uri style: UserInfo, Host, Port, Path, & Query.
+            // Only one of them should ever be non null. One of them must be set in InitializeAndValidate
             private Uri? _namespaceAsHttp;
             private Match? _compactId;
 
             /// <summary>
-            /// Gets a value indicating whether this instance is compact identifier.
+            /// Gets a value indicating whether this instance is a compact identifier style URI.
             /// </summary>
             /// <value>
             ///   <c>true</c> if the associated Uri is a drs compact identifier uri; otherwise, <c>false</c>.
             /// </value>
-            /// <exception cref="System.InvalidOperationException">Uri initialization and validation is not complete.</exception>
+            /// <exception cref="InvalidOperationException">Uri initialization and validation is not complete.</exception>
             private bool IsCompactId
             {
                 get
@@ -156,17 +166,14 @@ namespace CommonUtilities
                         throw new InvalidOperationException("Uri initialization and validation is not complete.");
                     }
 
+                    if (_namespaceAsHttp is not null && _compactId is not null)
+                    {
+                        throw new System.Diagnostics.UnreachableException("Uri is corrupted.");
+                    }
+
                     return _compactId is not null;
                 }
             }
-
-            /// <inheritdoc/> 
-            protected override bool IsBaseOf(Uri baseUri, Uri relativeUri)
-                => UriSchemeDrs.Equals(baseUri.Scheme, StringComparison.OrdinalIgnoreCase) && UriSchemeDrs.Equals(relativeUri.Scheme, StringComparison.OrdinalIgnoreCase)
-                ? baseUri.Host.Equals(relativeUri.Host, StringComparison.OrdinalIgnoreCase) &&
-                    baseUri.Port.Equals(relativeUri.Port) &&
-                    baseUri.Query.Equals(relativeUri.Query, StringComparison.Ordinal) // TODO: review
-                : base.IsBaseOf(baseUri, relativeUri);
 
             /// <inheritdoc/>
             protected override bool IsWellFormedOriginalString(Uri uri)
@@ -174,9 +181,19 @@ namespace CommonUtilities
                 ? IsWellFormedCompactIdOriginalString(uri)
                 : IsWellFormedNamespaceOriginalString(uri, this);
 
+            /// <inheritdoc/> 
+            protected override bool IsBaseOf(Uri baseUri, Uri relativeUri)
+                => UriSchemeDrs.Equals(baseUri.Scheme, StringComparison.OrdinalIgnoreCase) && UriSchemeDrs.Equals(relativeUri.Scheme, StringComparison.OrdinalIgnoreCase)
+                ? baseUri.Host.Equals(relativeUri.Host, StringComparison.OrdinalIgnoreCase) &&
+                    baseUri.Port.Equals(relativeUri.Port) &&
+                    baseUri.Query.Equals(relativeUri.Query, StringComparison.Ordinal)
+                : base.IsBaseOf(baseUri, relativeUri);
+
             /// <inheritdoc/>
             protected override string? Resolve(Uri baseUri, Uri? relativeUri, out UriFormatException? parsingError)
             {
+                parsingError = null;
+
                 if (relativeUri is null || string.IsNullOrWhiteSpace(relativeUri.OriginalString) || !IsAccessionValid(relativeUri.OriginalString))
                 {
                     parsingError = new("relativeUri is not a valid DRS ID");
@@ -184,14 +201,8 @@ namespace CommonUtilities
                 }
 
                 return IsCompactId
-                    ? ResolveCompactId(baseUri, relativeUri, out parsingError)
+                    ? $"{_uriPrefix}{baseUri.Host}:{relativeUri.OriginalString}"
                     : base.Resolve(baseUri, relativeUri, out parsingError);
-            }
-
-            private static string? ResolveCompactId(Uri baseUri, Uri relativeUri, out UriFormatException? parsingError)
-            {
-                parsingError = null;
-                return $"{_prefix}{baseUri.Host}:{relativeUri.OriginalString}";
             }
 
             /// <inheritdoc/>
@@ -204,16 +215,15 @@ namespace CommonUtilities
 
             private string GetCompactIdComponents(Uri uri, UriComponents components, UriFormat format) => components switch
             {
-                // UriBuilder
-                UriComponents.AbsoluteUri => _prefix + GetCompactIdComponents(uri, UriComponents.Host, UriFormat.UriEscaped) + GetCompactIdComponents(uri, UriComponents.Path | UriComponents.KeepDelimiter, UriFormat.UriEscaped),
+                UriComponents.AbsoluteUri => _uriPrefix + GetCompactIdComponents(uri, UriComponents.Host, UriFormat.UriEscaped) + GetCompactIdComponents(uri, UriComponents.Path | UriComponents.KeepDelimiter, UriFormat.UriEscaped),
 
-                // "provider_code" includes the separating '/' if a provider code was found due to the regex.
+                // "provider_code" includes the separating '/' if a provider code was found by the regex.
                 UriComponents.Host => _compactId!.Groups["provider_code"].Value.ToLowerInvariant() + _compactId!.Groups["namespace"].Value.ToLowerInvariant(),
 
                 var c when c.AreComponentExactly(UriComponents.Path, UriComponents.KeepDelimiter) =>
                     (components.AreComponentsIn(UriComponents.KeepDelimiter) ? ":" : string.Empty) + _compactId!.Groups["accession"].Value,
 
-                // Base class implementation will call back here for (some of) the individual elements.
+                // Base class implementation will call back here for individual elements as applicable.
                 _ => base.GetComponents(uri, components, format),
             };
 
@@ -235,14 +245,14 @@ namespace CommonUtilities
                     return path;
                 })(),
 
-                // Base class implementation will call back here for (some of) the individual elements.
+                // Base class implementation will call back here for individual elements as applicable.
                 _ => base.GetComponents(uri, components, format),
             };
 
             /// <inheritdoc/>
             protected override void InitializeAndValidate(Uri uri, out UriFormatException? parsingError)
             {
-                if (!uri.OriginalString.StartsWith(_prefix, StringComparison.OrdinalIgnoreCase))
+                if (!uri.OriginalString.StartsWith(_uriPrefix, StringComparison.OrdinalIgnoreCase))
                 {
                     parsingError = new("Invalid DRS URI: Unexpected schema in Uri.");
                     return;
@@ -256,7 +266,7 @@ namespace CommonUtilities
                     return;
                 }
 
-                var uriWithoutPrefix = uri.OriginalString.AsSpan(_prefixLength);
+                var uriWithoutPrefix = uri.OriginalString.AsSpan(_uriPrefixLength);
 
                 var idxOfEndOfPath = uriWithoutPrefix.IndexOfAny(['?', '#']);
                 var authorityAndPath = idxOfEndOfPath == -1 ? uriWithoutPrefix : uriWithoutPrefix[..idxOfEndOfPath];
@@ -275,7 +285,7 @@ namespace CommonUtilities
                 if (_compactId is null)
                 {
                     // hostname style
-                    // This https uri is used to parse out the escaped Host, Port, and Path uri properties because GenericUriParser is unable to do it correctly with our settings.
+                    // This https uri is used to parse out the escaped Host, Port, and Path uri properties.
                     _namespaceAsHttp = new(Uri.UriSchemeHttps + Uri.SchemeDelimiter + uriWithoutPrefix.ToString());
 
                     if (!IsHostnameUriValid(uri))
@@ -284,7 +294,7 @@ namespace CommonUtilities
                     }
                     else
                     {
-                        // This is a hostname URI. However we turned off the host uri parsing in base.InitializeAndValidate (to prevent forming filesystem style URIs), so we'll validate it here.
+                        // Validate Host here separately because the GenericUriParser settings turn off host validations because of the settings required to successfully parse compact id URIs
                         switch (Uri.CheckHostName(uri.Host))
                         {
                             case UriHostNameType.Dns:
@@ -305,6 +315,7 @@ namespace CommonUtilities
                     parsingError = new("Invalid DRS URI: Invalid DSR ID/Accession.");
                 }
 
+                // Verifies that base.InitializeAndValidate() did not create an invalid Uri for the basis of a hostname URI
                 static bool IsHostnameUriValid(Uri uri)
                 {
                     if (!uri.IsAbsoluteUri)
@@ -321,6 +332,7 @@ namespace CommonUtilities
                     return true;
                 }
 
+                // Verifies that the DRS ID (aka compact id accession) is valid
                 static bool IsDrsIdValid(Uri uri)
                 {
                     var path = uri.AbsolutePath;
@@ -340,6 +352,7 @@ namespace CommonUtilities
                 }
             }
 
+            // IDrsParser
             bool IDrsParser.IsWellFormedOriginalString(Uri uri) => base.IsWellFormedOriginalString(uri);
 
             // Same as DrsCompactId(), except with RegexOptions.IgnoreCase to allow case insensitive comparisons.
