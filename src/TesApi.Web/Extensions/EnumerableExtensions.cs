@@ -10,7 +10,7 @@ namespace TesApi.Web.Extensions
     /// <summary>
     /// <see cref="IEnumerable{T}"/> extensions
     /// </summary>
-    public static class EmumerableExtensions
+    public static class EnumerableExtensions
     {
         /// <summary>
         /// Filters a sequence of values based on a false predicate.

@@ -64,6 +64,9 @@ namespace TesApi.Web
 
         internal const string NodeTaskRunnerFilename = "tes-runner";
 
+        internal static TimeSpan QueuedTesTaskTaskGroupGatherWindow = TimeSpan.FromSeconds(10);
+        internal static TimeSpan QueuedTesTaskPoolGroupGatherWindow = TaskScheduler.BatchRunInterval;
+
         private const string AzureSupportUrl = "https://portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/newsupportrequest";
         private const int PoolKeyLength = 55; // 64 max pool name length - 9 chars generating unique pool names
         private const int DefaultCoreCount = 1;
@@ -536,296 +539,68 @@ namespace TesApi.Web
             return separatorIndex == -1 ? cloudTaskId : cloudTaskId[..separatorIndex];
         }
 
-        private record struct QueuedTaskPoolMetadata(TesTask TesTask, VirtualMachineInformation VirtualMachineInfo, IList<string> Identities, string PoolDisplayName);
-        private record struct QueuedTaskJobMetadata(string PoolKey, string JobId, VirtualMachineInformation VirtualMachineInfo, IEnumerable<TesTask> Tasks);
-        private record struct QueuedTaskMetadata(string PoolKey, IEnumerable<TesTask> Tasks);
+        // Collections and records managing the processing of TesTasks in Queued status
+        private record struct PendingCloudTask(CloudTask CloudTask, TaskCompletionSource TaskCompletion);
+        private record struct PendingPoolRequest(string PoolKey, VirtualMachineInformation VirtualMachineInfo, IList<string> Identities, string PoolDisplayName, TaskCompletionSource<string> TaskCompletion);
+        private record struct PendingPool(string PoolKey, VirtualMachineInformation VirtualMachineInfo, IList<string> Identities, string PoolDisplayName, int InitialTarget, IEnumerable<TaskCompletionSource<string>> TaskCompletions);
+        private record struct ImmutableQueueWithTimer<T>(Timer Timer, ImmutableQueue<T> Queue);
+
+        private readonly ConcurrentDictionary<string, ImmutableQueueWithTimer<PendingCloudTask>> _queuedTesTaskPendingTasksByJob = new();
+        private readonly ConcurrentDictionary<string, ImmutableQueueWithTimer<PendingPoolRequest>> _queuedTesTaskPendingPoolsByKey = new();
+        private readonly ConcurrentQueue<(string JobId, IList<PendingCloudTask> Tasks)> _queuedTesTaskPendingJobBatches = new();
+        private readonly ConcurrentQueue<PendingPool> _queuedTesTaskPendingPoolQuotas = new();
+        private readonly ConcurrentQueue<PendingPool> _queuedTesTaskPendingPools = new();
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<RelatedTask<TesTask, bool>> ProcessQueuedTesTasksAsync(TesTask[] tesTasks, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        public async Task<bool> ProcessQueuedTesTaskAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
-            ConcurrentBag<RelatedTask<TesTask, bool>> results = []; // Early item return facilitator. TaskCatchException() & TaskCatchAggregateException() add items to this.
-            ConcurrentDictionary<string, ImmutableArray<QueuedTaskPoolMetadata>> tasksPoolMetadataByPoolKey = new();
+            string poolKey = default;
 
-            var acrPullIdentity = await actionIdentityProvider.GetAcrPullActionIdentity(CancellationToken.None);
-
+            try
             {
-                logger.LogDebug(@"Checking quota for {QueuedTasks} tasks.", tesTasks.Length);
+                var identities = new List<string>();
 
-                // Determine how many nodes in each pool we might need for this group.
-                await Parallel.ForEachAsync(tesTasks, cancellationToken, async (tesTask, token) =>
+                if (!string.IsNullOrWhiteSpace(globalManagedIdentity))
                 {
-                    string poolKey = default;
-                    var identities = new List<string>();
-
-                    if (!string.IsNullOrWhiteSpace(globalManagedIdentity))
-                    {
-                        identities.Add(globalManagedIdentity);
-                    }
-
-                    if (tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true)
-                    {
-                        var workflowId = tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity);
-
-                        if (!NodeTaskBuilder.IsValidManagedIdentityResourceId(workflowId))
-                        {
-                            workflowId = azureProxy.GetManagedIdentityInBatchAccountResourceGroup(workflowId);
-                        }
-
-                        identities.Add(workflowId);
-                    }
-
-                    if (acrPullIdentity is not null)
-                    {
-                        identities.Add(acrPullIdentity);
-                    }
-
-                    try
-                    {
-                        var virtualMachineInfo = await GetVmSizeAsync(tesTask, token);
-                        (poolKey, var displayName) = GetPoolKey(tesTask, virtualMachineInfo, identities);
-                        await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, needPoolOrJobQuotaCheck: !IsPoolAvailable(poolKey), cancellationToken: token);
-
-                        _ = tasksPoolMetadataByPoolKey.AddOrUpdate(poolKey,
-                            _ => [new(tesTask, virtualMachineInfo, identities, displayName)],
-                            (_, list) => list.Add(new(tesTask, virtualMachineInfo, identities, displayName)));
-                    }
-                    catch (AggregateException aggregateException)
-                    {
-                        TaskCatchAggregateException(aggregateException.Flatten().InnerExceptions, tesTask, poolKey);
-                    }
-                    catch (Exception exception)
-                    {
-                        TaskCatchException(exception, tesTask, poolKey);
-                    }
-                });
-            }
-
-            // Return any results that are ready
-            foreach (var result in results)
-            {
-                yield return result;
-            }
-
-            if (tasksPoolMetadataByPoolKey.IsEmpty)
-            {
-                yield break;
-            }
-
-            results.Clear();
-
-            // Determine how many nodes in each possibly new pool we might need for this group of tasks.
-            var neededPoolNodesByPoolKey = tasksPoolMetadataByPoolKey.ToDictionary(t => t.Key, t => t.Value.Length);
-            ConcurrentBag<QueuedTaskJobMetadata> tasksJobMetadata = [];
-
-            {
-                // Determine how many new pools/jobs we need now
-                var requiredNewPools = neededPoolNodesByPoolKey.Keys.WhereNot(IsPoolAvailable).ToArray();
-
-                // Revisit pool/job quotas (the above loop already dealt with the possiblility of needing just one more pool or job).
-                // This will remove pool keys we cannot accomodate due to quota, along with all of their associated tasks, from being queued into Batch.
-                if (requiredNewPools.Skip(1).Any())
-                {
-                    bool TryRemoveKeyAndTasks(string key, out (string Key, ImmutableArray<QueuedTaskPoolMetadata> ListOfTaskMetadata) result)
-                    {
-                        result = default;
-
-                        if (tasksPoolMetadataByPoolKey.TryRemove(key, out var listOfTaskMetadata))
-                        {
-                            result = (key, listOfTaskMetadata);
-                            return true;
-                        }
-
-                        return false;
-                    }
-
-                    var (exceededQuantity, exception) = await quotaVerifier.CheckBatchAccountPoolAndJobQuotasAsync(requiredNewPools.Length, cancellationToken);
-
-                    foreach (var (key, listOfTaskMetadata) in requiredNewPools
-                        .Reverse() // TODO: do we want to favor earlier or later tasks?
-                        .SelectWhere<string, (string, ImmutableArray<QueuedTaskPoolMetadata>)>(TryRemoveKeyAndTasks)
-                        .Take(exceededQuantity))
-                    {
-                        foreach (var task in listOfTaskMetadata.Select(m => m.TesTask))
-                        {
-                            yield return new(HandleExceptionAsync(exception, key, task), task);
-                        }
-                    }
+                    identities.Add(globalManagedIdentity);
                 }
 
-                logger.LogDebug(@"Obtaining {PoolQuantity} batch pool identifiers for {QueuedTasks} tasks.", tasksPoolMetadataByPoolKey.Count, tasksPoolMetadataByPoolKey.Values.Sum(l => l.Length));
-
-                await Parallel.ForEachAsync(tasksPoolMetadataByPoolKey, cancellationToken, async (pool, token) =>
+                if (tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true)
                 {
-                    var (_, virtualMachineInfo, identities, displayName) = pool.Value.First();
+                    var workflowId = tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity);
 
-                    try
+                    if (!NodeTaskBuilder.IsValidManagedIdentityResourceId(workflowId))
                     {
-                        var useGen2 = virtualMachineInfo.HyperVGenerations?.Contains("V2", StringComparer.OrdinalIgnoreCase) ?? false;
-                        var poolId = (await GetOrAddPoolAsync(
-                            key: pool.Key,
-                            isPreemptable: virtualMachineInfo.LowPriority,
-                            modelPoolFactory: async (id, ct) => await GetPoolSpecification(
-                                name: id,
-                                displayName: displayName,
-                                poolIdentity: GetBatchPoolIdentity(identities),
-                                vmSize: virtualMachineInfo.VmSize,
-                                vmFamily: virtualMachineInfo.VmFamily,
-                                preemptable: virtualMachineInfo.LowPriority,
-                                initialTarget: neededPoolNodesByPoolKey[pool.Key],
-                                nodeInfo: useGen2 ? gen2BatchNodeInfo : gen1BatchNodeInfo,
-                                encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
-                                cancellationToken: ct),
-                            cancellationToken: token)
-                            ).PoolId;
-
-                        tasksJobMetadata.Add(new(pool.Key, poolId, virtualMachineInfo, pool.Value.Select(tuple => tuple.TesTask)));
+                        workflowId = azureProxy.GetManagedIdentityInBatchAccountResourceGroup(workflowId);
                     }
-                    catch (AggregateException aggregateException)
-                    {
-                        var innerExceptions = aggregateException.Flatten().InnerExceptions;
 
-                        foreach (var tesTask in pool.Value.Select(tuple => tuple.TesTask))
-                        {
-                            TaskCatchAggregateException(innerExceptions, tesTask, pool.Key);
-                        }
-                    }
-                    catch (Exception exception)
-                    {
-                        foreach (var tesTask in pool.Value.Select(tuple => tuple.TesTask))
-                        {
-                            TaskCatchException(exception, tesTask, pool.Key);
-                        }
-                    }
-                });
-            }
-
-            // Return any results that are ready
-            foreach (var result in results)
-            {
-                yield return result;
-            }
-
-            if (tasksJobMetadata.IsEmpty)
-            {
-                yield break;
-            }
-
-            results.Clear();
-
-            ConcurrentBag<QueuedTaskMetadata> tasksMetadata = [];
-
-            async Task<CloudTask> GetCloudTaskAsync(TesTask tesTask, VirtualMachineInformation virtualMachineInfo, string poolKey, string poolId, string acrPullIdentity, CancellationToken cancellationToken)
-            {
-                try
-                {
-                    var tesTaskLog = tesTask.AddTesTaskLog();
-                    tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
-                    var cloudTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
-                    tesTask.PoolId = poolId;
-                    var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(cloudTaskId, tesTask, acrPullIdentity, cancellationToken);
-
-                    logger.LogInformation(@"Creating batch task for TES task {TesTaskId}. Using VM size {VmSize}.", tesTask.Id, virtualMachineInfo.VmSize);
-                    return cloudTask;
-                }
-                catch (AggregateException aggregateException)
-                {
-                    TaskCatchAggregateException(aggregateException.Flatten().InnerExceptions, tesTask, poolKey);
-                }
-                catch (Exception exception)
-                {
-                    TaskCatchException(exception, tesTask, poolKey);
+                    identities.Add(workflowId);
                 }
 
-                return null;
+                // acrPullIdentity is special. Add it to the end of the list even if it is null, so it is always retrievable.
+                identities.Add(await actionIdentityProvider.GetAcrPullActionIdentity(cancellationToken));
+
+                logger.LogDebug(@"Checking quota for {TesTask}.", tesTask.Id);
+
+                var virtualMachineInfo = await GetVmSizeAsync(tesTask, cancellationToken);
+                (poolKey, var displayName) = GetPoolKey(tesTask, virtualMachineInfo, identities);
+                await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, needPoolOrJobQuotaCheck: !IsPoolAvailable(poolKey), cancellationToken: cancellationToken);
+
+                // double await because the method call returns a System.Task. When that Task returns, the TesTask has been queued to a job and a pool exists to run that job's tasks
+                await await AttachQueuedTesTaskToBatchPoolAsync(poolKey, tesTask, virtualMachineInfo, identities, displayName, cancellationToken);
+
+                var tesTaskLog = tesTask.GetOrAddTesTaskLog();
+                tesTaskLog.StartTime = DateTimeOffset.UtcNow;
+                tesTask.State = TesState.INITIALIZING;
+                return true;
             }
-
-            await Parallel.ForEachAsync(
-                tasksJobMetadata.Select(metadata => (metadata.JobId, metadata.PoolKey, metadata.Tasks, CloudTasks: metadata.Tasks
-                    .Select(task => new RelatedTask<TesTask, CloudTask>(GetCloudTaskAsync(task, metadata.VirtualMachineInfo, metadata.PoolKey, metadata.JobId, acrPullIdentity, cancellationToken), task))
-                    .WhenEach(cancellationToken, task => task.Task))),
-                cancellationToken,
-                async (metadata, token) =>
-                {
-                    var (jobId, poolKey, tasks, relatedCloudTasks) = metadata;
-
-                    try
-                    {
-                        var cloudTasks = (await relatedCloudTasks.ToListAsync(token)).Where(task => task.Task.Result is not null);
-                        await azureProxy.AddBatchTasksAsync(cloudTasks.Select(task => task.Task.Result), jobId, token);
-
-                        tasksMetadata.Add(new(poolKey, cloudTasks.Select(task => task.Related)));
-                    }
-                    catch (AggregateException aggregateException)
-                    {
-                        var innerExceptions = aggregateException.Flatten().InnerExceptions;
-
-                        foreach (var tesTask in tasks)
-                        {
-                            TaskCatchAggregateException(innerExceptions, tesTask, poolKey);
-                        }
-                    }
-                    catch (Exception exception)
-                    {
-                        foreach (var tesTask in tasks)
-                        {
-                            TaskCatchException(exception, tesTask, poolKey);
-                        }
-                    }
-                });
-
-            // Return any results that are ready
-            foreach (var result in results)
-            {
-                yield return result;
-            }
-
-            if (tasksMetadata.IsEmpty)
-            {
-                yield break;
-            }
-
-            results.Clear();
-
-            _ = Parallel.ForEach(tasksMetadata.SelectMany(metadata => metadata.Tasks.Select(task => (task, metadata.PoolKey))), metadata =>
-            {
-                var (tesTask, poolKey) = metadata;
-
-                try
-                {
-                    var tesTaskLog = tesTask.GetOrAddTesTaskLog();
-                    tesTaskLog.StartTime = DateTimeOffset.UtcNow;
-                    tesTask.State = TesState.INITIALIZING;
-                    results.Add(new(Task.FromResult(true), tesTask));
-                }
-                catch (AggregateException aggregateException)
-                {
-                    TaskCatchAggregateException(aggregateException.Flatten().InnerExceptions, tesTask, poolKey);
-                }
-                catch (Exception exception)
-                {
-                    TaskCatchException(exception, tesTask, poolKey);
-                }
-            });
-
-            foreach (var result in results)
-            {
-                yield return result;
-            }
-
-            yield break;
-
-            void TaskCatchException(Exception exception, TesTask tesTask, string poolKey)
-            {
-                results.Add(new(HandleExceptionAsync(exception, poolKey, tesTask), tesTask));
-            }
-
-            void TaskCatchAggregateException(IEnumerable<Exception> innerExceptions, TesTask tesTask, string poolKey)
+            catch (AggregateException aggregateException)
             {
                 var result = false;
                 var exceptions = new List<Exception>();
 
-                foreach (var partResult in innerExceptions
-                    .Select(ex => HandleExceptionAsync(ex, poolKey, tesTask)))
+                foreach (var partResult in aggregateException.InnerExceptions
+                    .Select(ex => QueuedTesTaskHandleExceptionAsync(ex, poolKey, tesTask)))
                 {
                     if (partResult.IsFaulted)
                     {
@@ -837,95 +612,367 @@ namespace TesApi.Web
                     }
                 }
 
-                results.Add(new(exceptions.Count == 0
-                    ? Task.FromResult(result)
-                    : Task.FromException<bool>(new AggregateException(exceptions)),
-                    tesTask));
-            }
-
-            Task<bool> HandleExceptionAsync(Exception exception, string poolKey, TesTask tesTask)
-            {
-                switch (exception)
+                if (exceptions.Count == 0)
                 {
-                    case AzureBatchPoolCreationException azureBatchPoolCreationException:
-                        if (!azureBatchPoolCreationException.IsTimeout && !azureBatchPoolCreationException.IsJobQuota && !azureBatchPoolCreationException.IsPoolQuota && azureBatchPoolCreationException.InnerException is not null)
-                        {
-                            return HandleExceptionAsync(azureBatchPoolCreationException.InnerException, poolKey, tesTask);
-                        }
+                    return result;
+                }
+                else
+                {
+                    throw new AggregateException(exceptions);
+                }
+            }
+            catch (Exception exception)
+            {
+                var result = QueuedTesTaskHandleExceptionAsync(exception, poolKey, tesTask);
 
-                        logger.LogWarning(azureBatchPoolCreationException, "TES task: {TesTask} AzureBatchPoolCreationException.Message: {ExceptionMessage}. This might be a transient issue. Task will remain with state QUEUED. Confirmed timeout: {ConfirmedTimeout}", tesTask.Id, azureBatchPoolCreationException.Message, azureBatchPoolCreationException.IsTimeout);
+                if (result.IsFaulted)
+                {
+                    throw result.Exception;
+                }
+                else
+                {
+                    return result.Result;
+                }
+            }
+        }
 
-                        if (azureBatchPoolCreationException.IsJobQuota || azureBatchPoolCreationException.IsPoolQuota)
-                        {
-                            neededPools.Add(poolKey);
-                            tesTask.SetWarning(azureBatchPoolCreationException.InnerException switch
-                            {
-                                null => "Unknown reason",
-                                Microsoft.Rest.Azure.CloudException cloudException => cloudException.Body.Message,
-                                var e when e is BatchException batchException && batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException => batchErrorException.Body.Message.Value,
-                                _ => "Unknown reason",
-                            });
-                        }
+        private async ValueTask<Task> AttachQueuedTesTaskToBatchPoolAsync(string poolKey, TesTask tesTask, VirtualMachineInformation virtualMachineInfo, IList<string> identities, string poolDisplayName, CancellationToken cancellationToken)
+        {
+            TaskCompletionSource taskCompletion = new(); // This provides the System.Task this method returns
 
-                        break;
+            try
+            {
+                var pool = batchPools.TryGetValue(poolKey, out var set) ? set.LastOrDefault(p => p.IsAvailable) : default;
 
-                    case AzureBatchQuotaMaxedOutException azureBatchQuotaMaxedOutException:
-                        logger.LogWarning("TES task: {TesTask} AzureBatchQuotaMaxedOutException.Message: {ExceptionMessage}. Not enough quota available. Task will remain with state QUEUED.", tesTask.Id, azureBatchQuotaMaxedOutException.Message);
-                        neededPools.Add(poolKey);
-                        break;
+                if (pool is null)
+                {
+                    TaskCompletionSource<string> poolCompletion = new(); // This provides the poolId of the pool provided for the task
+                    AddTValueToCollectorQueue(
+                        key: poolKey,
+                        value: new PendingPoolRequest(poolKey, virtualMachineInfo, identities, poolDisplayName, poolCompletion),
+                        dictionary: _queuedTesTaskPendingPoolsByKey,
+                        enqueue: (key, tasks) => _queuedTesTaskPendingPoolQuotas.Enqueue(new(key, tasks.First().VirtualMachineInfo, tasks.First().Identities, tasks.First().PoolDisplayName, tasks.Count, tasks.Select(t => t.TaskCompletion))),
+                        groupGatherWindow: QueuedTesTaskPoolGroupGatherWindow,
+                        maxCount: int.MaxValue);
 
-                    case AzureBatchLowQuotaException azureBatchLowQuotaException:
-                        tesTask.State = TesState.SYSTEM_ERROR;
-                        tesTask.AddTesTaskLog(); // Adding new log here because this exception is thrown from CheckBatchAccountQuotas() and AddTesTaskLog() above is called after that. This way each attempt will have its own log entry.
-                        tesTask.SetFailureReason("InsufficientBatchQuota", azureBatchLowQuotaException.Message);
-                        logger.LogError(azureBatchLowQuotaException, "TES task: {TesTask} AzureBatchLowQuotaException.Message: {ExceptionMessage}", tesTask.Id, azureBatchLowQuotaException.Message);
-                        break;
+                    pool = batchPools.GetPoolOrDefault(await poolCompletion.Task); // This ensures that the pool is managed by this BatchScheduler
 
-                    case AzureBatchVirtualMachineAvailabilityException azureBatchVirtualMachineAvailabilityException:
-                        tesTask.State = TesState.SYSTEM_ERROR;
-                        tesTask.AddTesTaskLog(); // Adding new log here because this exception is thrown from GetVmSizeAsync() and AddTesTaskLog() above is called after that. This way each attempt will have its own log entry.
-                        tesTask.SetFailureReason("NoVmSizeAvailable", azureBatchVirtualMachineAvailabilityException.Message);
-                        logger.LogError(azureBatchVirtualMachineAvailabilityException, "TES task: {TesTask} AzureBatchVirtualMachineAvailabilityException.Message: {ExceptionMessage}", tesTask.Id, azureBatchVirtualMachineAvailabilityException.Message);
-                        break;
-
-                    case TesException tesException:
-                        tesTask.State = TesState.SYSTEM_ERROR;
-                        tesTask.SetFailureReason(tesException);
-                        logger.LogError(tesException, "TES task: {TesTask} TesException.Message: {ExceptionMessage}", tesTask.Id, tesException.Message);
-                        break;
-
-                    case BatchClientException batchClientException:
-                        tesTask.State = TesState.SYSTEM_ERROR;
-                        tesTask.SetFailureReason("BatchClientException", string.Join(",", batchClientException.Data.Values), batchClientException.Message, batchClientException.StackTrace);
-                        logger.LogError(batchClientException, "TES task: {TesTask} BatchClientException.Message: {ExceptionMessage} {ExceptionData}", tesTask.Id, batchClientException.Message, string.Join(",", batchClientException?.Data?.Values));
-                        break;
-
-                    case BatchException batchException when batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException && AzureBatchPoolCreationException.IsJobQuotaException(batchErrorException.Body.Code):
-                        tesTask.SetWarning(batchErrorException.Body.Message.Value, []);
-                        logger.LogInformation("Not enough job quota available for task Id {TesTask}. Reason: {BodyMessage}. Task will remain in queue.", tesTask.Id, batchErrorException.Body.Message.Value);
-                        break;
-
-                    case BatchException batchException when batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException && AzureBatchPoolCreationException.IsPoolQuotaException(batchErrorException.Body.Code):
-                        neededPools.Add(poolKey);
-                        tesTask.SetWarning(batchErrorException.Body.Message.Value, []);
-                        logger.LogInformation("Not enough pool quota available for task Id {TesTask}. Reason: {BodyMessage}. Task will remain in queue.", tesTask.Id, batchErrorException.Body.Message.Value);
-                        break;
-
-                    case Microsoft.Rest.Azure.CloudException cloudException when AzureBatchPoolCreationException.IsPoolQuotaException(cloudException.Body.Code):
-                        neededPools.Add(poolKey);
-                        tesTask.SetWarning(cloudException.Body.Message, []);
-                        logger.LogInformation("Not enough pool quota available for task Id {TesTask}. Reason: {BodyMessage}. Task will remain in queue.", tesTask.Id, cloudException.Body.Message);
-                        break;
-
-                    default:
-                        tesTask.State = TesState.SYSTEM_ERROR;
-                        tesTask.SetFailureReason(AzureBatchTaskState.UnknownError, $"{exception?.GetType().FullName}: {exception?.Message}", exception?.StackTrace);
-                        logger.LogError(exception, "TES task: {TesTask} Exception: {ExceptionType}: {ExceptionMessage}", tesTask.Id, exception?.GetType().FullName, exception?.Message);
-                        break;
+                    if (pool is null)
+                    {
+                        throw new System.Diagnostics.UnreachableException("Pool should have been obtained by this point.");
+                    }
                 }
 
-                return Task.FromResult(true);
+                var tesTaskLog = tesTask.AddTesTaskLog();
+                tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
+                var cloudTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
+                tesTask.PoolId = pool.PoolId;
+                var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(cloudTaskId, tesTask, identities.Last(), cancellationToken);
+
+                logger.LogInformation(@"Creating batch task for TES task {TesTaskId}. Using VM size {VmSize}.", tesTask.Id, virtualMachineInfo.VmSize);
+
+                AddTValueToCollectorQueue(
+                    key: pool.PoolId,
+                    value: new(cloudTask, taskCompletion),
+                    dictionary: _queuedTesTaskPendingTasksByJob,
+                    enqueue: (key, tasks) => _queuedTesTaskPendingJobBatches.Enqueue((key, tasks)),
+                    groupGatherWindow: QueuedTesTaskTaskGroupGatherWindow,
+                    maxCount: 100);
             }
+            catch (Exception exception)
+            {
+                taskCompletion.SetException(exception);
+            }
+
+            return taskCompletion.Task;
+        }
+
+        /// <summary>
+        /// Adds an entry to the queue in the directory's value for a key in a IDisposable-safe pattern and set that timer after the entry is in the dictionary only once.
+        /// </summary>
+        /// <typeparam name="TKey">The type of the key.</typeparam>
+        /// <typeparam name="TValue">The type of the value.</typeparam>
+        /// <param name="key">The key.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="dictionary">The grouping dictionary into which to insert <paramref name="value"/> into the <paramref name="key"/>'s value's queue.</param>
+        /// <param name="enqueue">The method to transfer the group to the processing queue.</param>
+        /// <param name="groupGatherWindow">The time period within which any additional tasks are added to the same group.</param>
+        /// <param name="maxCount">The maximum group size.</param>
+        private static void AddTValueToCollectorQueue<TKey, TValue>(TKey key, TValue value, ConcurrentDictionary<TKey, ImmutableQueueWithTimer<TValue>> dictionary, Action<TKey, IList<TValue>> enqueue, TimeSpan groupGatherWindow, int maxCount)
+        {
+            // Save a list of timers created in this method invocation because ConcurrentDictionary.AddOrUpdate() can call addValueFactory any number of times and never store the result anywhere, resulting in created timers without reachable references
+            List<Timer> timers = [];
+            var entry = dictionary.AddOrUpdate(key: key,
+                addValueFactory: key =>
+                    new(Timer: CreateTimer(
+                        callback: state => QueuedTesTaskAddTaskEntryToQueueFromDirectory(
+                            key: (TKey)state,
+                            dictionary: dictionary,
+                            enqueue: enqueue,
+                            groupGatherWindow: groupGatherWindow,
+                            maxCount: maxCount),
+                        state: key),
+                    Queue: [value]),
+                updateValueFactory: (key, entry) => new(Timer: entry.Timer, Queue: entry.Queue.Enqueue(value)));
+
+            // If a new entry in the dictionary was created, set that entry's timer to run and don't dispose that timer
+            if (timers.Remove(entry.Timer))
+            {
+                entry.Timer.Change(groupGatherWindow, Timeout.InfiniteTimeSpan);
+            }
+
+            // Dispose all remaining timers
+            timers.ForEach(t => t.Dispose());
+
+            Timer CreateTimer(TimerCallback callback, TKey state)
+            {
+                Timer timer = new(callback, state, Timeout.Infinite, Timeout.Infinite);
+                timers.Add(timer);
+                return timer;
+            }
+        }
+
+        // Move entries from a ConcurrentDictionary entry (collection queue) to another queue (processing queue) as a single entry
+        private static void QueuedTesTaskAddTaskEntryToQueueFromDirectory<TKey, TValue>(TKey key, ConcurrentDictionary<TKey, ImmutableQueueWithTimer<TValue>> dictionary, Action<TKey, IList<TValue>> enqueue, TimeSpan groupGatherWindow, int maxCount)
+        {
+            if (!dictionary.TryGetValue(key, out var refValue))
+            {
+                return; // Quick return
+            }
+
+            var (timer, queue) = refValue;
+            List<TValue> tasks = [];
+
+            while (!queue.IsEmpty && tasks.Count < maxCount)
+            {
+                queue = queue.Dequeue(out var task);
+                tasks.Add(task);
+            }
+
+            enqueue(key, tasks);
+
+            // Remove enqueued entries from directory without leaving empty entries. This is a loop because we are using ConcurrentDirectory
+            for (;
+                !(queue.IsEmpty switch
+                {
+                    true => dictionary.TryRemove(new(key, refValue)),
+                    false => dictionary.TryUpdate(key, new(timer, queue), refValue),
+                });
+                queue = ImmutableQueue.CreateRange(refValue.Queue.WhereNot(tasks.Contains)))
+            {
+                refValue = dictionary[key];
+            }
+
+            if (queue.IsEmpty)
+            {
+                // Entry was removed from directory
+                timer.Dispose();
+            }
+            else
+            {
+                // Entry was retained in directory
+                timer.Change(groupGatherWindow, Timeout.InfiniteTimeSpan);
+            }
+        }
+
+        /// <inheritdoc/>
+        public async ValueTask PerformBackgroundTasksAsync(CancellationToken cancellationToken)
+        {
+            // Add a batch of tasks to a job
+            if (_queuedTesTaskPendingJobBatches.TryDequeue(out var jobBatch))
+            {
+                var (jobId, tasks) = jobBatch;
+                logger.LogDebug(@"Adding {AddedTasks} tasks to {CloudJob}.", tasks.Count, jobId);
+                await PerformTaskAsync(
+                    method: async token => await azureProxy.AddBatchTasksAsync(tasks.Select(t => t.CloudTask), jobId, token),
+                    taskCompletions: tasks.Select(task => task.TaskCompletion),
+                    cancellationToken: cancellationToken);
+            }
+
+            // Apply Pool and Job Quota limits
+            {
+                Dictionary<string, PendingPool> pools = [];
+
+                while (_queuedTesTaskPendingPoolQuotas.TryDequeue(out var pendingPool))
+                {
+                    pools.Add(pendingPool.PoolKey, pendingPool);
+                }
+
+                if (pools.Count != 0)
+                {
+                    // Determine how many new pools/jobs we need now
+                    var requiredNewPools = pools.Keys.WhereNot(IsPoolAvailable).ToList();
+
+                    // Revisit pool/job quotas (the task quota analysis already dealt with the possibility of needing just one more pool or job).
+                    if (requiredNewPools.Skip(1).Any())
+                    {
+                        // This will remove pool keys we cannot accommodate due to quota, along with all of their associated tasks, from being queued into Batch.
+                        logger.LogDebug(@"Checking pools and jobs quota to accommodate {NeededPools} additional pools.", requiredNewPools.Count);
+
+                        var (exceededQuantity, exception) = await quotaVerifier.CheckBatchAccountPoolAndJobQuotasAsync(requiredNewPools.Count, cancellationToken);
+
+                        foreach (var task in ((IEnumerable<string>)requiredNewPools)
+                            .Reverse()
+                            .SelectWhere<string, PendingPool>(TryRemovePool)
+                            .Take(exceededQuantity)
+                            .SelectMany(t => t.TaskCompletions))
+                        {
+                            task.SetException(exception);
+                        }
+
+                        bool TryRemovePool(string key, out PendingPool result)
+                        {
+                            logger.LogDebug(@"Due to quotas, unable to accommodate {PoolKey} batch pools.", key);
+                            result = pools[key];
+                            pools.Remove(key);
+                            return true;
+                        }
+                    }
+
+                    logger.LogDebug(@"Obtaining {NewPools} batch pools.", pools.Count);
+
+                    foreach (var poolToCreate in pools)
+                    {
+                        _queuedTesTaskPendingPools.Enqueue(poolToCreate.Value);
+                    }
+                }
+            }
+
+            // Create a batch pool
+            if (_queuedTesTaskPendingPools.TryDequeue(out var pool))
+            {
+                logger.LogDebug(@"Creating pool for {PoolKey}.", pool.PoolKey);
+                await PerformTaskOfTAsync(
+                    method: async token => (await GetOrAddPoolAsync(
+                            key: pool.PoolKey,
+                            isPreemptable: pool.VirtualMachineInfo.LowPriority,
+                            modelPoolFactory: async (id, ct) => await GetPoolSpecification(
+                                name: id,
+                                displayName: pool.PoolDisplayName,
+                            poolIdentity: GetBatchPoolIdentity(pool.Identities.WhereNot(string.IsNullOrWhiteSpace).ToList()),
+                            vmSize: pool.VirtualMachineInfo.VmSize,
+                            vmFamily: pool.VirtualMachineInfo.VmFamily,
+                                preemptable: pool.VirtualMachineInfo.LowPriority,
+                                initialTarget: pool.InitialTarget,
+                                nodeInfo: (pool.VirtualMachineInfo.HyperVGenerations?.Contains("V2", StringComparer.OrdinalIgnoreCase) ?? false) ? gen2BatchNodeInfo : gen1BatchNodeInfo,
+                                encryptionAtHostSupported: pool.VirtualMachineInfo.EncryptionAtHostSupported,
+                                cancellationToken: ct),
+                            cancellationToken: token))
+                        .PoolId,
+                    taskCompletions: pool.TaskCompletions,
+                    cancellationToken: cancellationToken);
+            }
+
+            async static ValueTask PerformTaskAsync(Func<CancellationToken, ValueTask> method, IEnumerable<TaskCompletionSource> taskCompletions, CancellationToken cancellationToken)
+            {
+                try
+                {
+                    await method(cancellationToken);
+                    taskCompletions.ForEach(completion => completion.SetResult());
+                }
+                catch (Exception exception)
+                {
+                    taskCompletions.ForEach(completion => completion.SetException(new AggregateException(Enumerable.Empty<Exception>().Append(exception))));
+                }
+            }
+
+            async static ValueTask PerformTaskOfTAsync<T>(Func<CancellationToken, ValueTask<T>> method, IEnumerable<TaskCompletionSource<T>> taskCompletions, CancellationToken cancellationToken)
+            {
+                try
+                {
+                    var result = await method(cancellationToken);
+                    taskCompletions.ForEach(completion => completion.SetResult(result));
+                }
+                catch (Exception exception)
+                {
+                    taskCompletions.ForEach(completion => completion.SetException(new AggregateException(Enumerable.Empty<Exception>().Append(exception))));
+                }
+            }
+        }
+
+        Task<bool> QueuedTesTaskHandleExceptionAsync(Exception exception, string poolKey, TesTask tesTask)
+        {
+            switch (exception)
+            {
+                case AzureBatchPoolCreationException azureBatchPoolCreationException:
+                    if (!azureBatchPoolCreationException.IsTimeout && !azureBatchPoolCreationException.IsJobQuota && !azureBatchPoolCreationException.IsPoolQuota && azureBatchPoolCreationException.InnerException is not null)
+                    {
+                        return QueuedTesTaskHandleExceptionAsync(azureBatchPoolCreationException.InnerException, poolKey, tesTask);
+                    }
+
+                    logger.LogWarning(azureBatchPoolCreationException, "TES task: {TesTask} AzureBatchPoolCreationException.Message: {ExceptionMessage}. This might be a transient issue. Task will remain with state QUEUED. Confirmed timeout: {ConfirmedTimeout}", tesTask.Id, azureBatchPoolCreationException.Message, azureBatchPoolCreationException.IsTimeout);
+
+                    if (azureBatchPoolCreationException.IsJobQuota || azureBatchPoolCreationException.IsPoolQuota)
+                    {
+                        neededPools.Add(poolKey);
+                        tesTask.SetWarning(azureBatchPoolCreationException.InnerException switch
+                        {
+                            null => "Unknown reason",
+                            Azure.RequestFailedException requestFailedException => $"{requestFailedException.ErrorCode}: \"{requestFailedException.Message}\"{requestFailedException.Data.Keys.Cast<string>().Zip(requestFailedException.Data.Values.Cast<string>()).Select(p => $"\n{p.First}: {p.Second}")}",
+                            Microsoft.Rest.Azure.CloudException cloudException => cloudException.Body.Message,
+                            var e when e is BatchException batchException && batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException => batchErrorException.Body.Message.Value,
+                            _ => "Unknown reason",
+                        });
+                    }
+
+                    break;
+
+                case AzureBatchQuotaMaxedOutException azureBatchQuotaMaxedOutException:
+                    logger.LogWarning("TES task: {TesTask} AzureBatchQuotaMaxedOutException.Message: {ExceptionMessage}. Not enough quota available. Task will remain with state QUEUED.", tesTask.Id, azureBatchQuotaMaxedOutException.Message);
+                    neededPools.Add(poolKey);
+                    break;
+
+                case AzureBatchLowQuotaException azureBatchLowQuotaException:
+                    tesTask.State = TesState.SYSTEM_ERROR;
+                    tesTask.AddTesTaskLog(); // Adding new log here because this exception is thrown from CheckBatchAccountQuotas() and AddTesTaskLog() above is called after that. This way each attempt will have its own log entry.
+                    tesTask.SetFailureReason("InsufficientBatchQuota", azureBatchLowQuotaException.Message);
+                    logger.LogError(azureBatchLowQuotaException, "TES task: {TesTask} AzureBatchLowQuotaException.Message: {ExceptionMessage}", tesTask.Id, azureBatchLowQuotaException.Message);
+                    break;
+
+                case AzureBatchVirtualMachineAvailabilityException azureBatchVirtualMachineAvailabilityException:
+                    tesTask.State = TesState.SYSTEM_ERROR;
+                    tesTask.AddTesTaskLog(); // Adding new log here because this exception is thrown from GetVmSizeAsync() and AddTesTaskLog() above is called after that. This way each attempt will have its own log entry.
+                    tesTask.SetFailureReason("NoVmSizeAvailable", azureBatchVirtualMachineAvailabilityException.Message);
+                    logger.LogError(azureBatchVirtualMachineAvailabilityException, "TES task: {TesTask} AzureBatchVirtualMachineAvailabilityException.Message: {ExceptionMessage}", tesTask.Id, azureBatchVirtualMachineAvailabilityException.Message);
+                    break;
+
+                case TesException tesException:
+                    tesTask.State = TesState.SYSTEM_ERROR;
+                    tesTask.SetFailureReason(tesException);
+                    logger.LogError(tesException, "TES task: {TesTask} TesException.Message: {ExceptionMessage}", tesTask.Id, tesException.Message);
+                    break;
+
+                case BatchClientException batchClientException:
+                    tesTask.State = TesState.SYSTEM_ERROR;
+                    tesTask.SetFailureReason("BatchClientException", string.Join(",", batchClientException.Data.Values), batchClientException.Message, batchClientException.StackTrace);
+                    logger.LogError(batchClientException, "TES task: {TesTask} BatchClientException.Message: {ExceptionMessage} {ExceptionData}", tesTask.Id, batchClientException.Message, string.Join(",", batchClientException?.Data?.Values));
+                    break;
+
+                case BatchException batchException when batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException && AzureBatchPoolCreationException.IsJobQuotaException(batchErrorException.Body.Code):
+                    tesTask.SetWarning(batchErrorException.Body.Message.Value, []);
+                    logger.LogInformation("Not enough job quota available for task Id {TesTask}. Reason: {BodyMessage}. Task will remain in queue.", tesTask.Id, batchErrorException.Body.Message.Value);
+                    break;
+
+                case BatchException batchException when batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException && AzureBatchPoolCreationException.IsPoolQuotaException(batchErrorException.Body.Code):
+                    neededPools.Add(poolKey);
+                    tesTask.SetWarning(batchErrorException.Body.Message.Value, []);
+                    logger.LogInformation("Not enough pool quota available for task Id {TesTask}. Reason: {BodyMessage}. Task will remain in queue.", tesTask.Id, batchErrorException.Body.Message.Value);
+                    break;
+
+                case Microsoft.Rest.Azure.CloudException cloudException when AzureBatchPoolCreationException.IsPoolQuotaException(cloudException.Body.Code):
+                    neededPools.Add(poolKey);
+                    tesTask.SetWarning(cloudException.Body.Message, []);
+                    logger.LogInformation("Not enough pool quota available for task Id {TesTask}. Reason: {BodyMessage}. Task will remain in queue.", tesTask.Id, cloudException.Body.Message);
+                    break;
+
+                default:
+                    tesTask.State = TesState.SYSTEM_ERROR;
+                    tesTask.SetFailureReason(AzureBatchTaskState.UnknownError, $"{exception?.GetType().FullName}: {exception?.Message}", exception?.StackTrace);
+                    logger.LogError(exception, "TES task: {TesTask} Exception: {ExceptionType}: {ExceptionMessage}", tesTask.Id, exception?.GetType().FullName, exception?.Message);
+                    break;
+            }
+
+            return Task.FromResult(true);
         }
 
         /// <summary>

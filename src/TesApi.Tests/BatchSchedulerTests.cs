@@ -735,14 +735,17 @@ namespace TesApi.Tests
                 GetMockAllowedVms(config));
             var batchScheduler = serviceProvider.GetT();
 
-            await foreach (var _ in batchScheduler.ProcessQueuedTesTasksAsync([tesTask], CancellationToken.None)) { }
+            {
+                await using var schedulerBackgroundTasks = new PerformBatchSchedulerBackgroundTasks(batchScheduler);
+                _ = await batchScheduler.ProcessQueuedTesTaskAsync(tesTask, CancellationToken.None);
+            }
 
             var createBatchPoolAsyncInvocation = serviceProvider.BatchPoolManager.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IBatchPoolManager.CreateBatchPoolAsync));
             var pool = createBatchPoolAsyncInvocation?.Arguments[0] as BatchAccountPoolData;
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual("TES-hostname-edicated1-obkfufnroslrzwlitqbrmjeowu7iuhfm-", tesTask.PoolId[0..^8]);
+                Assert.AreEqual("TES-hostname-edicated1-vibnmgoytavzom4xpzeq56u7xkqevpks-", tesTask.PoolId[0..^8]);
                 Assert.AreEqual("VmSizeDedicated1", pool.VmSize);
                 Assert.IsTrue(((BatchScheduler)batchScheduler).TryGetPool(tesTask.PoolId, out _));
             });
@@ -1350,7 +1353,8 @@ namespace TesApi.Tests
 
             if (azureProxyReturnValues.BatchTaskState is null)
             {
-                await foreach (var _ in batchScheduler.ProcessQueuedTesTasksAsync(tesTasks, CancellationToken.None)) { }
+                await using PerformBatchSchedulerBackgroundTasks schedulerBackgroundTasks = new(batchScheduler);
+                await Parallel.ForEachAsync(tesTasks, async (task, token) => _ = await batchScheduler.ProcessQueuedTesTaskAsync(task, token));
             }
             else
             {
@@ -1618,6 +1622,46 @@ namespace TesApi.Tests
                 }
 
                 throw;
+            }
+        }
+
+        internal readonly struct PerformBatchSchedulerBackgroundTasks : IAsyncDisposable
+        {
+            private readonly CancellationTokenSource cancellationToken = new();
+            private readonly IBatchScheduler batchScheduler;
+            private readonly Task task;
+
+            public PerformBatchSchedulerBackgroundTasks(IBatchScheduler batchScheduler) : this()
+            {
+                BatchScheduler.QueuedTesTaskPoolGroupGatherWindow = TimeSpan.FromSeconds(0.5);
+                BatchScheduler.QueuedTesTaskTaskGroupGatherWindow = TimeSpan.FromSeconds(0.5);
+                this.batchScheduler = batchScheduler;
+                this.task = RepeatedlyCallPerformBackgroundTasksAsync();
+            }
+
+            private readonly async Task RepeatedlyCallPerformBackgroundTasksAsync()
+            {
+                using PeriodicTimer timer = new(TimeSpan.FromMilliseconds(50));
+
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    try
+                    {
+                        await batchScheduler.PerformBackgroundTasksAsync(cancellationToken.Token);
+                        await timer.WaitForNextTickAsync(cancellationToken.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
+                }
+            }
+
+            public readonly async ValueTask DisposeAsync()
+            {
+                cancellationToken.Cancel();
+                await task;
+                cancellationToken.Dispose();
             }
         }
 

@@ -17,7 +17,7 @@ using CloudTaskWithPreviousComputeNodeId = TesApi.Web.IBatchPool.CloudTaskWithPr
 namespace TesApi.Web
 {
     /// <summary>
-    /// A background service that montitors <see cref="CloudPool"/>s in the batch system, orchestrates their lifecycle, and updates their state.
+    /// A background service that monitors <see cref="CloudPool"/>s in the batch system, orchestrates their lifecycle, and updates their state.
     /// This should only be used as a system-wide singleton service.  This class does not support scale-out on multiple machines,
     /// nor does it implement a leasing mechanism.  In the future, consider using the Lease Blob operation.
     /// </summary>

@@ -37,7 +37,7 @@ namespace TesApi.Web
         Task UploadTaskRunnerIfNeededAsync(CancellationToken cancellationToken);
 
         /// <summary>
-        /// Update <see cref="TesTask"/>s with task-related state on a batch system
+        /// Updates <see cref="TesTask"/>s with task-related state on a batch system
         /// </summary>
         /// <param name="tesTasks"><see cref="TesTask"/>s to schedule on the batch system.</param>
         /// <param name="taskStates"><see cref="AzureBatchTaskState"/>s corresponding to each <seealso cref="TesTask"/>.</param>
@@ -46,12 +46,12 @@ namespace TesApi.Web
         IAsyncEnumerable<RelatedTask<TesTask, bool>> ProcessTesTaskBatchStatesAsync(IEnumerable<TesTask> tesTasks, AzureBatchTaskState[] taskStates, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Schedule queued <see cref="TesTask"/>s on a batch system
+        /// Schedules a <see cref="TesTask"/>s on a batch system
         /// </summary>
-        /// <param name="tesTasks"><see cref="TesTask"/>s to schedule on the batch system.</param>
+        /// <param name="tesTask">A <see cref="TesTask"/> to schedule on the batch system.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>True for each <see cref="TesTask"/> that needs to be persisted.</returns>
-        IAsyncEnumerable<RelatedTask<TesTask, bool>> ProcessQueuedTesTasksAsync(TesTask[] tesTasks, CancellationToken cancellationToken);
+        /// <returns>True to persist the <see cref="TesTask"/>, otherwise False.</returns>
+        Task<bool> ProcessQueuedTesTaskAsync(TesTask tesTask, CancellationToken cancellationToken);
 
         /// <summary>
         /// Adds <see cref="IBatchPool"/> to the managed batch pools.
@@ -111,6 +111,13 @@ namespace TesApi.Web
         /// <param name="event">Optional event to retrieve. Defaults to all events.</param>
         /// <returns></returns>
         IAsyncEnumerable<Events.RunnerEventsMessage> GetEventMessagesAsync(CancellationToken cancellationToken, string @event = default);
+
+        /// <summary>
+        /// Performs background tasks.
+        /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        ValueTask PerformBackgroundTasksAsync(CancellationToken cancellationToken);
 
         /// <summary>
         /// Identifies an azure cloud task.
