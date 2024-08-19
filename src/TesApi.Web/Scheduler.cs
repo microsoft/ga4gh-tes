@@ -101,6 +101,22 @@ namespace TesApi.Web
         private async ValueTask OrchestrateTesTasksOnBatch(CancellationToken stoppingToken)
         {
             var pools = new HashSet<string>();
+            var parentTasks = new List<TesTask>();
+
+            var parentClientIdsForQueuedTasks = (await repository.GetItemsAsync(
+                                        predicate: t => t.ParentClientId != null && t.State == TesState.QUEUED,
+                                        cancellationToken: stoppingToken))
+                                     .Select(c => c.ParentClientId)
+                                     .ToList();
+
+            if (parentClientIdsForQueuedTasks.Count > 0)
+            {
+                // Get the parent tasks
+                parentTasks = (await repository.GetItemsAsync(
+                            predicate: t => parentClientIdsForQueuedTasks.Contains(t.ClientId),
+                            cancellationToken: stoppingToken))
+                            .ToList();
+            }
 
             var tesTasks = (await repository.GetItemsAsync(
                     predicate: t => t.State == TesState.QUEUED
@@ -123,6 +139,48 @@ namespace TesApi.Web
             {
                 try
                 {
+                    if (!string.IsNullOrWhiteSpace(tesTask.ParentClientId))
+                    {
+                        var parentTask = parentTasks.FirstOrDefault(t => t.ClientId == tesTask.ParentClientId);
+
+                        if (parentTask is null)
+                        {
+                            // Parent task not found; wait for it to be created
+
+                            if (DateTime.UtcNow.Subtract(tesTask.CreationTime.Value.UtcDateTime).TotalDays > 10)
+                            {
+                                // The parent task was never created.  This task should fail.
+                                tesTask.State = TesState.SYSTEM_ERROR;
+                                tesTask.EndTime = DateTimeOffset.UtcNow;
+                                tesTask.SetFailureReason("ParentTaskNotCreated", $"The parent task was not created in time for this graph of execution.", null);
+                                await repository.UpdateItemAsync(tesTask, stoppingToken);
+                                continue;
+                            }
+
+                            continue;
+                        }
+
+                        if (TesState.EXECUTOR_ERROR == parentTask.State 
+                            || TesState.SYSTEM_ERROR == parentTask.State
+                            || TesState.CANCELED == parentTask.State)
+                        {
+                            // The parent task failed, so this task should fail too
+                            tesTask.State = TesState.SYSTEM_ERROR;
+                            tesTask.EndTime = DateTimeOffset.UtcNow;
+                            tesTask.SetFailureReason("ParentTaskFailed", $"Parent task failed with {parentTask.State}", null);
+                            await repository.UpdateItemAsync(tesTask, stoppingToken);
+                            continue;
+                        }
+
+                        if (TesState.COMPLETE != parentTask.State)
+                        {
+                            // Parent task is not complete; wait for it to complete
+                            continue;
+                        }
+
+                        // Parent task is complete; continue with this task
+                    }
+
                     var isModified = false;
                     try
                     {

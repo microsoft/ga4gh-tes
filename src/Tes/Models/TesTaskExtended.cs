@@ -26,6 +26,18 @@ namespace Tes.Models
         /// <summary>
         /// Number of retries attempted
         /// </summary>
+        [DataMember(Name = "client_id")]
+        public string ClientId { get; set; }
+
+        /// <summary>
+        /// Number of retries attempted
+        /// </summary>
+        [DataMember(Name = "parent_client_id")]
+        public string ParentClientId { get; set; }
+
+        /// <summary>
+        /// Number of retries attempted
+        /// </summary>
         [DataMember(Name = "error_count")]
         public int ErrorCount { get; set; }
 
