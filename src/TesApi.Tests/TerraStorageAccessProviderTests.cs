@@ -49,7 +49,7 @@ namespace TesApi.Tests
             optionsMock.Setup(o => o.Value).Returns(terraOptions);
             azureProxyMock = new Mock<IAzureProxy>();
             var config = ExpensiveObjectTestUtility.AzureCloudConfig.AzureEnvironmentConfig;
-            terraStorageAccessProvider = new TerraStorageAccessProvider(wsmApiClientMock.Object, azureProxyMock.Object, optionsMock.Object, Options.Create(batchSchedulingOptions), config, NullLogger<TerraStorageAccessProvider>.Instance);
+            terraStorageAccessProvider = new TerraStorageAccessProvider(new(wsmApiClientMock.Object), azureProxyMock.Object, optionsMock.Object, Options.Create(batchSchedulingOptions), config, NullLogger<TerraStorageAccessProvider>.Instance);
         }
 
         [TestMethod]

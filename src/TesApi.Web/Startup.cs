@@ -8,7 +8,7 @@ using System.Net;
 using System.Reflection;
 using System.Threading;
 using Azure.Core;
-using Azure.Identity;
+using Azure.ResourceManager;
 using CommonUtilities;
 using CommonUtilities.AzureCloud;
 using CommonUtilities.Options;
@@ -42,7 +42,7 @@ namespace TesApi.Web
     public class Startup
     {
         // TODO centralize in single location
-        internal const string TesVersion = "5.3.3";
+        internal const string TesVersion = "5.4.2";
         private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
@@ -69,6 +69,14 @@ namespace TesApi.Web
                 services
                     .AddSingleton(AzureCloudConfig)
                     .AddSingleton(AzureCloudConfig.AzureEnvironmentConfig)
+                    .AddSingleton(s =>
+                    {
+                        var options = TerraOptionsAreConfigured(s)
+                            ? new AzureServicesConnectionStringCredentialOptions("RunAs=App", s.GetRequiredService<AzureCloudConfig>())
+                            : ActivatorUtilities.CreateInstance<AzureServicesConnectionStringCredentialOptions>(s);
+                        options.AuthorityHost = AzureCloudConfig.AuthorityHost;
+                        return options;
+                    })
                     .AddLogging()
                     .AddApplicationInsightsTelemetry(configuration)
                     .Configure<GeneralOptions>(configuration.GetSection(GeneralOptions.SectionName))
@@ -91,7 +99,7 @@ namespace TesApi.Web
                     .AddTransient<BatchPool>()
                     .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                     .AddSingleton(CreateTerraApiClient)
-                    .AddSingleton(CreateBatchPoolManagerFromConfiguration)
+                    .AddSingleton<IBatchPoolManager>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesBatchPoolManager>(sp, CreateBatchPoolManagerFromConfiguration(sp)))
 
                     .AddControllers(options => options.Filters.Add<Controllers.OperationCancelledExceptionFilter>())
                         .AddNewtonsoftJson(opts =>
@@ -108,6 +116,7 @@ namespace TesApi.Web
                     .AddAutoMapper(typeof(MappingProfilePoolToWsmRequest))
                     .AddSingleton<CachingRetryPolicyBuilder>()
                     .AddSingleton<RetryPolicyBuilder>(s => s.GetRequiredService<CachingRetryPolicyBuilder>()) // Return the already declared retry policy builder
+                    .AddSingleton(CreateActionIdentityProvider)
                     .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                     .AddSingleton<IBatchScheduler, BatchScheduler>()
                     .AddSingleton<PriceApiClient>()
@@ -117,13 +126,10 @@ namespace TesApi.Web
                     .AddSingleton<AzureManagementClientsFactory>()
                     .AddSingleton<ConfigurationUtils>()
                     .AddSingleton<IAllowedVmSizesService, AllowedVmSizesService>()
-                    .AddSingleton<TokenCredential>(s =>
-                    {
-                        return new DefaultAzureCredential(
-                            new DefaultAzureCredentialOptions { AuthorityHost = new Uri(AzureCloudConfig.Authentication.LoginEndpointUrl) });
-                    })
+                    .AddSingleton<TokenCredential, AzureServicesConnectionStringCredential>()
                     .AddSingleton<TaskToNodeTaskConverter>()
                     .AddSingleton<TaskExecutionScriptingManager>()
+                    .AddSingleton<PoolMetadataReader>()
 
                     .AddSingleton(c =>
                     {
@@ -369,7 +375,7 @@ namespace TesApi.Web
                 return false;
             }
 
-            TerraWsmApiClient CreateTerraApiClient(IServiceProvider services)
+            Lazy<TerraWsmApiClient> CreateTerraApiClient(IServiceProvider services)
             {
                 logger.LogInformation("Attempting to create a Terra WSM API client");
 
@@ -379,10 +385,29 @@ namespace TesApi.Web
 
                     ValidateRequiredOptionsForTerraStorageProvider(options.Value);
 
-                    return ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services, options.Value.WsmApiHost);
+                    return new(() => ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services, options.Value.WsmApiHost));
                 }
 
                 throw new InvalidOperationException("Terra WSM API Host is not configured.");
+            }
+
+            IActionIdentityProvider CreateActionIdentityProvider(IServiceProvider services)
+            {
+                logger.LogInformation("Attempting to create an ActionIdentityProvider");
+
+                if (TerraOptionsAreConfigured(services))
+                {
+                    var options = services.GetRequiredService<IOptions<TerraOptions>>();
+
+                    ValidateRequiredOptionsForTerraActionIdentities(options.Value);
+
+                    var samClient = new Lazy<TerraSamApiClient>(() => ActivatorUtilities.CreateInstance<TerraSamApiClient>(services, options.Value.SamApiHost));
+
+                    logger.LogInformation("Creating TerraActionIdentityProvider");
+                    return ActivatorUtilities.CreateInstance<TerraActionIdentityProvider>(services, samClient);
+                }
+
+                return ActivatorUtilities.CreateInstance<DefaultActionIdentityProvider>(services);
             }
 
             static void ValidateRequiredOptionsForTerraStorageProvider(TerraOptions terraOptions)
@@ -392,6 +417,12 @@ namespace TesApi.Web
                 ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageContainerName, nameof(terraOptions.WorkspaceStorageContainerName));
                 ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageContainerResourceId, nameof(terraOptions.WorkspaceStorageContainerResourceId));
                 ArgumentException.ThrowIfNullOrEmpty(terraOptions.WsmApiHost, nameof(terraOptions.WsmApiHost));
+            }
+
+            static void ValidateRequiredOptionsForTerraActionIdentities(TerraOptions terraOptions)
+            {
+                ArgumentException.ThrowIfNullOrEmpty(terraOptions.SamApiHost, nameof(terraOptions.SamApiHost));
+                ArgumentException.ThrowIfNullOrEmpty(terraOptions.SamApiHost, nameof(terraOptions.SamResourceIdForAcrPull));
             }
 
             BatchAccountResourceInformation CreateBatchAccountResourceInformation(IServiceProvider services)
@@ -407,7 +438,7 @@ namespace TesApi.Web
                 if (string.IsNullOrWhiteSpace(options.Value.AppKey))
                 {
                     //we are assuming Arm with MI/RBAC if no key is provided. Try to get info from the batch account.
-                    var task = ArmResourceInformationFinder.TryGetResourceInformationFromAccountNameAsync(options.Value.AccountName, AzureCloudConfig, System.Threading.CancellationToken.None);
+                    var task = ArmResourceInformationFinder.TryGetBatchAccountInformationFromAccountNameAsync(options.Value.AccountName, services.GetRequiredService<TokenCredential>(), AzureCloudConfig.ArmEnvironment.Value, CancellationToken.None);
                     task.Wait();
 
                     if (task.Result is null)

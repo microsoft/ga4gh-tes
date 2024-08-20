@@ -19,7 +19,14 @@ namespace Tes.Runner.Storage
     {
         private readonly ILogger<DrsUriTransformationStrategy> logger = PipelineLoggerFactory.Create<DrsUriTransformationStrategy>();
         private readonly DrsHubApiClient drsHubApiClient;
-        private const string DrsScheme = "drs";
+
+        static DrsUriTransformationStrategy()
+        {
+            if (!UriParser.IsKnownScheme(DrsUriParser.UriSchemeDrs))
+            {
+                DrsUriParser.Register();
+            }
+        }
 
         public DrsUriTransformationStrategy(DrsHubApiClient drsHubApiClient)
         {
@@ -37,7 +44,7 @@ namespace Tes.Runner.Storage
 
         public async Task<Uri> TransformUrlWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions = 0)
         {
-            var sourceUri = new Uri(sourceUrl);
+            Uri sourceUri = new(sourceUrl);
 
             if (!ContainsDrsScheme(sourceUri.Scheme))
             {
@@ -62,7 +69,7 @@ namespace Tes.Runner.Storage
 
         private static bool ContainsDrsScheme(string scheme)
         {
-            return scheme.Equals(DrsScheme, StringComparison.OrdinalIgnoreCase);
+            return scheme.Equals(DrsUriParser.UriSchemeDrs, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

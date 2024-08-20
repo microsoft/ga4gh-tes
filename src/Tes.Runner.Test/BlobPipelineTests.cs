@@ -118,7 +118,7 @@ namespace Tes.Runner.Test
 
             var result = await pipeline.CalculateFileMd5HashAsync(tempFile1);
 
-            var expectedHash = RunnerTestUtils.CalculateMd5Hash(await File.ReadAllBytesAsync(tempFile1));
+            var expectedHash = RunnerTestUtils.CalculateBase64Md5Hash(await File.ReadAllBytesAsync(tempFile1));
 
             Assert.AreEqual(expectedHash, result);
         }

@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Azure.Management.Batch;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using TesApi.Web.Management.Models.Quotas;
@@ -63,7 +62,7 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
         if (isDedicatedAndPerVmFamilyCoreQuotaEnforced)
         {
             dedicatedCoresPerFamilies = batchQuota.DedicatedCoreQuotaPerVMFamily
-                         .Select(r => new BatchVmCoresPerFamily(r.Name, r.CoreQuota))
+                         .Select(r => new BatchVmCoresPerFamily(r.Name, r.CoreQuota ?? 0))
                          .ToList();
         }
 
@@ -79,7 +78,11 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
     /// </summary>
     /// <returns></returns>
     public virtual async Task<AzureBatchAccountQuotas> GetBatchAccountQuotasAsync(CancellationToken cancellationToken)
-        => await appCache.GetOrCreateAsync(clientsFactory.BatchAccountInformation.ToString(), _1 => GetBatchAccountQuotasImplAsync(cancellationToken)); // TODO: Consider expiring the quota daily, because quota can be changed.
+        => await appCache.GetOrCreateAsync(clientsFactory.BatchAccountInformation.ToString(), entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1);
+            return GetBatchAccountQuotasImplAsync(cancellationToken);
+        });
 
     private async Task<AzureBatchAccountQuotas> GetBatchAccountQuotasImplAsync(CancellationToken cancellationToken)
     {
@@ -87,25 +90,21 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
         {
             logger.LogInformation($"Getting quota information for Batch Account: {clientsFactory.BatchAccountInformation.Name} calling ARM API");
 
-            using var managementClient = await clientsFactory.CreateBatchAccountManagementClient(cancellationToken);
-            var batchAccount = await managementClient.BatchAccount.GetAsync(clientsFactory.BatchAccountInformation.ResourceGroupName, clientsFactory.BatchAccountInformation.Name, cancellationToken: cancellationToken);
+            var managementClient = clientsFactory.CreateBatchAccountManagementClient();
+            var batchAccount = (await managementClient.GetAsync(cancellationToken: cancellationToken)).Value.Data;
 
-            if (batchAccount == null)
-            {
-                throw new InvalidOperationException(
-                    $"Batch Account was not found. Account name:{clientsFactory.BatchAccountInformation.Name}.  Resource group:{clientsFactory.BatchAccountInformation.ResourceGroupName}");
-            }
-
-            return new AzureBatchAccountQuotas
-            {
-                ActiveJobAndJobScheduleQuota = batchAccount.ActiveJobAndJobScheduleQuota,
-                DedicatedCoreQuota = batchAccount.DedicatedCoreQuota ?? 0,
-                DedicatedCoreQuotaPerVMFamily = batchAccount.DedicatedCoreQuotaPerVMFamily,
-                DedicatedCoreQuotaPerVMFamilyEnforced = batchAccount.DedicatedCoreQuotaPerVMFamilyEnforced,
-                LowPriorityCoreQuota = batchAccount.LowPriorityCoreQuota ?? 0,
-                PoolQuota = batchAccount.PoolQuota,
-
-            };
+            return batchAccount is null
+                ? throw new InvalidOperationException(
+                    $"Batch Account was not found. Account name:{clientsFactory.BatchAccountInformation.Name}.  Resource group:{clientsFactory.BatchAccountInformation.ResourceGroupName}")
+                : new AzureBatchAccountQuotas
+                {
+                    ActiveJobAndJobScheduleQuota = batchAccount.ActiveJobAndJobScheduleQuota ?? 0,
+                    DedicatedCoreQuota = batchAccount.DedicatedCoreQuota ?? 0,
+                    DedicatedCoreQuotaPerVMFamily = batchAccount.DedicatedCoreQuotaPerVmFamily,
+                    DedicatedCoreQuotaPerVMFamilyEnforced = batchAccount.IsDedicatedCoreQuotaPerVmFamilyEnforced ?? false,
+                    LowPriorityCoreQuota = batchAccount.LowPriorityCoreQuota ?? 0,
+                    PoolQuota = batchAccount.PoolQuota ?? 0,
+                };
         }
         catch (Exception ex)
         {

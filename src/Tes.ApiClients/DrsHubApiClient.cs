@@ -14,6 +14,14 @@ namespace Tes.ApiClients
         private const string DrsHubApiSegments = "/api/v4/drs";
         private static readonly IMemoryCache SharedMemoryCache = new MemoryCache(new MemoryCacheOptions());
 
+        static DrsHubApiClient()
+        {
+            if (!UriParser.IsKnownScheme(DrsUriParser.UriSchemeDrs))
+            {
+                DrsUriParser.Register();
+            }
+        }
+
         /// <summary>
         /// Parameterless constructor for mocking
         /// </summary>

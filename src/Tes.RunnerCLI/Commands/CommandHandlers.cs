@@ -126,7 +126,7 @@ namespace Tes.RunnerCLI.Commands
         /// <param name="dockerUri">Local docker engine endpoint</param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
-        internal static async Task ExecuteExecCommandAsync(Uri? fileUri, FileInfo? file, string apiVersion, Uri dockerUri)
+        internal static async Task<int> ExecuteExecCommandAsync(Uri? fileUri, FileInfo? file, string apiVersion, Uri dockerUri)
         {
             try
             {
@@ -144,6 +144,14 @@ namespace Tes.RunnerCLI.Commands
                 {
                     Logger.LogInformation("Docker container result error: {ContainerResultError}", result.ContainerResult.Error);
                 }
+
+                return result.ContainerResult.ExitCode switch
+                {
+                    var code when code == 0 => 0,
+                    var code when code < 0 => 255,
+                    var code when code > 255 => 255,
+                    _ => (int)result.ContainerResult.ExitCode,
+                };
             }
             catch (Exception e)
             {

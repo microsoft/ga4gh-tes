@@ -83,18 +83,14 @@ namespace Tes.Runner.Test.Storage
 
         private static RuntimeOptions CreateRuntimeOptions()
         {
-            return new RuntimeOptions
+            return new()
             {
-                AzureEnvironmentConfig = new AzureEnvironmentConfig()
-                {
-                    StorageUrlSuffix = @"core.windows.net",
-                    TokenScope = ".default"
-                }
+                AzureEnvironmentConfig = new AzureEnvironmentConfig(default, ".default", @"core.windows.net")
             };
         }
         private static TerraRuntimeOptions CreateTerraRuntimeOptions(string? drsHubHost = default)
         {
-            return new TerraRuntimeOptions
+            return new()
             {
                 DrsHubApiHost = drsHubHost,
                 WsmApiHost = "https://wsmhost.bio",

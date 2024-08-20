@@ -130,6 +130,7 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolic
         }
         request.Headers.Add($"x-ms-meta-{name}", value);
     }
+
     private static void AddContentMd5HeaderIfValueIsSet(HttpRequestMessage request, string? value)
     {
         if (string.IsNullOrEmpty(value))
@@ -137,7 +138,7 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolic
             return;
         }
 
-        request.Headers.Add($"x-ms-blob-content-md5", Convert.ToBase64String(Encoding.UTF8.GetBytes(value)));
+        request.Headers.Add($"x-ms-blob-content-md5", value);
     }
 
     public static void AddBlobServiceHeaders(HttpRequestMessage request, string apiVersion)

@@ -10,6 +10,6 @@ namespace CommonUtilities
     /// </summary>
     public static class ExpensiveObjectTestUtility
     {
-        public static AzureCloudConfig AzureCloudConfig = AzureCloudConfig.CreateAsync().Result;
+        public static AzureCloudConfig AzureCloudConfig = AzureCloudConfig.FromKnownCloudNameAsync().Result;
     }
 }

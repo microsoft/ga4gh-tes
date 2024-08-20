@@ -43,31 +43,31 @@ namespace TesApi.Web.Runner
         private readonly TerraOptions terraOptions;
         private readonly ILogger<TaskToNodeTaskConverter> logger;
         private readonly IList<ExternalStorageContainerInfo> externalStorageContainers;
-        private readonly BatchAccountOptions batchAccountOptions;
+        private readonly IAzureProxy azureProxy;
         private readonly AzureEnvironmentConfig azureCloudIdentityConfig;
 
         /// <summary>
         /// Constructor of TaskToNodeTaskConverter
         /// </summary>
         /// <param name="terraOptions"></param>
-        /// <param name="storageAccessProvider"></param>
         /// <param name="storageOptions"></param>
-        /// <param name="batchAccountOptions"></param>
+        /// <param name="storageAccessProvider"></param>
+        /// <param name="azureProxy"></param>
         /// <param name="azureCloudIdentityConfig"></param>
         /// <param name="logger"></param>
-        public TaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, IStorageAccessProvider storageAccessProvider, IOptions<StorageOptions> storageOptions, IOptions<BatchAccountOptions> batchAccountOptions, AzureEnvironmentConfig azureCloudIdentityConfig, ILogger<TaskToNodeTaskConverter> logger)
+        public TaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, IOptions<StorageOptions> storageOptions, IStorageAccessProvider storageAccessProvider, IAzureProxy azureProxy, AzureEnvironmentConfig azureCloudIdentityConfig, ILogger<TaskToNodeTaskConverter> logger)
         {
             ArgumentNullException.ThrowIfNull(terraOptions);
             ArgumentNullException.ThrowIfNull(storageOptions);
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
-            ArgumentNullException.ThrowIfNull(batchAccountOptions);
+            ArgumentNullException.ThrowIfNull(azureProxy);
             ArgumentNullException.ThrowIfNull(azureCloudIdentityConfig);
             ArgumentNullException.ThrowIfNull(logger);
 
             this.terraOptions = terraOptions.Value;
             this.logger = logger;
             this.storageAccessProvider = storageAccessProvider;
-            this.batchAccountOptions = batchAccountOptions.Value;
+            this.azureProxy = azureProxy;
             this.azureCloudIdentityConfig = azureCloudIdentityConfig;
             externalStorageContainers = StorageUrlUtils.GetExternalStorageContainerInfos(storageOptions.Value);
         }
@@ -80,16 +80,17 @@ namespace TesApi.Web.Runner
         /// <summary>
         /// Generates <see cref="NodeTaskResolverOptions"/>.
         /// </summary>
+        /// <param name="task">The TES task.</param>
         /// <param name="nodeTaskConversionOptions">The node task conversion options.</param>
         /// <returns>Environment required for runner to retrieve blobs from storage.</returns>
-        public virtual NodeTaskResolverOptions ToNodeTaskResolverOptions(NodeTaskConversionOptions nodeTaskConversionOptions)
+        public virtual NodeTaskResolverOptions ToNodeTaskResolverOptions(TesTask task, NodeTaskConversionOptions nodeTaskConversionOptions)
         {
             try
             {
                 var builder = new NodeTaskBuilder();
                 builder.WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
                     .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath: string.Empty))
-                    .WithResourceIdManagedIdentity(nodeTaskConversionOptions.GlobalManagedIdentity);
+                    .WithResourceIdManagedIdentity(GetNodeManagedIdentityResourceId(nodeTaskConversionOptions.GlobalManagedIdentity, task));
 
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
                 {
@@ -134,6 +135,7 @@ namespace TesApi.Web.Runner
                 builder.WithId(task.Id)
                     .WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
                     .WithResourceIdManagedIdentity(GetNodeManagedIdentityResourceId(task, nodeTaskConversionOptions.GlobalManagedIdentity))
+                    .WithAcrPullResourceIdManagedIdentity(nodeTaskConversionOptions.AcrPullIdentity)
                     .WithWorkflowId(task.WorkflowId)
                     .WithContainerCommands(executor.Command)
                     .WithContainerImage(executor.Image)
@@ -260,16 +262,7 @@ namespace TesApi.Web.Runner
                     inputs.AddRange(distinctAdditionalInputs);
                 }
 
-                foreach (var input in inputs)
-                {
-                    if (input?.Path.Contains('?') == true)
-                    {
-                        logger.LogWarning("Warning: TES task with ID {TesTask} contains a question mark in its path. The last one will be removed along with all text after it.", task.Id);
-                        task.SetWarning("A task input path contains the character '?'. The path was modified to remove it and all text after.");
-                    }
-                }
-
-                MapInputs(inputs, pathParentDirectory, containerMountParentDirectory, builder);
+                await MapInputsAsync(inputs, pathParentDirectory, containerMountParentDirectory, builder);
             }
         }
 
@@ -280,7 +273,7 @@ namespace TesApi.Web.Runner
 
             if (tesTask.Inputs is null)
             {
-                return new List<TesInput>();
+                return [];
             }
 
             foreach (var input in tesTask.Inputs)
@@ -334,12 +327,12 @@ namespace TesApi.Web.Runner
                 inputs.Add(key, input);
             }
 
-            return inputs.Values.ToList();
+            return [.. inputs.Values];
         }
 
         /// <summary>
         /// This returns the node managed identity resource id from the task if it is set, otherwise it returns the global managed identity.
-        /// If the value in the workflow identity is not a full resource id, it is assumed to be the name. In this case, the resource id is constructed from the name.    
+        /// If the value in the workflow identity is not a full resource id, it is assumed to be the name. In this case, the resource id is constructed from the name.
         /// </summary>
         /// <param name="task"></param>
         /// <param name="globalManagedIdentity"></param>
@@ -350,8 +343,13 @@ namespace TesApi.Web.Runner
                 task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters
                     .workflow_execution_identity);
 
-            if (string.IsNullOrEmpty(workflowId))
+            if (string.IsNullOrWhiteSpace(workflowId))
             {
+                if (!NodeTaskBuilder.IsValidManagedIdentityResourceId(globalManagedIdentity))
+                {
+                    throw new TesException("NoManagedIdentityForRunner", "Neither the TES server nor the task provided an Azure User Managed Identity for the task runner. Please check your configuration.");
+                }
+
                 return globalManagedIdentity;
             }
 
@@ -360,7 +358,38 @@ namespace TesApi.Web.Runner
                 return workflowId;
             }
 
-            return $"/subscriptions/{batchAccountOptions.SubscriptionId}/resourceGroups/{batchAccountOptions.ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{workflowId}";
+            return azureProxy.GetManagedIdentityInBatchAccountResourceGroup(workflowId);
+        }
+
+        /// <summary>
+        /// This returns the global managed identity if it is set, otherwise it returns the node managed identity resource id from the task.
+        /// If the value in the workflow identity is not a full resource id, it is assumed to be the name. In this case, the resource id is constructed from the name.
+        /// </summary>
+        /// <param name="globalManagedIdentity"></param>
+        /// <param name="task"></param>
+        /// <returns></returns>
+        public string GetNodeManagedIdentityResourceId(string globalManagedIdentity, TesTask task)
+        {
+            if (NodeTaskBuilder.IsValidManagedIdentityResourceId(globalManagedIdentity))
+            {
+                return globalManagedIdentity;
+            }
+
+            var workflowId =
+                task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters
+                    .workflow_execution_identity);
+
+            if (string.IsNullOrWhiteSpace(workflowId))
+            {
+                throw new TesException("NoManagedIdentityForRunner", "Neither the TES server nor the task provided an Azure User Managed Identity for the task runner. Please check your configuration.");
+            }
+
+            if (NodeTaskBuilder.IsValidManagedIdentityResourceId(workflowId))
+            {
+                return workflowId;
+            }
+
+            return azureProxy.GetManagedIdentityInBatchAccountResourceGroup(workflowId);
         }
 
 
@@ -418,7 +447,7 @@ namespace TesApi.Web.Runner
         private TesInput PrepareLocalFileInput(TesInput input, string defaultStorageAccountName)
         {
             //When Cromwell runs in local mode with a Blob FUSE drive, the URL property may contain an absolute path.
-            //The path must be converted to a URL. For Terra this scenario doesn't apply. 
+            //The path must be converted to a URL. For Terra this scenario doesn't apply.
             if (StorageUrlUtils.IsLocalAbsolutePath(input.Url))
             {
                 var convertedUrl = StorageUrlUtils.ConvertLocalPathOrCromwellLocalPathToUrl(input.Url, defaultStorageAccountName);
@@ -464,13 +493,19 @@ namespace TesApi.Web.Runner
         private async Task<TesInput> PrepareContentInputAsync(TesTask tesTask, TesInput input,
             CancellationToken cancellationToken)
         {
-
             if (String.IsNullOrWhiteSpace(input?.Content))
             {
                 return default;
             }
 
             logger.LogInformation(@"The input is content. Uploading its content to the internal storage location. Input path:{InputPath}", input.Path);
+
+            if (input.Type == TesFileType.DIRECTORY)
+            {
+                throw new ArgumentException("Content inputs cannot be directories.", nameof(input));
+            }
+
+            input.Type = TesFileType.FILE;
 
             return await UploadContentAndCreateTesInputAsync(tesTask, input.Path, input.Content, cancellationToken);
         }
@@ -486,15 +521,54 @@ namespace TesApi.Web.Runner
             });
         }
 
-        private static void MapInputs(List<TesInput> inputs, string pathParentDirectory, string containerMountParentDirectory,
+        private async Task MapInputsAsync(List<TesInput> inputs, string pathParentDirectory, string containerMountParentDirectory,
             NodeTaskBuilder builder)
         {
-            inputs?.ForEach(input =>
+            if (inputs is null || inputs.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var input in inputs)
+            {
+                if (input?.Type == TesFileType.FILE)
+                {
+                    AddInputToBuilder(input.Path, input.Url);
+                }
+                else
+                {
+                    // Nextflow directory example
+                    // input.Url = /storageaccount/work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
+                    // input.Path = /work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
+                    var blobDirectoryUrlWithSasToken = await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, default, default, getContainerSas: true);
+                    var blobDirectoryUrlWithoutSasToken = blobDirectoryUrlWithSasToken.GetLeftPart(UriPartial.Path);
+                    var blobAbsoluteUrls = await storageAccessProvider.GetBlobUrlsAsync(blobDirectoryUrlWithSasToken, default);
+
+                    if (input.Type == default)
+                    {
+                        if (blobAbsoluteUrls.Count == 0)
+                        {
+                            AddInputToBuilder(input.Path, input.Url);
+                            continue;
+                        }
+                    }
+
+                    foreach (var blobAbsoluteUrl in blobAbsoluteUrls)
+                    {
+                        var blobSuffix = blobAbsoluteUrl.AbsoluteUri[blobDirectoryUrlWithoutSasToken.TrimEnd('/').Length..].TrimStart('/');
+                        var localPath = $"{input.Path.TrimEnd('/')}/{blobSuffix}";
+
+                        AddInputToBuilder(localPath, blobAbsoluteUrl.AbsoluteUri);
+                    }
+                }
+            }
+
+            void AddInputToBuilder(string path, string url)
             {
                 builder.WithInputUsingCombinedTransformationStrategy(
-                    AppendParentDirectoryIfSet(input.Path, pathParentDirectory), input.Url,
+                    AppendParentDirectoryIfSet(path, pathParentDirectory), url,
                     containerMountParentDirectory);
-            });
+            }
         }
 
         private static FileType? ToNodeTaskFileType(TesFileType outputType)
@@ -525,10 +599,11 @@ namespace TesApi.Web.Runner
     /// <param name="AdditionalInputs"></param>
     /// <param name="DefaultStorageAccountName"></param>
     /// <param name="GlobalManagedIdentity"></param>
+    /// <param name="AcrPullIdentity"></param>
     /// <param name="DrsHubApiHost"></param>
     /// <param name="SetContentMd5OnUpload"></param>
     /// <param name="VmFamilyGroup"></param>
     public record NodeTaskConversionOptions(IList<TesInput> AdditionalInputs = default, string DefaultStorageAccountName = default,
-        string GlobalManagedIdentity = default, string DrsHubApiHost = default, bool SetContentMd5OnUpload = false,
-        BatchScheduler.VmFamilySeries VmFamilyGroup = default);
+        string GlobalManagedIdentity = default, string AcrPullIdentity = default, string DrsHubApiHost = default, bool SetContentMd5OnUpload = false,
+            BatchScheduler.VmFamilySeries VmFamilyGroup = default);
 }

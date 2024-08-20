@@ -61,6 +61,7 @@ namespace Tes.Runner.Models
         public TerraRuntimeOptions? Terra { get; set; }
 
         public string? NodeManagedIdentityResourceId { get; set; }
+        public string? AcrPullManagedIdentityResourceId { get; set; }
 
         public StorageTargetLocation? StorageEventSink { get; set; }
 

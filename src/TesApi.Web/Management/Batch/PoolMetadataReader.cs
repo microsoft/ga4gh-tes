@@ -3,8 +3,9 @@
 
 using System;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
-using Microsoft.Azure.Batch.Auth;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TesApi.Web.Management.Configuration;
@@ -17,10 +18,9 @@ namespace TesApi.Web.Management.Batch
     /// </summary>
     public class PoolMetadataReader
     {
-        private readonly ILogger<PoolMetadataReader> logger;
+        private readonly ILogger logger;
         private readonly TerraOptions terraOptions;
-        private readonly BatchAccountOptions batchAccountOptions;
-        private readonly BatchClient batchClient;
+        private readonly IAzureProxy azureProxy;
 
         /// <summary>
         /// Parameter-less constructor of PoolMetadataReader
@@ -30,23 +30,21 @@ namespace TesApi.Web.Management.Batch
         /// <summary>
         /// Constructor of PoolMetadataReader
         /// </summary>
-        /// <param name="batchAccountOptions"><see cref="BatchAccountOptions"/></param>
         /// <param name="terraOptions"><see cref="TerraOptions"/></param>
+        /// <param name="azureProxy"></param>
         /// <param name="logger"><see cref="ILogger{TCategoryName}"/>></param>
-        public PoolMetadataReader(IOptions<BatchAccountOptions> batchAccountOptions, IOptions<TerraOptions> terraOptions, ILogger<PoolMetadataReader> logger)
+        public PoolMetadataReader(IOptions<TerraOptions> terraOptions, IAzureProxy azureProxy, ILogger<PoolMetadataReader> logger)
         {
-            ArgumentNullException.ThrowIfNull(batchAccountOptions);
+            ArgumentNullException.ThrowIfNull(azureProxy);
             ArgumentNullException.ThrowIfNull(terraOptions);
             ArgumentNullException.ThrowIfNull(logger);
 
 
-            this.batchAccountOptions = batchAccountOptions.Value;
             this.terraOptions = terraOptions.Value;
+            this.azureProxy = azureProxy;
             this.logger = logger;
 
             ValidateOptions();
-
-            batchClient = CreateBatchClientFromOptions();
         }
 
         /// <summary>
@@ -54,14 +52,14 @@ namespace TesApi.Web.Management.Batch
         /// </summary>
         /// <param name="poolId">Pool id</param>
         /// <param name="key">Metadata key</param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException">When pool is not found</exception>
-        public virtual string GetMetadataValue(string poolId, string key)
+        public virtual async ValueTask<string> GetMetadataValueAsync(string poolId, string key, CancellationToken cancellationToken)
         {
+            logger.LogInformation(@"Getting metadata from pool {PoolId}. Key {MetadataKey}", poolId, key);
 
-            logger.LogInformation($"Getting metadata from pool {poolId}. Key {key}");
-
-            var poolMetadata = batchClient.PoolOperations.GetPool(poolId)?.Metadata;
+            var poolMetadata = (await azureProxy.GetBatchPoolAsync(poolId, cancellationToken: cancellationToken, new ODATADetailLevel { SelectClause = "metadata" }))?.Metadata;
 
             if (poolMetadata is null)
             {
@@ -71,19 +69,9 @@ namespace TesApi.Web.Management.Batch
             return poolMetadata.SingleOrDefault(m => m.Name.Equals(key))?.Value;
         }
 
-        private BatchClient CreateBatchClientFromOptions()
-        {
-            return BatchClient.Open(new BatchSharedKeyCredentials(batchAccountOptions.BaseUrl,
-                batchAccountOptions.AccountName, batchAccountOptions.AppKey));
-        }
-
         private void ValidateOptions()
         {
             ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceId, nameof(terraOptions.WorkspaceId));
-            ArgumentException.ThrowIfNullOrEmpty(batchAccountOptions.AccountName, nameof(batchAccountOptions.AccountName));
-            ArgumentException.ThrowIfNullOrEmpty(batchAccountOptions.AppKey, nameof(batchAccountOptions.AppKey));
-            ArgumentException.ThrowIfNullOrEmpty(batchAccountOptions.BaseUrl, nameof(batchAccountOptions.BaseUrl));
-            ArgumentException.ThrowIfNullOrEmpty(batchAccountOptions.ResourceGroup, nameof(batchAccountOptions.ResourceGroup));
         }
     }
 }
