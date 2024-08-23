@@ -90,5 +90,37 @@ namespace TesApi.Web
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         ValueTask FlushPoolsAsync(IEnumerable<string> assignedPools, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// TES metadata carried in the batch pool.
+        /// </summary>
+        /// <param name="HostName"></param>
+        /// <param name="IsDedicated"></param>
+        /// <param name="RunnerMD5"></param>
+        record struct PoolMetadata(string HostName, bool IsDedicated, string RunnerMD5)
+        {
+            private static readonly System.Text.Json.JsonSerializerOptions Options = new(System.Text.Json.JsonSerializerDefaults.Web);
+
+            /// <inheritdoc/>
+            public override readonly string ToString()
+            {
+                return System.Text.Json.JsonSerializer.Serialize(this, Options);
+            }
+
+            /// <summary>
+            /// Create <see cref="PoolMetadata"/> from batch pool metadata value.
+            /// </summary>
+            /// <param name="value">Batch pool '<see cref="BatchScheduler.PoolMetadata"/>' metadata value.</param>
+            /// <returns><see cref="PoolMetadata"/>.</returns>
+            public static PoolMetadata Create(string value)
+            {
+                return System.Text.Json.JsonSerializer.Deserialize<PoolMetadata>(value, Options);
+            }
+
+            internal readonly bool Validate()
+            {
+                return !(string.IsNullOrWhiteSpace(HostName) || string.IsNullOrWhiteSpace(RunnerMD5));
+            }
+        }
     }
 }

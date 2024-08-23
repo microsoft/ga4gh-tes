@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,8 +28,7 @@ namespace TesApi.Tests.Runner
         private TaskExecutionScriptingManager taskExecutionScriptingManager;
         private Mock<TaskToNodeTaskConverter> taskToNodeTaskConverterMock;
         private Mock<IStorageAccessProvider> storageAccessProviderMock;
-        private Mock<BatchNodeScriptBuilder> batchNodeScriptBuilderMock;
-        private const string WgetOptions = "--https-only --no-verbose --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue";
+        private const string WgetOptions = "--no-verbose --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue";
         private static readonly Uri AssetUrl = new("http://foo.bar/bar");
         private TesTask tesTask;
         private NodeTask nodeTask;
@@ -37,7 +37,6 @@ namespace TesApi.Tests.Runner
         [TestInitialize]
         public void SetUp()
         {
-
             tesTask = GetTestTesTask();
             nodeTask = new NodeTask();
             storageAccessProviderMock = new Mock<IStorageAccessProvider>();
@@ -55,21 +54,18 @@ namespace TesApi.Tests.Runner
                  It.IsAny<NodeTaskConversionOptions>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(nodeTask);
 
-            batchNodeScriptBuilderMock = new Mock<BatchNodeScriptBuilder>();
-            batchNodeScriptBuilderMock.Setup(x => x.Build()).Returns("echo");
 
-            taskExecutionScriptingManager = new TaskExecutionScriptingManager(storageAccessProviderMock.Object, taskToNodeTaskConverterMock.Object, batchNodeScriptBuilderMock.Object, new NullLogger<TaskExecutionScriptingManager>());
+            taskExecutionScriptingManager = new TaskExecutionScriptingManager(storageAccessProviderMock.Object, taskToNodeTaskConverterMock.Object, new NullLogger<TaskExecutionScriptingManager>());
         }
 
         [TestMethod]
         public void ParseBatchRunCommand_ReturnsRunCommandWithScriptDownloadAndExecution()
         {
-            var scriptName = "batch_script";
-            var scriptUrl = $"https://foo.bar/{scriptName}";
+            var scriptName = "node_task";
             var nodeTaskUrl = $"https://foo.bar/{scriptName}";
-            var scriptAssets = new BatchScriptAssetsInfo(new(scriptUrl), new(nodeTaskUrl), scriptName);
+            var scriptAssets = new BatchScriptAssetsInfo(new(nodeTaskUrl), new Dictionary<string, string>().AsReadOnly());
 
-            var expectedCommand = $"/bin/bash -c \"wget {WgetOptions} -O ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName} '{scriptUrl}' && chmod +x ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName} && ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName}\"";
+            var expectedCommand = $"/usr/bin/env -S \"{BatchScheduler.BatchNodeSharedEnvVar}/{BatchScheduler.NodeTaskRunnerFilename} -i '{nodeTaskUrl}'\"";
 
             var runCommand = taskExecutionScriptingManager.ParseBatchRunCommand(scriptAssets);
 
@@ -91,11 +87,8 @@ namespace TesApi.Tests.Runner
                     It.IsAny<NodeTaskConversionOptions>(), It.IsAny<CancellationToken>()),
                 Times.Once);
 
-            //creates the script
-            batchNodeScriptBuilderMock.Verify(c => c.Build(), Times.Once);
-
-            //it should upload three assets/blobs: server task, node task definition and script
-            storageAccessProviderMock.Verify(p => p.UploadBlobAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(3));
+            //it should upload two assets/blobs: server task and node task definition
+            storageAccessProviderMock.Verify(p => p.UploadBlobAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
         }
 
         private static TesTask GetTestTesTask()

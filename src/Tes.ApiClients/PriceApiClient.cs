@@ -17,9 +17,9 @@ namespace Tes.ApiClients
         /// <summary>
         /// Constructor of the Price API Client.
         /// </summary>
-        /// <param name="cachingRetryHandler"><see cref="CachingRetryPolicyBuilder"/></param>
+        /// <param name="cachingRetryPolicyBuilder"><see cref="CachingRetryPolicyBuilder"/></param>
         /// <param name="logger"><see cref="ILogger{TCategoryName}"/></param>
-        public PriceApiClient(CachingRetryPolicyBuilder cachingRetryHandler, ILogger<PriceApiClient> logger) : base(cachingRetryHandler, logger)
+        public PriceApiClient(CachingRetryPolicyBuilder cachingRetryPolicyBuilder, ILogger<PriceApiClient> logger) : base(cachingRetryPolicyBuilder, logger)
         {
         }
 
@@ -75,7 +75,7 @@ namespace Tes.ApiClients
         {
             var builder = new UriBuilder(ApiEndpoint) { Query = BuildRequestQueryString(skip, region) };
 
-            var result = await HttpGetRequestAsync<RetailPricingData>(builder.Uri, setAuthorizationHeader: false, cacheResults: cacheResults, cancellationToken: cancellationToken);
+            var result = await HttpGetRequestAsync(builder.Uri, setAuthorizationHeader: false, cacheResults: cacheResults, typeInfo: RetailPricingDataContext.Default.RetailPricingData, cancellationToken: cancellationToken);
 
             result.RequestLink = builder.ToString();
 

@@ -5,27 +5,32 @@ using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
 using Microsoft.Extensions.Logging;
+using Tes.Runner.Models;
 using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Storage
 {
     public class ArmUrlTransformationStrategy : IUrlTransformationStrategy
     {
-        const string StorageHostSuffix = ".blob.core.windows.net";
+        const string BlobUrlPrefix = ".blob."; // "core.windows.net";
         private const int BlobSasTokenExpirationInHours = 24 * 7; //7 days which is the Azure Batch node runtime;
         const int UserDelegationKeyExpirationInHours = 1;
 
         private readonly ILogger logger = PipelineLoggerFactory.Create<ArmUrlTransformationStrategy>();
-        private readonly Dictionary<string, UserDelegationKey> userDelegationKeyDictionary;
-        private readonly SemaphoreSlim semaphoreSlim = new SemaphoreSlim(1, 1);
+        private readonly Dictionary<string, UserDelegationKey> userDelegationKeyDictionary = [];
+        private readonly SemaphoreSlim semaphoreSlim = new(1, 1);
         private readonly Func<Uri, BlobServiceClient> blobServiceClientFactory;
+        private readonly RuntimeOptions runtimeOptions;
+        private readonly string storageHostSuffix;
 
-        public ArmUrlTransformationStrategy(Func<Uri, BlobServiceClient> blobServiceClientFactory)
+        public ArmUrlTransformationStrategy(Func<Uri, BlobServiceClient> blobServiceClientFactory, RuntimeOptions runtimeOptions)
         {
             ArgumentNullException.ThrowIfNull(blobServiceClientFactory);
+            ArgumentNullException.ThrowIfNull(runtimeOptions);
 
             this.blobServiceClientFactory = blobServiceClientFactory;
-            userDelegationKeyDictionary = new Dictionary<string, UserDelegationKey>();
+            this.runtimeOptions = runtimeOptions;
+            storageHostSuffix = BlobUrlPrefix + this.runtimeOptions!.AzureEnvironmentConfig!.StorageUrlSuffix;
         }
 
         public async Task<Uri> TransformUrlWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions)
@@ -35,27 +40,20 @@ namespace Tes.Runner.Storage
             if (!IsValidAzureStorageAccountUri(sourceUrl))
             {
                 var uri = new Uri(sourceUrl);
-                logger.LogWarning($"The URL provided is not a valid storage account. The resolution strategy won't be applied. Host: {uri.Host}");
+                logger.LogWarning("The URL provided is not a valid storage account. The resolution strategy won't be applied. Host: {Host}", uri.Host);
 
                 return uri;
             }
 
-            if (UrlContainsSasToken(sourceUrl))
+            if (BlobApiHttpUtils.UrlContainsSasToken(sourceUrl))
             {
                 var uri = new Uri(sourceUrl);
-                logger.LogWarning($"The URL provided has SAS token. The resolution strategy won't be applied. Host: {uri.Host}");
+                logger.LogWarning("The URL provided has SAS token. The resolution strategy won't be applied. Host: {Host}", uri.Host);
 
                 return uri;
             }
 
             return await GetStorageUriWithSasTokenAsync(sourceUrl, blobSasPermissions);
-        }
-
-        private bool UrlContainsSasToken(string sourceUrl)
-        {
-            var blobBuilder = new BlobUriBuilder(new Uri(sourceUrl));
-
-            return !string.IsNullOrWhiteSpace(blobBuilder?.Sas?.Signature);
         }
 
         private async Task<Uri> GetStorageUriWithSasTokenAsync(string sourceUrl, BlobSasPermissions permissions)
@@ -92,16 +90,19 @@ namespace Tes.Runner.Storage
 
         private async Task<UserDelegationKey> GetUserDelegationKeyAsync(BlobServiceClient blobServiceClient, string storageAccountName)
         {
-
             try
             {
                 await semaphoreSlim.WaitAsync();
 
                 var userDelegationKey = userDelegationKeyDictionary.GetValueOrDefault(storageAccountName);
 
-                if (userDelegationKey is null || userDelegationKey.SignedExpiresOn < DateTimeOffset.UtcNow)
+                // https://www.allenconway.net/2023/11/dealing-with-time-skew-and-sas-azure.html
+                // https://learn.microsoft.com/en-us/azure/storage/common/storage-sas-overview?toc=%2Fazure%2Fstorage%2Fblobs%2Ftoc.json&bc=%2Fazure%2Fstorage%2Fblobs%2Fbreadcrumb%2Ftoc.json#best-practices-when-using-sas paragraph referencing "clock skew"
+                var now = DateTimeOffset.UtcNow.Subtract(TimeSpan.FromMinutes(15));
+
+                if (userDelegationKey is null || userDelegationKey.SignedExpiresOn < now)
                 {
-                    userDelegationKey = await blobServiceClient.GetUserDelegationKeyAsync(startsOn: default, expiresOn: DateTimeOffset.UtcNow.AddHours(UserDelegationKeyExpirationInHours));
+                    userDelegationKey = await blobServiceClient.GetUserDelegationKeyAsync(startsOn: now, expiresOn: DateTimeOffset.UtcNow.AddHours(UserDelegationKeyExpirationInHours));
 
                     userDelegationKeyDictionary[storageAccountName] = userDelegationKey;
                 }
@@ -119,11 +120,11 @@ namespace Tes.Runner.Storage
             }
         }
 
-        private static bool IsValidAzureStorageAccountUri(string uri)
+        private bool IsValidAzureStorageAccountUri(string uri)
         {
             return Uri.TryCreate(uri, UriKind.Absolute, out var result) &&
                    result.Scheme == "https" &&
-                   result.Host.EndsWith(StorageHostSuffix);
+                   result.Host.EndsWith(storageHostSuffix);
         }
     }
 }

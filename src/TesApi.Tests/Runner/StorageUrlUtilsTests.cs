@@ -18,10 +18,10 @@ namespace TesApi.Tests.Runner
         private const string CromwellStorageAccount = "default";
 
         [DataTestMethod]
-        [DataRow("/foo/container/blob", $"https://foo{StorageUrlUtils.BlobEndpointHostNameSuffix}/container/blob")]
-        [DataRow($"{StorageAccessProvider.CromwellPathPrefix}blob", $"https://{CromwellStorageAccount}{StorageUrlUtils.BlobEndpointHostNameSuffix}{StorageAccessProvider.CromwellPathPrefix}blob")]
-        [DataRow("/foo/container", $"https://foo{StorageUrlUtils.BlobEndpointHostNameSuffix}/container/")] //empty blob is a valid scenario...
-        [DataRow("/foo/container/", $"https://foo{StorageUrlUtils.BlobEndpointHostNameSuffix}/container/")] //empty blob is a valid scenario...
+        [DataRow("/foo/container/blob", $"https://foo{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/container/blob")]
+        [DataRow($"{StorageAccessProvider.CromwellPathPrefix}blob", $"https://{CromwellStorageAccount}{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}{StorageAccessProvider.CromwellPathPrefix}blob")]
+        [DataRow("/foo/container", $"https://foo{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/container/")] //empty blob is a valid scenario...
+        [DataRow("/foo/container/", $"https://foo{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/container/")] //empty blob is a valid scenario...
         public void ConvertLocalPathOrCromwellLocalPathToUrlTest_ValidInputProvided_ExpectedResult(string input, string expectedResult)
         {
             var result = StorageUrlUtils.ConvertLocalPathOrCromwellLocalPathToUrl(input, CromwellStorageAccount);
@@ -46,11 +46,11 @@ namespace TesApi.Tests.Runner
         }
 
         [DataTestMethod]
-        [DataRow($"https://foo{StorageUrlUtils.BlobEndpointHostNameSuffix}", true)]
-        [DataRow($"https://foo{StorageUrlUtils.BlobEndpointHostNameSuffix}/", true)]
-        [DataRow($"https://foo{StorageUrlUtils.BlobEndpointHostNameSuffix}/container", true)]
-        [DataRow($"https://foo{StorageUrlUtils.BlobEndpointHostNameSuffix}/container/", true)]
-        [DataRow($"https://foo{StorageUrlUtils.BlobEndpointHostNameSuffix}/container/blob", true)]
+        [DataRow($"https://foo{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}", true)]
+        [DataRow($"https://foo{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/", true)]
+        [DataRow($"https://foo{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/container", true)]
+        [DataRow($"https://foo{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/container/", true)]
+        [DataRow($"https://foo{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/container/blob", true)]
         [DataRow($"https://foo.bar.com/container/blob", false)]
         public void IsValidAzureStorageAccountUri_ValidInput_ExpectedResult(string input, bool expectedResult)
         {
@@ -60,11 +60,11 @@ namespace TesApi.Tests.Runner
         }
 
         [DataTestMethod]
-        [DataRow($"https://ext1{StorageUrlUtils.BlobEndpointHostNameSuffix}/cont/?sas=sig,https://ext2{StorageUrlUtils.BlobEndpointHostNameSuffix}/cont/?sas=sig", 2)]
-        [DataRow($"https://ext1{StorageUrlUtils.BlobEndpointHostNameSuffix}/cont/?sas=sig;https://ext2{StorageUrlUtils.BlobEndpointHostNameSuffix}/cont/?sas=sig", 2)]
-        [DataRow($"https://ext1{StorageUrlUtils.BlobEndpointHostNameSuffix}/cont/?sas=sig\nhttps://ext2{StorageUrlUtils.BlobEndpointHostNameSuffix}/cont/?sas=sig", 2)]
-        [DataRow($"https://ext1{StorageUrlUtils.BlobEndpointHostNameSuffix}/cont/?sas=sig\rhttps://ext2{StorageUrlUtils.BlobEndpointHostNameSuffix}/cont/?sas=sig", 2)]
-        [DataRow($"https://ext1{StorageUrlUtils.BlobEndpointHostNameSuffix}/cont/?sas=sig", 1)]
+        [DataRow($"https://ext1{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/cont/?sas=sig,https://ext2{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/cont/?sas=sig", 2)]
+        [DataRow($"https://ext1{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/cont/?sas=sig;https://ext2{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/cont/?sas=sig", 2)]
+        [DataRow($"https://ext1{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/cont/?sas=sig\nhttps://ext2{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/cont/?sas=sig", 2)]
+        [DataRow($"https://ext1{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/cont/?sas=sig\rhttps://ext2{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/cont/?sas=sig", 2)]
+        [DataRow($"https://ext1{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/cont/?sas=sig", 1)]
         [DataRow("", 0)]
         [DataRow(null, 0)]
         public void GetExternalStorageContainerInfos_ListProvided_ExpectedCount(string externalStorageList, int expectedCount)

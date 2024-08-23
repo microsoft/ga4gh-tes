@@ -17,9 +17,9 @@ namespace Tes.Runner.Storage
         private readonly IFileInfoProvider fileInfoProvider = null!;
         private readonly ILogger logger = PipelineLoggerFactory.Create<FileOperationResolver>();
 
-        public FileOperationResolver(NodeTask nodeTask) : this(nodeTask, new ResolutionPolicyHandler(nodeTask.RuntimeOptions), new DefaultFileInfoProvider())
-        {
-        }
+        public FileOperationResolver(NodeTask nodeTask, string apiVersion)
+            : this(nodeTask, new(nodeTask.RuntimeOptions, apiVersion), new DefaultFileInfoProvider())
+        { }
 
         /// <summary>
         /// Parameter-less constructor for mocking
@@ -54,9 +54,9 @@ namespace Tes.Runner.Storage
 
         private List<FileInput> ExpandInputs()
         {
-            var expandedInputs = new List<FileInput>();
+            List<FileInput> expandedInputs = [];
 
-            foreach (var input in nodeTask.Inputs ?? Enumerable.Empty<FileInput>())
+            foreach (var input in nodeTask.Inputs ?? [])
             {
                 expandedInputs.Add(CreateExpandedFileInput(input));
             }
@@ -68,7 +68,7 @@ namespace Tes.Runner.Storage
         {
             ValidateFileInput(input);
 
-            return new FileInput
+            return new()
             {
                 TransformationStrategy = input.TransformationStrategy,
                 SourceUrl = input.SourceUrl,
@@ -94,9 +94,9 @@ namespace Tes.Runner.Storage
 
         private List<FileOutput> ExpandOutputs()
         {
-            var outputs = new List<FileOutput>();
+            List<FileOutput> outputs = [];
 
-            foreach (var output in nodeTask.Outputs ?? Enumerable.Empty<FileOutput>())
+            foreach (var output in nodeTask.Outputs ?? [])
             {
                 outputs.AddRange(ExpandOutput(output));
             }
@@ -108,25 +108,22 @@ namespace Tes.Runner.Storage
         {
             ValidateFileOutput(output);
 
-            IEnumerable<FileOutput> expandedOutputs;
-
-            switch (output.FileType)
+            var expandedOutputs = output.FileType switch
             {
-                case FileType.Directory:
-                    expandedOutputs = ExpandDirectoryOutput(output);
-                    break;
-                case FileType.File:
-                    expandedOutputs = ExpandFileOutput(output);
-                    break;
-                default:
-                    logger.LogWarning($"File type was not set for the output: {output.Path}. Expanding the output as file type.");
-                    expandedOutputs = ExpandFileOutput(output);
-                    break;
-            }
+                FileType.Directory => ExpandDirectoryOutput(output),
+                FileType.File => ExpandFileOutput(output),
+                _ => WarnOnMissingType(output, logger)
+            };
 
-            foreach (var fileOutput in expandedOutputs)
+            foreach (var fileOutput in expandedOutputs.Where(f => f is not null))
             {
                 yield return fileOutput;
+            }
+
+            IEnumerable<FileOutput> WarnOnMissingType(FileOutput output, ILogger logger)
+            {
+                logger.LogWarning("File type was not set for the output: {Path}. Expanding the output as file type.", output.Path);
+                return ExpandFileOutput(output);
             }
         }
 
@@ -162,29 +159,39 @@ namespace Tes.Runner.Storage
             if (fileInfoProvider.FileExists(expandedPath))
             {
                 //treat the output as a single file and use the target URL as is
-                logger.LogInformation($"Adding file: {expandedPath} to the output list with a target URL as is");
+                logger.LogInformation("Adding file: {ExpandedPath} to the output list with a target URL as is", expandedPath);
 
                 yield return CreateExpandedFileOutputUsingTargetUrl(output,
                     absoluteFilePath: expandedPath);
 
                 yield break;
             }
-
-            //at this point, the output is not a single file, so it must be a search pattern
-            //break the given path into root and relative path, where the relative path is the search pattern
-            var rootPathPair = fileInfoProvider.GetRootPathPair(expandedPath);
-
-            foreach (var file in fileInfoProvider.GetFilesBySearchPattern(rootPathPair.Root, rootPathPair.RelativePath))
+            else if (output.FileType == FileType.File
+                && !expandedPath.EndsWith('/')
+                && !expandedPath.Contains('*')
+                && !expandedPath.Contains('?'))
             {
-                logger.LogInformation($"Adding file: {file.RelativePathToSearchPath} with absolute path: {file.AbsolutePath} to the output list with a combined target URL");
+                logger.LogWarning("The file does not exist and is NOT a search pattern: {ExpandedPath}. The output will be ignored.", expandedPath);
+                yield return null!;
+            }
+            else
+            {
+                //at this point, the output is not a single file, so it must be a search pattern
+                //break the given path into root and relative path, where the relative path is the search pattern
+                var rootPathPair = fileInfoProvider.GetRootPathPair(expandedPath);
 
-                yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, absoluteFilePath: file.AbsolutePath, relativePathToSearchPath: file.RelativePathToSearchPath);
+                foreach (var file in fileInfoProvider.GetFilesBySearchPattern(rootPathPair.Root, rootPathPair.RelativePath))
+                {
+                    logger.LogInformation("Adding file: {RelativePathToSearchPath} with absolute path: {AbsolutePath} to the output list with a combined target URL", file.RelativePathToSearchPath, file.AbsolutePath);
+
+                    yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, absoluteFilePath: file.AbsolutePath, relativePathToSearchPath: file.RelativePathToSearchPath);
+                }
             }
         }
 
         private static FileOutput CreateExpandedFileOutputWithCombinedTargetUrl(FileOutput output, string absoluteFilePath, string relativePathToSearchPath)
         {
-            return new FileOutput()
+            return new()
             {
                 Path = absoluteFilePath,
                 TargetUrl = ToCombinedTargetUrl(output.TargetUrl!, prefixToRemoveFromPath: string.Empty, relativePathToSearchPath),
@@ -192,9 +199,10 @@ namespace Tes.Runner.Storage
                 FileType = FileType.File,
             };
         }
+
         private static FileOutput CreateExpandedFileOutputUsingTargetUrl(FileOutput output, string absoluteFilePath)
         {
-            return new FileOutput()
+            return new()
             {
                 Path = absoluteFilePath,
                 TargetUrl = output.TargetUrl,
@@ -225,7 +233,7 @@ namespace Tes.Runner.Storage
 
             if (expandedPath.StartsWith(expandedPrefix))
             {
-                return expandedPath.Substring(expandedPrefix.Length).TrimStart('/');
+                return expandedPath[expandedPrefix.Length..].TrimStart('/');
             }
 
             return expandedPath.TrimStart('/');

@@ -11,15 +11,13 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.ResourceManager;
+using Azure.ResourceManager.ContainerService;
+using Azure.ResourceManager.ManagedServiceIdentities;
+using Azure.Storage.Blobs;
+using CommonUtilities.AzureCloud;
 using k8s;
 using k8s.Models;
-using Microsoft.Azure.Management.ContainerService;
-using Microsoft.Azure.Management.ContainerService.Fluent;
-using Microsoft.Azure.Management.Msi.Fluent;
-using Microsoft.Azure.Management.ResourceManager.Fluent;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
-using Microsoft.Azure.Management.Storage.Fluent;
 using Polly;
 using Polly.Retry;
 
@@ -35,31 +33,35 @@ namespace TesDeployer
             .WaitAndRetryAsync(80, retryAttempt => TimeSpan.FromSeconds(15));
 
         private static readonly AsyncRetryPolicy KubeExecRetryPolicy = Policy
-            .Handle<WebSocketException>(ex => ex.WebSocketErrorCode == WebSocketError.NotAWebSocket)
-            .WaitAndRetryAsync(200, retryAttempt => TimeSpan.FromSeconds(5));
+                    .Handle<WebSocketException>(ex => ex.WebSocketErrorCode == WebSocketError.NotAWebSocket)
+                    .WaitAndRetryAsync(200, retryAttempt => TimeSpan.FromSeconds(5));
 
         private const string NginxIngressRepo = "https://kubernetes.github.io/ingress-nginx";
         private const string NginxIngressVersion = "4.7.1";
         private const string CertManagerRepo = "https://charts.jetstack.io";
         private const string CertManagerVersion = "v1.12.3";
 
-        private Configuration configuration { get; set; }
-        private AzureCredentials azureCredentials { get; set; }
-        private CancellationToken cancellationToken { get; set; }
+        private Configuration configuration { get; }
+        private AzureCloudConfig azureEndpoints { get; }
+        private CancellationToken cancellationToken { get; }
         private string workingDirectoryTemp { get; set; }
         private string kubeConfigPath { get; set; }
         private string valuesTemplatePath { get; set; }
-        public string helmScriptsRootDirectory { get; set; }
-        public string TempHelmValuesYamlPath { get; set; }
-        public string TesCname { get; set; }
+        public string helmScriptsRootDirectory { get; private set; }
+        public string TempHelmValuesYamlPath { get; private set; }
+        public string TesCname { get; private set; }
         public string TesHostname { get; set; }
-        public string AzureDnsLabelName { get; set; }
+        public string AzureDnsLabelName { get; private set; }
 
-        public KubernetesManager(Configuration config, AzureCredentials credentials, CancellationToken cancellationToken)
+        public delegate BlobClient GetBlobClient(Azure.ResourceManager.Storage.StorageAccountData storageAccount, string containerName, string blobName);
+        private readonly GetBlobClient getBlobClient;
+
+        public KubernetesManager(Configuration config, AzureCloudConfig azureCloudConfig, GetBlobClient getBlobClient, CancellationToken cancellationToken)
         {
+            this.azureEndpoints = azureCloudConfig;
             this.cancellationToken = cancellationToken;
             configuration = config;
-            azureCredentials = credentials;
+            this.getBlobClient = getBlobClient;
 
             CreateAndInitializeWorkingDirectoriesAsync().Wait(cancellationToken);
         }
@@ -67,22 +69,20 @@ namespace TesDeployer
         public void SetTesIngressNetworkingConfiguration(string prefix)
         {
             const int maxCnLength = 64;
-            var suffix = $".{configuration.RegionName}.cloudapp.azure.com";
+            var suffix = $".{configuration.RegionName}.cloudapp.{azureEndpoints.Domain}";
             var prefixMaxLength = maxCnLength - suffix.Length;
             TesCname = GetTesCname(prefix, prefixMaxLength);
             TesHostname = $"{TesCname}{suffix}";
             AzureDnsLabelName = TesCname;
         }
 
-        public async Task<IKubernetes> GetKubernetesClientAsync(IResource resourceGroupObject)
+        public async Task<IKubernetes> GetKubernetesClientAsync(ContainerServiceManagedClusterResource managedCluster)
         {
-            var resourceGroup = resourceGroupObject.Name;
-            var containerServiceClient = new ContainerServiceClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId };
+            using MemoryStream kubeconfig = new((await managedCluster.GetClusterAdminCredentialsAsync(cancellationToken: cancellationToken)).Value.Kubeconfigs[0].Value, writable: false);
 
-            // Write kubeconfig in the working directory, because KubernetesClientConfiguration needs to read from a file, TODO figure out how to pass this directly. 
-            var creds = await containerServiceClient.ManagedClusters.ListClusterAdminCredentialsAsync(resourceGroup, configuration.AksClusterName, cancellationToken: cancellationToken);
+            // Write kubeconfig in the working directory as helm & kubctl need it.
             var kubeConfigFile = new FileInfo(kubeConfigPath);
-            await File.WriteAllTextAsync(kubeConfigFile.FullName, Encoding.Default.GetString(creds.Kubeconfigs.First().Value), cancellationToken);
+            await File.WriteAllTextAsync(kubeConfigFile.FullName, Encoding.Default.GetString(kubeconfig.ToArray()), cancellationToken);
             kubeConfigFile.Refresh();
 
             if (!OperatingSystem.IsWindows())
@@ -90,8 +90,7 @@ namespace TesDeployer
                 kubeConfigFile.UnixFileMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
             }
 
-            var k8sConfiguration = KubernetesClientConfiguration.LoadKubeConfig(kubeConfigFile, false);
-            var k8sClientConfiguration = KubernetesClientConfiguration.BuildConfigFromConfigObject(k8sConfiguration);
+            var k8sClientConfiguration = KubernetesClientConfiguration.BuildConfigFromConfigFile(kubeconfig);
             return new Kubernetes(k8sClientConfiguration);
         }
 
@@ -101,7 +100,6 @@ namespace TesDeployer
                 apiVersion: apps/v1
                 kind: Deployment
                 metadata:
-                  creationTimestamp: null
                   labels:
                     io.kompose.service: ubuntu
                   name: ubuntu
@@ -110,21 +108,16 @@ namespace TesDeployer
                   selector:
                     matchLabels:
                       io.kompose.service: ubuntu
-                  strategy: {}
                   template:
                     metadata:
-                      creationTimestamp: null
                       labels:
                         io.kompose.service: ubuntu
                     spec:
                       containers:
-                        - name: ubuntu
-                          image: mcr.microsoft.com/mirror/docker/library/ubuntu:22.04
-                          command: [ "/bin/bash", "-c", "--" ]
-                          args: [ "while true; do sleep 30; done;" ]
-                          resources: {}
-                      restartPolicy: Always
-                status: {}
+                      - name: ubuntu
+                        image: ubuntu
+                        command: ["/bin/bash", "-c", "--"]
+                        args: ["while true; do sleep 30; done;"]
                 """));
 
         /// <summary>
@@ -235,6 +228,7 @@ namespace TesDeployer
                 workingDirectory: workingDirectoryTemp);
             await WaitForWorkloadAsync(kubernetesClient, "tes", configuration.AksCoANamespace, cancellationToken);
         }
+
         public async Task RemovePodAadChart()
         {
             await ExecHelmProcessAsync($"uninstall aad-pod-identity", throwOnNonZeroExitCode: false);
@@ -247,18 +241,18 @@ namespace TesDeployer
             return values;
         }
 
-        public async Task UpdateHelmValuesAsync(IStorageAccount storageAccount, string keyVaultUrl, string resourceGroupName, Dictionary<string, string> settings, IIdentity managedId)
+        public async Task UpdateHelmValuesAsync(Azure.ResourceManager.Storage.StorageAccountData storageAccount, Uri keyVaultUrl, string resourceGroupName, Dictionary<string, string> settings, UserAssignedIdentityData managedId)
         {
             var values = await GetHelmValuesAsync(valuesTemplatePath);
             UpdateValuesFromSettings(values, settings);
             values.Config["resourceGroup"] = resourceGroupName;
             values.Identity["name"] = managedId.Name;
-            values.Identity["resourceId"] = managedId.Id;
-            values.Identity["clientId"] = managedId.ClientId;
+            values.Identity["resourceId"] = managedId.Id.ToString();
+            values.Identity["clientId"] = managedId.ClientId?.ToString("D");
 
             if (configuration.CrossSubscriptionAKSDeployment.GetValueOrDefault())
             {
-                values.InternalContainersKeyVaultAuth = new List<Dictionary<string, string>>();
+                values.InternalContainersKeyVaultAuth = [];
 
                 foreach (var container in values.DefaultContainers)
                 {
@@ -266,7 +260,7 @@ namespace TesDeployer
                     {
                         { "accountName",  storageAccount.Name },
                         { "containerName", container },
-                        { "keyVaultURL", keyVaultUrl },
+                        { "keyVaultURL", keyVaultUrl.AbsoluteUri },
                         { "keyVaultSecretName", Deployer.StorageAccountKeySecretName}
                     };
 
@@ -275,7 +269,7 @@ namespace TesDeployer
             }
             else
             {
-                values.InternalContainersMIAuth = new List<Dictionary<string, string>>();
+                values.InternalContainersMIAuth = [];
 
                 foreach (var container in values.DefaultContainers)
                 {
@@ -292,21 +286,43 @@ namespace TesDeployer
 
             var valuesString = KubernetesYaml.Serialize(values);
             await File.WriteAllTextAsync(TempHelmValuesYamlPath, valuesString, cancellationToken);
-            await Deployer.UploadTextToStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", valuesString, cancellationToken);
+            await Deployer.UploadTextToStorageAccountAsync(getBlobClient(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml"), valuesString, cancellationToken);
         }
 
-        public async Task UpgradeValuesYamlAsync(IStorageAccount storageAccount, Dictionary<string, string> settings)
+        public async Task UpgradeValuesYamlAsync(Azure.ResourceManager.Storage.StorageAccountData storageAccount, Dictionary<string, string> settings)
         {
-            var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", cancellationToken));
+            var blobClient = getBlobClient(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml");
+            var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(blobClient, cancellationToken));
             UpdateValuesFromSettings(values, settings);
             var valuesString = KubernetesYaml.Serialize(values);
             await File.WriteAllTextAsync(TempHelmValuesYamlPath, valuesString, cancellationToken);
-            await Deployer.UploadTextToStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", valuesString, cancellationToken);
+            await Deployer.UploadTextToStorageAccountAsync(blobClient, valuesString, cancellationToken);
         }
 
-        public async Task<Dictionary<string, string>> GetAKSSettingsAsync(IStorageAccount storageAccount)
+        public async Task<FileInfo> ConfigureAltLocalValuesYamlAsync(string altName, Action<HelmValues> configure)
         {
-            var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", cancellationToken));
+            FileInfo altValues = new(Path.Combine(Path.GetDirectoryName(TempHelmValuesYamlPath), altName));
+            var values = KubernetesYaml.Deserialize<HelmValues>(await File.ReadAllTextAsync(TempHelmValuesYamlPath, cancellationToken));
+            configure(values);
+            await File.WriteAllTextAsync(altValues.FullName, KubernetesYaml.Serialize(values), cancellationToken);
+            return altValues;
+        }
+
+        public FileInfo SwapLocalValuesYaml(FileInfo file)
+        {
+            FileInfo backup = new(Path.Combine(file.DirectoryName, "backup.bak"));
+            File.Replace(file.FullName, TempHelmValuesYamlPath, backup.FullName);
+            return backup;
+        }
+
+        public void RestoreLocalValuesYaml(FileInfo backup)
+        {
+            File.Replace(backup.FullName, TempHelmValuesYamlPath, default);
+        }
+
+        public async Task<Dictionary<string, string>> GetAKSSettingsAsync(Azure.ResourceManager.Storage.StorageAccountData storageAccount)
+        {
+            var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(getBlobClient(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml"), cancellationToken));
             return ValuesToSettings(values);
         }
 
@@ -341,6 +357,7 @@ namespace TesDeployer
             {
                 foreach (var command in commands)
                 {
+                    // Debug: ConsoleEx.WriteLine($"Executing: {string.Join(' ', command)}");
                     _ = await client.NamespacedPodExecAsync(workloadPod.Metadata.Name, podNamespace, podName, command, true,
                         (stdIn, stdOut, stdError) => Task.WhenAll(StreamHandler(stdOut), StreamHandler(stdError)), CancellationToken.None);
                 }
@@ -388,8 +405,10 @@ namespace TesDeployer
             var batchScheduling = GetObjectFromConfig(values, "batchScheduling") ?? new Dictionary<string, string>();
             var batchImageGen2 = GetObjectFromConfig(values, "batchImageGen2") ?? new Dictionary<string, string>();
             var batchImageGen1 = GetObjectFromConfig(values, "batchImageGen1") ?? new Dictionary<string, string>();
-            var martha = GetObjectFromConfig(values, "martha") ?? new Dictionary<string, string>();
+            var drsHub = GetObjectFromConfig(values, "drsHub") ?? new Dictionary<string, string>();
+            var deployment = GetObjectFromConfig(values, "deployment") ?? new Dictionary<string, string>();
 
+            values.Config["azureCloudName"] = GetValueOrDefault(settings, "AzureCloudName");
             values.Config["tesOnAzureVersion"] = GetValueOrDefault(settings, "TesOnAzureVersion");
             values.Config["azureServicesAuthConnectionString"] = GetValueOrDefault(settings, "AzureServicesAuthConnectionString");
             values.Config["applicationInsightsAccountName"] = GetValueOrDefault(settings, "ApplicationInsightsAccountName");
@@ -408,9 +427,7 @@ namespace TesDeployer
             batchImageGen1["sku"] = GetValueOrDefault(settings, "Gen1BatchImageSku");
             batchImageGen1["version"] = GetValueOrDefault(settings, "Gen1BatchImageVersion");
             batchImageGen1["nodeAgentSkuId"] = GetValueOrDefault(settings, "Gen1BatchNodeAgentSkuId");
-            martha["url"] = GetValueOrDefault(settings, "MarthaUrl");
-            martha["keyVaultName"] = GetValueOrDefault(settings, "MarthaKeyVaultName");
-            martha["secretName"] = GetValueOrDefault(settings, "MarthaSecretName");
+            drsHub["url"] = GetValueOrDefault(settings, "DrsHubUrl");
             batchScheduling["prefix"] = GetValueOrDefault(settings, "BatchPrefix");
             values.Config["crossSubscriptionAKSDeployment"] = GetValueOrDefault(settings, "CrossSubscriptionAKSDeployment");
             values.Images["tes"] = GetValueOrDefault(settings, "TesImageName");
@@ -427,17 +444,29 @@ namespace TesDeployer
             values.TesDatabase["databaseName"] = GetValueOrDefault(settings, "PostgreSqlTesDatabaseName");
             values.TesDatabase["databaseUserLogin"] = GetValueOrDefault(settings, "PostgreSqlTesDatabaseUserLogin");
             values.TesDatabase["databaseUserPassword"] = GetValueOrDefault(settings, "PostgreSqlTesDatabaseUserPassword");
+            deployment["organizationName"] = GetValueOrDefault(settings, "DeploymentOrganizationName");
+            deployment["organizationUrl"] = GetValueOrDefault(settings, "DeploymentOrganizationUrl");
+            deployment["contactUri"] = GetValueOrDefault(settings, "DeploymentContactUri");
+            deployment["environment"] = GetValueOrDefault(settings, "DeploymentEnvironment");
+            deployment["created"] = GetValueOrDefault(settings, "DeploymentCreated");
+            deployment["updated"] = GetValueOrDefault(settings, "DeploymentUpdated");
+
+            // ensure entries have values
+            _ = batchNodes.TryAdd("contentMD5", "false");
+            _ = batchScheduling.TryAdd("poolRotationForcedDays", "7");
+            _ = batchScheduling.TryAdd("taskMaxWallClockTimeDays", "7");
 
             values.Config["batchAccount"] = batchAccount;
             values.Config["batchNodes"] = batchNodes;
             values.Config["batchScheduling"] = batchScheduling;
             values.Config["batchImageGen2"] = batchImageGen2;
             values.Config["batchImageGen1"] = batchImageGen1;
-            values.Config["martha"] = martha;
+            values.Config["drsHub"] = drsHub;
+            values.Config["deployment"] = deployment;
         }
 
         private static IDictionary<string, string> GetObjectFromConfig(HelmValues values, string key)
-            => (values?.Config[key] as IDictionary<object, object>)?.ToDictionary(p => p.Key as string, p => p.Value as string);
+            => (values?.Config.TryGetValue(key, out var config) ?? false ? (config as IDictionary<object, object>) : null)?.ToDictionary(p => p.Key as string, p => p.Value as string);
 
         private static T GetValueOrDefault<T>(IDictionary<string, T> propertyBag, string key)
             => propertyBag.TryGetValue(key, out var value) ? value : default;
@@ -449,10 +478,12 @@ namespace TesDeployer
             var batchScheduling = GetObjectFromConfig(values, "batchScheduling") ?? new Dictionary<string, string>();
             var batchImageGen2 = GetObjectFromConfig(values, "batchImageGen2") ?? new Dictionary<string, string>();
             var batchImageGen1 = GetObjectFromConfig(values, "batchImageGen1") ?? new Dictionary<string, string>();
-            var martha = GetObjectFromConfig(values, "martha") ?? new Dictionary<string, string>();
+            var drsHub = GetObjectFromConfig(values, "drsHub") ?? new Dictionary<string, string>();
+            var deployment = GetObjectFromConfig(values, "deployment") ?? new Dictionary<string, string>();
 
             return new()
             {
+                ["AzureCloudName"] = GetValueOrDefault(values.Config, "azureCloudName") as string,
                 ["TesOnAzureVersion"] = GetValueOrDefault(values.Config, "tesOnAzureVersion") as string,
                 ["AzureServicesAuthConnectionString"] = GetValueOrDefault(values.Config, "azureServicesAuthConnectionString") as string,
                 ["ApplicationInsightsAccountName"] = GetValueOrDefault(values.Config, "applicationInsightsAccountName") as string,
@@ -471,9 +502,7 @@ namespace TesDeployer
                 ["Gen1BatchImageSku"] = GetValueOrDefault(batchImageGen1, "sku"),
                 ["Gen1BatchImageVersion"] = GetValueOrDefault(batchImageGen1, "version"),
                 ["Gen1BatchNodeAgentSkuId"] = GetValueOrDefault(batchImageGen1, "nodeAgentSkuId"),
-                ["MarthaUrl"] = GetValueOrDefault(martha, "url"),
-                ["MarthaKeyVaultName"] = GetValueOrDefault(martha, "keyVaultName"),
-                ["MarthaSecretName"] = GetValueOrDefault(martha, "secretName"),
+                ["DrsHubUrl"] = GetValueOrDefault(drsHub, "url"),
                 ["BatchPrefix"] = GetValueOrDefault(batchScheduling, "prefix"),
                 ["CrossSubscriptionAKSDeployment"] = GetValueOrDefault(values.Config, "crossSubscriptionAKSDeployment") as string,
                 ["UsePostgreSqlSingleServer"] = GetValueOrDefault(values.Config, "usePostgreSqlSingleServer") as string,
@@ -492,6 +521,12 @@ namespace TesDeployer
                 ["PostgreSqlTesDatabaseName"] = GetValueOrDefault(values.TesDatabase, "databaseName"),
                 ["PostgreSqlTesDatabaseUserLogin"] = GetValueOrDefault(values.TesDatabase, "databaseUserLogin"),
                 ["PostgreSqlTesDatabaseUserPassword"] = GetValueOrDefault(values.TesDatabase, "databaseUserPassword"),
+                ["DeploymentOrganizationName"] = GetValueOrDefault(deployment, "organizationName"),
+                ["DeploymentOrganizationUrl"] = GetValueOrDefault(deployment, "organizationUrl"),
+                ["DeploymentContactUri"] = GetValueOrDefault(deployment, "contactUri"),
+                ["DeploymentEnvironment"] = GetValueOrDefault(deployment, "environment"),
+                ["DeploymentCreated"] = GetValueOrDefault(deployment, "created"),
+                ["DeploymentUpdated"] = GetValueOrDefault(deployment, "updated"),
             };
         }
 
@@ -502,7 +537,7 @@ namespace TesDeployer
         /// <returns></returns>
         private static string GetTesCname(string prefix, int maxLength = 40)
         {
-            var tempCname = SdkContext.RandomResourceName($"{prefix.Replace(".", "")}-", maxLength);
+            var tempCname = Utility.RandomResourceName($"{prefix.Replace(".", "")}-", maxLength);
 
             if (tempCname.Length > maxLength)
             {

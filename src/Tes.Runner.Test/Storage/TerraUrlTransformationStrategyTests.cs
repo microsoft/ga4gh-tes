@@ -39,7 +39,7 @@ namespace Tes.Runner.Test.Storage
             SetupWsmClientWithAssumingSuccess();
             transformationStrategy = new TerraUrlTransformationStrategy(runtimeOptions.Terra, mockTerraWsmApiClient.Object, SasExpirationInSeconds);
             secondTransformationStrategy = new TerraUrlTransformationStrategy(runtimeOptions.Terra, mockTerraWsmApiClient.Object, SasExpirationInSeconds);
-            transformationStrategy.ClearCache(); // Clear cache to avoid test interference, since cache is static in the class level scope.
+            TerraUrlTransformationStrategy.ClearCache(); // Clear cache to avoid test interference, since cache is static in the class level scope.
 
         }
 
@@ -63,25 +63,25 @@ namespace Tes.Runner.Test.Storage
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(() => new WsmListContainerResourcesResponse()
                 {
-                    Resources = new List<Resource>()
-                    {
-                        new Resource()
+                    Resources =
+                    [
+                        new()
                         {
-                            Metadata = new Metadata()
+                            Metadata = new()
                             {
                                 ResourceId = containerResourceId.ToString(),
                                 WorkspaceId = workspaceId.ToString()
                             },
-                            ResourceAttributes = new ResourceAttributes()
+                            ResourceAttributes = new()
                             {
-                                AzureStorageContainer = new AzureStorageContainer()
+                                AzureStorageContainer = new()
                                 {
                                     // the storage container follows the naming convention of sc-{workspaceId}
                                     StorageContainerName = $"sc-{workspaceId}",
                                 }
                             }
                         }
-                    }
+                    ]
                 });
         }
 
@@ -101,12 +101,22 @@ namespace Tes.Runner.Test.Storage
             Assert.AreEqual(wsmPermissions, capturedSasTokenApiParameters.SasPermission);
         }
 
-        [TestMethod]
+        [DataTestMethod]
         [DataRow("https://foo.blob.core.windows.net/container")]
         [DataRow("https://foo.bar.net/container")]
         [DataRow("https://foo.bar.net")]
         public async Task TransformUrlWithStrategyAsync_NonTerraStorageAccount_SourceUrlIsReturned(string sourceUrl)
         {
+            var sasUrl = await transformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
+
+            Assert.AreEqual(new Uri(sourceUrl).ToString(), sasUrl.ToString());
+        }
+
+        [TestMethod]
+        public async Task TransformUrlWithStrategyAsync_TerraStorageAccountWithSasToken_SourceUrlIsReturned()
+        {
+            var sourceUrl = $"{stubTerraBlobUrl}/blob?{StubSasToken}";
+
             var sasUrl = await transformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
 
             Assert.AreEqual(new Uri(sourceUrl).ToString(), sasUrl.ToString());

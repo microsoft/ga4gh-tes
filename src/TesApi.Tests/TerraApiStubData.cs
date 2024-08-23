@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using Tes.ApiClients.Models.Terra;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
 
@@ -13,6 +14,7 @@ public class TerraApiStubData
 {
     public const string LandingZoneApiHost = "https://landingzone.host";
     public const string WsmApiHost = "https://wsm.host";
+    public const string SamApiHost = "https://sam.host";
     public const string ResourceGroup = "mrg-terra-dev-previ-20191228";
     public const string WorkspaceAccountName = "lzaccount1";
     public const string SasToken = "SASTOKENSTUB=";
@@ -20,16 +22,22 @@ public class TerraApiStubData
 
     public const string WorkspaceStorageContainerName = $"sc-{WorkspaceIdValue}";
     public const string WsmGetSasResponseStorageUrl = $"https://{WorkspaceAccountName}.blob.core.windows.net/{WorkspaceStorageContainerName}";
+    public const string TerraPetName = "pet-2674060218359759651b0";
 
+    public Guid TenantId { get; } = Guid.NewGuid();
     public Guid LandingZoneId { get; } = Guid.NewGuid();
     public Guid SubscriptionId { get; } = Guid.NewGuid();
     public Guid ContainerResourceId { get; } = Guid.NewGuid();
     public Guid WorkspaceId { get; } = Guid.Parse(WorkspaceIdValue);
+    public Guid AcrPullIdentitySamResourceId { get; } = Guid.NewGuid();
 
     public string BatchAccountName => "lzee170c71b6cf678cfca744";
     public string Region => "westus3";
     public string BatchAccountId =>
         $"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Batch/batchAccounts/{BatchAccountName}";
+
+    public string ManagedIdentityObjectId =>
+        $"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{TerraPetName}";
 
     public string PoolId => "poolId";
 
@@ -50,6 +58,10 @@ public class TerraApiStubData
     {
         return JsonSerializer.Deserialize<WsmSasTokenApiResponse>(GetWsmSasTokenApiResponseInJson(blobName));
     }
+    public SamActionManagedIdentityApiResponse GetSamActionManagedIdentityApiResponse()
+    {
+        return JsonSerializer.Deserialize<SamActionManagedIdentityApiResponse>(GetSamActionManagedIdentityApiResponseInJson());
+    }
 
     public TerraOptions GetTerraOptions()
     {
@@ -58,9 +70,11 @@ public class TerraApiStubData
             WorkspaceId = WorkspaceId.ToString(),
             LandingZoneApiHost = LandingZoneApiHost,
             WsmApiHost = WsmApiHost,
+            SamApiHost = SamApiHost,
             WorkspaceStorageAccountName = WorkspaceAccountName,
             WorkspaceStorageContainerName = WorkspaceStorageContainerName,
-            WorkspaceStorageContainerResourceId = ContainerResourceId.ToString()
+            WorkspaceStorageContainerResourceId = ContainerResourceId.ToString(),
+            SamResourceIdForAcrPull = AcrPullIdentitySamResourceId.ToString()
         };
     }
 
@@ -302,6 +316,27 @@ public class TerraApiStubData
     ""activeJobAndJobScheduleQuota"": 300,
     ""dedicatedCoreQuota"": 350,
     ""lowPriorityCoreQuota"": 100
+  }}
+}}";
+    }
+
+    public string GetSamActionManagedIdentityApiResponseInJson()
+    {
+        return $@"{{
+  ""id"": {{
+    ""resourceId"": {{
+      ""resourceTypeName"": ""private_azure_container_registry"",
+      ""resourceId"": ""{AcrPullIdentitySamResourceId}""
+    }},
+    ""action"": ""pull_image"",
+    ""billingProfileId"": ""{AcrPullIdentitySamResourceId}""
+  }},
+  ""objectId"": ""{ManagedIdentityObjectId}"",
+  ""displayName"": ""my nice action identity"",
+  ""managedResourceGroupCoordinates"": {{
+    ""tenantId"": ""{TenantId}"",
+    ""subscriptionId"": ""{SubscriptionId}"",
+    ""managedResourceGroupName"": ""{ResourceGroup}""
   }}
 }}";
     }

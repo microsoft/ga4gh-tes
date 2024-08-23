@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Collections.ObjectModel;
 using Azure.Storage.Sas;
 
 namespace Tes.Runner.Storage
@@ -20,6 +21,12 @@ namespace Tes.Runner.Storage
             this.strategies = strategies;
         }
 
+        public void InsertStrategy(int index, IUrlTransformationStrategy strategy)
+        {
+            ArgumentNullException.ThrowIfNull(strategy);
+            strategies.Insert(index, strategy);
+        }
+
         public async Task<Uri> TransformUrlWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions)
         {
             ArgumentException.ThrowIfNullOrEmpty(sourceUrl, nameof(sourceUrl));
@@ -32,6 +39,11 @@ namespace Tes.Runner.Storage
             }
 
             return result;
+        }
+
+        public ReadOnlyCollection<IUrlTransformationStrategy> GetStrategies()
+        {
+            return strategies.AsReadOnly();
         }
     }
 }
