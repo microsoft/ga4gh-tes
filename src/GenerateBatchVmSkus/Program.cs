@@ -52,11 +52,6 @@ namespace GenerateBatchVmSkus
         }
     }
 
-    /*
-     * TODO considerations:
-     *   Currently, we consider the Azure APIs to return the same values for each region where any given SKU exists, but that is not the case. Consider implementing a strategy where we, on a case-by-case basis, determine whether we want the "max" or the "min" of all the regions sampled for any given property.
-     */
-
     internal class Program
     {
         static Program()
@@ -167,23 +162,22 @@ namespace GenerateBatchVmSkus
                     .UseCommandHandler<RootCommand, AzureBatchSkuLocator>();
                 });
 
-                builder.UseExceptionHandler(onException: (exception, context) =>
+            builder.UseExceptionHandler(onException: (exception, context) =>
+            {
+                if (exception is not OperationCanceledException)
                 {
-                    if (exception is not OperationCanceledException)
-                    {
-                        var terminal = context.Console.GetTerminal(outputMode: context.Console.DetectOutputMode());
+                    var terminal = context.Console.GetTerminal();
 
-                        terminal.ResetColor();
-                        terminal.ForegroundColor = ConsoleColor.Red;
+                    terminal?.ResetColor();
+                    terminal?.Render(ForegroundColorSpan.Red());
 
-                        context.Console.Error.Write(context.LocalizationResources.ExceptionHandlerHeader());
-                        context.Console.Error.WriteLine(exception.ToString());
+                    context.Console.Error.WriteLine(context.LocalizationResources.ExceptionHandlerHeader() + exception.ToString());
 
-                        terminal.ResetColor();
-                    }
+                    terminal?.ResetColor();
+                }
 
-                    context.ExitCode = 1;
-                });
+                context.ExitCode = 1;
+            });
 
             return builder;
         }
@@ -198,6 +192,7 @@ namespace GenerateBatchVmSkus
             }
             catch (Exception exception)
             {
+                Console.ResetColor();
                 Console.ForegroundColor = ConsoleColor.Red;
 
                 for (var ex = exception; ex is not null; ex = ex.InnerException)
