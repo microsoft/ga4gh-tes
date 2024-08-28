@@ -289,7 +289,7 @@ namespace GenerateBatchVmSkus
                 string oneIndent = new(Enumerable.Repeat(' ', indent).ToArray());
                 string twoIndent = new(Enumerable.Repeat(' ', indent * 2).ToArray());
                 string threeIndent = new(Enumerable.Repeat(' ', indent * 3).ToArray());
-                var tableWidth = console.IsOutputRedirected ? 0 : Console.WindowWidth - (indent * 3);
+                var tableWidth = console.IsOutputRedirected ? 0 : Console.WindowWidth - threeIndent.Length;
                 ConsoleHelper.WriteLine(ForegroundColorSpan.LightYellow(), $"Due to either availability, capacity, quota, or other constraints, the following {notVerified.Count()} SKUs were not validated and will not be included. Consider adding quota or additional regions as needed:");
                 notVerified.Select(vmsize => (vmsize.Sku.VmSize, vmsize.Sku.VmFamily, vmsize.Sku.LowPriority, vmsize.Sku.RegionsAvailable))
                     .GroupBy(sku => sku.VmFamily, sku => (sku.VmSize, sku.LowPriority, sku.RegionsAvailable), StringComparer.OrdinalIgnoreCase)
@@ -300,17 +300,24 @@ namespace GenerateBatchVmSkus
                         family.OrderBy(sku => sku.VmSize)
                             .ThenBy(sku => sku.LowPriority)
                             .ForEach(sku => ConsoleHelper.WriteLine(
-                                $"{twoIndent}'{sku.VmSize}'{DedicatedMarker(sku.LowPriority)} regions available:{Environment.NewLine}{threeIndent}{string.Join($"{Environment.NewLine}{threeIndent}", MakeTable(tableWidth, sku.RegionsAvailable.OrderBy(region => region, StringComparer.OrdinalIgnoreCase), " ")).TrimEnd()}"));
+                                $"{twoIndent}'{sku.VmSize}'{DedicatedMarker(sku.LowPriority)} regions available:{Environment.NewLine}{threeIndent}{string.Join($"{Environment.NewLine}{threeIndent}", MakeTable(tableWidth, sku.RegionsAvailable.OrderBy(region => region, StringComparer.OrdinalIgnoreCase), " ").Select(s => s.TrimEnd()))}"));
                     });
                 ConsoleHelper.WriteLine(string.Empty);
 
                 static string DedicatedMarker(bool hasLowPriority) => hasLowPriority ? string.Empty : " (dedicatedOnly)";
 
-                static IEnumerable<string> MakeTable(int tableWidth, IEnumerable<string> items, string separator) // returns rows
+                // returns rows with equal-width columns
+                static IEnumerable<string> MakeTable(int tableWidth, IEnumerable<string> items, string separator)
                 {
+                    if (tableWidth <= 0)
+                    {
+                        return items;
+                    }
+
                     items = items.ToList(); // to safely enumerate twice
                     var columnWidth = items.Max(item => item.Length);
-                    return items.ConvertGroup((tableWidth + separator.Length) / (columnWidth + separator.Length), (item, _) => item + new string(Enumerable.Repeat(' ', columnWidth - item.Length).ToArray()), row => string.Join(separator, row));
+                    var columns = (tableWidth + separator.Length) / (columnWidth + separator.Length);
+                    return items.ConvertGroup(columns, (item, _) => item + new string(Enumerable.Repeat(' ', columnWidth - item.Length).ToArray()), row => string.Join(separator, row));
                 }
             }
 
@@ -355,7 +362,7 @@ namespace GenerateBatchVmSkus
                 VmFamily = sku.Family,
                 LowPriority = false,
                 HyperVGenerations = generations,
-                RegionsAvailable = regionsForVm[name].Order().ToList(),
+                RegionsAvailable = [.. regionsForVm[name].Order()],
                 EncryptionAtHostSupported = encryptionAtHostSupported,
                 PricePerHour = priceForVm.TryGetValue(name, out var priceItem) ? (decimal)priceItem.retailPrice : null,
             };
@@ -372,7 +379,7 @@ namespace GenerateBatchVmSkus
                     VmFamily = sku.Family,
                     LowPriority = true,
                     HyperVGenerations = generations,
-                    RegionsAvailable = regionsForVm[name].Order().ToList(),
+                    RegionsAvailable = [.. regionsForVm[name].Order()],
                     EncryptionAtHostSupported = encryptionAtHostSupported,
                     PricePerHour = lowPrPriceForVm.TryGetValue(name, out var lowPrPriceItem) ? (decimal)lowPrPriceItem.retailPrice : null,
                 };
