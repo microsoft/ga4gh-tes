@@ -373,7 +373,7 @@ namespace GenerateBatchVmSkus
                                         }
                                         else
                                         {
-                                            ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.Red(),"Unexpected Task<bool> completion. Contact developer.");
+                                            ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.Red(), "Unexpected Task<bool> completion. Contact developer.");
                                         }
                                         break;
 
