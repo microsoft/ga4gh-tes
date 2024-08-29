@@ -39,16 +39,16 @@ jobs:
     - name: Build
       run: dotnet build --no-restore
 
+    - name: Restore nuget.config
+      run: git restore nuget.config
+
     - name: Retrieve configuration
-      run: echo "$APPSETTINGS" > src/GenerateBatchVmSkus/bin/Debug/net7.0/appsettings.json
+      run: echo "$APPSETTINGS" > src/GenerateBatchVmSkus/bin/Debug/net8.0/appsettings.json
       env:
         APPSETTINGS: ${{ secrets.AZURE_VM_TEST_CONFIG }}
 
     - name: Run GenerateBatchVmSkus
-      run: ./src/GenerateBatchVmSkus/bin/Debug/net7.0/GenerateBatchVmSkus --outputFilePath src/TesApi.Web/BatchSupportedVmSizeInformation.json
-
-    - name: Restore nuget.config
-      run: git restore nuget.config
+      run: ./src/GenerateBatchVmSkus/bin/Debug/net8.0/GenerateBatchVmSkus --outputFilePath src/TesApi.Web/BatchSupportedVmSizeInformation.json
 
     - run: if (( $(git diff src/TesApi.Web/BatchSupportedVmSizeInformation.json | wc -l) > 0 )); then echo "UPDATE_PR=True" >> $GITHUB_ENV; fi
 
@@ -66,8 +66,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    #- name: create pull request
-    #  if: env.UPDATE_PR != null && env.SUBMIT_PR != null
-    #  run: gh pr create --assignee jsaun -B develop -H update-batch-vms --title 'Update BatchSupportedVmSizeInformation.json' --body 'Update BatchSupportedVmSizeInformation.json'
-    #  env:
-    #      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: create pull request
+      if: env.UPDATE_PR != null && env.SUBMIT_PR != null
+      run: gh pr create --assignee jsaun -B develop -H update-batch-vms --title 'Update BatchSupportedVmSizeInformation.json' --body 'Update BatchSupportedVmSizeInformation.json'
+      env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
