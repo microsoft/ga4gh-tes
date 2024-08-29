@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using Azure.Storage.Blobs;
+using CommonUtilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.ApiClients;
@@ -27,7 +28,8 @@ namespace TesApi.Web.Storage
     {
         private readonly TerraOptions terraOptions;
         private readonly BatchSchedulingOptions batchSchedulingOptions;
-        private readonly TerraWsmApiClient terraWsmApiClient;
+        private readonly Lazy<TerraWsmApiClient> terraWsmApiClient;
+        private readonly AzureEnvironmentConfig azureEnvironmentConfig;
         private const string SasBlobPermissions = "racw";
         private const string SasContainerPermissions = "racwl";
         private const string LzStorageAccountNamePattern = "lz[0-9a-f]*";
@@ -40,16 +42,19 @@ namespace TesApi.Web.Storage
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
         /// <param name="terraOptions"><see cref="TerraOptions"/></param>
         /// <param name="batchSchedulingOptions"><see cref="BatchSchedulingOptions"/>></param>
+        /// <param name="azureEnvironmentConfig"></param>
         /// <param name="logger">Logger <see cref="ILogger"/></param>
-        public TerraStorageAccessProvider(TerraWsmApiClient terraWsmApiClient, IAzureProxy azureProxy,
-            IOptions<TerraOptions> terraOptions, IOptions<BatchSchedulingOptions> batchSchedulingOptions,
+        public TerraStorageAccessProvider(Lazy<TerraWsmApiClient> terraWsmApiClient, IAzureProxy azureProxy,
+            IOptions<TerraOptions> terraOptions, IOptions<BatchSchedulingOptions> batchSchedulingOptions, AzureEnvironmentConfig azureEnvironmentConfig,
             ILogger<TerraStorageAccessProvider> logger) : base(
             logger, azureProxy)
         {
             ArgumentNullException.ThrowIfNull(terraOptions);
             ArgumentNullException.ThrowIfNull(batchSchedulingOptions);
             ArgumentNullException.ThrowIfNull(batchSchedulingOptions.Value.Prefix, nameof(batchSchedulingOptions.Value.Prefix));
+            ArgumentNullException.ThrowIfNull(azureEnvironmentConfig);
 
+            this.azureEnvironmentConfig = azureEnvironmentConfig;
             this.terraWsmApiClient = terraWsmApiClient;
             this.batchSchedulingOptions = batchSchedulingOptions.Value;
             this.terraOptions = terraOptions.Value;
@@ -154,7 +159,7 @@ namespace TesApi.Web.Storage
             }
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new($"https://{terraOptions.WorkspaceStorageAccountName}.blob.core.windows.net/{blobInfo.WsmContainerName.TrimStart('/')}/{blobInfo.BlobName.TrimStart('/')}"));
+            var builder = new BlobUriBuilder(new($"https://{terraOptions.WorkspaceStorageAccountName}.blob.{azureEnvironmentConfig.StorageUrlSuffix}/{blobInfo.WsmContainerName.TrimStart('/')}/{blobInfo.BlobName.TrimStart('/')}"));
 
             return builder.ToUri();
         }
@@ -172,7 +177,7 @@ namespace TesApi.Web.Storage
             }
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new($"https://{terraOptions.WorkspaceStorageAccountName}.blob.core.windows.net/{blobInfo.WsmContainerName.TrimStart('/')}{blobName}"));
+            var builder = new BlobUriBuilder(new($"https://{terraOptions.WorkspaceStorageAccountName}.blob.{azureEnvironmentConfig.StorageUrlSuffix}/{blobInfo.WsmContainerName.TrimStart('/')}{blobName}"));
 
             return builder.ToUri();
         }
@@ -195,7 +200,7 @@ namespace TesApi.Web.Storage
 
         private TerraBlobInfo GetTerraBlobInfoForInternalTesTask(TesTask task, string blobPath)
         {
-            var internalPath = $"{GetInternalTesPath()}/{task.Id}";
+            var internalPath = $"{GetInternalTesPath()}{DefaultTasksPrefix}{task.Id}";
 
             if (task.Resources != null && task.Resources.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix))
             {
@@ -247,7 +252,7 @@ namespace TesApi.Web.Storage
             {
                 //the goal is to get all containers, therefore the limit is set to 10000 which is a reasonable unreachable number of storage containers in a workspace.
                 var response =
-                    await terraWsmApiClient.GetContainerResourcesAsync(workspaceId, offset: 0, limit: 10000, cancellationToken);
+                    await terraWsmApiClient.Value.GetContainerResourcesAsync(workspaceId, offset: 0, limit: 10000, cancellationToken);
 
                 var metadata = response.Resources.Single(r =>
                     r.ResourceAttributes.AzureStorageContainer.StorageContainerName.Equals(containerName,
@@ -340,7 +345,7 @@ namespace TesApi.Web.Storage
             Logger.LogInformation(
                 $"Getting Sas Url from Terra. Wsm workspace id:{blobInfo.WorkspaceId}");
 
-            return await terraWsmApiClient.GetSasTokenAsync(
+            return await terraWsmApiClient.Value.GetSasTokenAsync(
                 blobInfo.WorkspaceId,
                 blobInfo.WsmContainerResourceId,
                 tokenParams, cancellationToken);
@@ -354,7 +359,7 @@ namespace TesApi.Web.Storage
             Logger.LogInformation(
                 $"Getting Sas container Url from Terra. Wsm workspace id:{blobInfo.WorkspaceId}");
 
-            return await terraWsmApiClient.GetSasTokenAsync(
+            return await terraWsmApiClient.Value.GetSasTokenAsync(
                 blobInfo.WorkspaceId,
                 blobInfo.WsmContainerResourceId,
                 tokenParams, cancellationToken);

@@ -89,8 +89,6 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
         }
 
         var isDedicatedAndPerVmFamilyCoreQuotaEnforced = isDedicated && batchVmFamilyBatchQuotas.DedicatedCoreQuotaPerVmFamilyEnforced;
-        var batchUtilization = await GetBatchAccountUtilizationAsync(virtualMachineInformation, cancellationToken);
-
 
         if (workflowCoresRequirement > batchVmFamilyBatchQuotas.TotalCoreQuota)
         {
@@ -106,9 +104,11 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
 
         if (needPoolOrJobQuotaCheck)
         {
+            var batchUtilization = GetBatchAccountUtilization();
+
             if (batchUtilization.ActiveJobsCount + 1 > batchVmFamilyBatchQuotas.ActiveJobAndJobScheduleQuota)
             {
-                throw new AzureBatchQuotaMaxedOutException($"No remaining active jobs quota available. There are {batchUtilization.ActivePoolsCount} active jobs out of {batchVmFamilyBatchQuotas.ActiveJobAndJobScheduleQuota}.");
+                throw new AzureBatchQuotaMaxedOutException($"No remaining active jobs quota available. There are {batchUtilization.ActiveJobsCount} active jobs out of {batchVmFamilyBatchQuotas.ActiveJobAndJobScheduleQuota}.");
             }
 
             if (batchUtilization.ActivePoolsCount + 1 > batchVmFamilyBatchQuotas.PoolQuota)
@@ -122,28 +122,12 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
     public IBatchQuotaProvider GetBatchQuotaProvider()
         => batchQuotaProvider;
 
-    private async Task<BatchAccountUtilization> GetBatchAccountUtilizationAsync(VirtualMachineInformation vmInfo, CancellationToken cancellationToken)
+    private BatchAccountUtilization GetBatchAccountUtilization()
     {
-        var isDedicated = !vmInfo.LowPriority;
+        // TODO: make these async
         var activeJobsCount = azureProxy.GetBatchActiveJobCount();
         var activePoolsCount = azureProxy.GetBatchActivePoolCount();
-        var activeNodeCountByVmSize = azureProxy.GetBatchActiveNodeCountByVmSize().ToList();
-        var virtualMachineInfoList = await batchSkuInformationProvider.GetVmSizesAndPricesAsync(batchAccountInformation.Region, cancellationToken);
 
-        var totalCoresInUse = activeNodeCountByVmSize
-            .Sum(x =>
-                virtualMachineInfoList
-                    .FirstOrDefault(vm => vm.VmSize.Equals(x.VirtualMachineSize, StringComparison.OrdinalIgnoreCase))?
-                    .VCpusAvailable * (isDedicated ? x.DedicatedNodeCount : x.LowPriorityNodeCount)) ?? 0;
-
-        var vmSizesInRequestedFamily = virtualMachineInfoList.Where(vm => String.Equals(vm.VmFamily, vmInfo.VmFamily, StringComparison.OrdinalIgnoreCase)).Select(vm => vm.VmSize).ToList();
-
-        var activeNodeCountByVmSizeInRequestedFamily = activeNodeCountByVmSize.Where(x => vmSizesInRequestedFamily.Contains(x.VirtualMachineSize, StringComparer.OrdinalIgnoreCase));
-
-        var dedicatedCoresInUseInRequestedVmFamily = activeNodeCountByVmSizeInRequestedFamily
-            .Sum(x => virtualMachineInfoList.FirstOrDefault(vm => vm.VmSize.Equals(x.VirtualMachineSize, StringComparison.OrdinalIgnoreCase))?.VCpusAvailable * x.DedicatedNodeCount) ?? 0;
-
-
-        return new BatchAccountUtilization(activeJobsCount, activePoolsCount, totalCoresInUse, dedicatedCoresInUseInRequestedVmFamily);
+        return new(activeJobsCount, activePoolsCount);
     }
 }

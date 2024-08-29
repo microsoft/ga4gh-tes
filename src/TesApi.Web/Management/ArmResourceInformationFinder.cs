@@ -2,15 +2,12 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure.Identity;
-using CommonUtilities;
-using Microsoft.Azure.Management.ApplicationInsights.Management;
-using Microsoft.Azure.Management.Batch;
-using Microsoft.Rest;
-using TesApi.Web.Extensions;
+using Azure;
+using Azure.ResourceManager;
 
 namespace TesApi.Web.Management
 {
@@ -22,15 +19,20 @@ namespace TesApi.Web.Management
         /// <summary>
         /// Looks up the AppInsights instrumentation key in subscriptions the TES services has access to 
         /// </summary>
-        /// <param name="accountName"></param>
+        /// <param name="accountName">AppInsights account name</param>
+        /// <param name="tokenCredential">A credential capable of providing an OAuth token.</param>
+        /// <param name="armEnvironment">The information of an Azure Cloud environment.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        /// <param name="cancellationToken"></param>
-        public static Task<string> GetAppInsightsConnectionStringAsync(string accountName, CancellationToken cancellationToken)
+        public static Task<string> GetAppInsightsConnectionStringFromAccountNameAsync(string accountName, Azure.Core.TokenCredential tokenCredential, ArmEnvironment armEnvironment, CancellationToken cancellationToken)
         {
+            ArgumentException.ThrowIfNullOrEmpty(accountName);
+
             return GetAzureResourceAsync(
-                clientFactory: (tokenCredentials, subscription) => new ApplicationInsightsManagementClient(tokenCredentials) { SubscriptionId = subscription },
-                listAsync: (client, ct) => client.Components.ListAsync(ct),
-                listNextAsync: (client, link, ct) => client.Components.ListNextAsync(link, ct),
+                tokenCredential, armEnvironment,
+                listAsync: Azure.ResourceManager.ApplicationInsights.ApplicationInsightsExtensions.GetApplicationInsightsComponentsAsync,
+                getDataAsync: async (subscriptionResource, token) => await subscriptionResource.GetAsync(token),
+                getData: subscriptionResource => subscriptionResource.Data,
                 predicate: a => a.ApplicationId.Equals(accountName, StringComparison.OrdinalIgnoreCase),
                 cancellationToken: cancellationToken,
                 finalize: a => a.ConnectionString);
@@ -40,68 +42,71 @@ namespace TesApi.Web.Management
         /// Attempts to get the batch resource information using the ARM api.
         /// Returns null if the resource was not found or the account does not have access.
         /// </summary>
-        /// <param name="batchAccountName">batch account name</param>
+        /// <param name="batchAccountName">Batch account name</param>
+        /// <param name="tokenCredential">A credential capable of providing an OAuth token.</param>
+        /// <param name="armEnvironment">The information of an Azure Cloud environment.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        /// <param name="cancellationToken"></param>
-        public static Task<BatchAccountResourceInformation> TryGetResourceInformationFromAccountNameAsync(string batchAccountName, CancellationToken cancellationToken)
+        public static Task<BatchAccountResourceInformation> TryGetBatchAccountInformationFromAccountNameAsync(string batchAccountName, Azure.Core.TokenCredential tokenCredential, ArmEnvironment armEnvironment, CancellationToken cancellationToken)
         {
-            //TODO: look if a newer version of the management SDK provides a simpler way to look for this information .
+            ArgumentException.ThrowIfNullOrEmpty(batchAccountName);
+
             return GetAzureResourceAsync(
-                clientFactory: (tokenCredentials, subscription) => new BatchManagementClient(tokenCredentials) { SubscriptionId = subscription },
-                listAsync: (client, ct) => client.BatchAccount.ListAsync(ct),
-                listNextAsync: (client, link, ct) => client.BatchAccount.ListNextAsync(link, ct),
+                tokenCredential, armEnvironment,
+                listAsync: Azure.ResourceManager.Batch.BatchExtensions.GetBatchAccountsAsync,
+                getDataAsync: async (subscriptionResource, token) => await subscriptionResource.GetAsync(token),
+                getData: subscriptionResource => subscriptionResource.Data,
                 predicate: a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase),
                 cancellationToken: cancellationToken,
-                finalize: batchAccount => BatchAccountResourceInformation.FromBatchResourceId(batchAccount.Id, batchAccount.Location, $"https://{batchAccount.AccountEndpoint}"));
+                finalize: batchAccount => BatchAccountResourceInformation.FromBatchResourceId(batchAccount.Id.ToString(), batchAccount.Location?.Name, $"{Uri.UriSchemeHttps}://{batchAccount.AccountEndpoint}"));
         }
-
-        private static async Task<string> GetAzureAccessTokenAsync(CancellationToken cancellationToken, string scope = "https://management.azure.com//.default")
-            => (await (new DefaultAzureCredential()).GetTokenAsync(new Azure.Core.TokenRequestContext(new string[] { scope }))).Token;
 
         /// <summary>
         /// Looks up an Azure resource with management clients that use <see cref="Microsoft.Rest.Azure.IPage{T}"/> enumerators
         /// </summary>
         /// <typeparam name="TResult">Value to return</typeparam>
-        /// <typeparam name="TAzManagementClient">Type of Azure management client to use to locate resources of type <typeparamref name="TResource"/></typeparam>
         /// <typeparam name="TResource">Type of Azure resource to enumerate/locate</typeparam>
-        /// <param name="clientFactory">Returns management client appropriate for enumerating resources of <typeparamref name="TResource"/>. A <see cref="TokenCredentials"/> and the <c>SubscriptionId</c> are passed to this method as parameters.</param>
-        /// <param name="listAsync"><c>ListAsync</c> method from operational parameter on <typeparamref name="TAzManagementClient"/>. Parameters are the <typeparamref name="TAzManagementClient"/> returned by <paramref name="clientFactory"/> and <paramref name="cancellationToken"/>.</param>
-        /// <param name="listNextAsync"><c>ListNextAsync</c> method from operational parameter on <typeparamref name="TAzManagementClient"/>. Parameters are the <typeparamref name="TAzManagementClient"/> returned by <paramref name="clientFactory"/>, the <see cref="Microsoft.Rest.Azure.IPage{T}.NextPageLink"/> from the previous server call, and <paramref name="cancellationToken"/>.</param>
-        /// <param name="predicate">Returns true when the desired <typeparamref name="TResource"/> is found.</param>
-        /// <param name="cancellationToken"></param>
-        /// <param name="finalize">Converts <typeparamref name="TResource"/> to <typeparamref name="TResult"/>. Required if <typeparamref name="TResource"/> is not <typeparamref name="TResult"/>.</param>
+        /// <typeparam name="TResourceData">Type of Azure resource data</typeparam>
+        /// <param name="tokenCredential">A credential capable of providing an OAuth token.</param>
+        /// <param name="armEnvironment">The information of an Azure Cloud environment.</param>
+        /// <param name="listAsync"><c>Get{TResource}sAsync</c>-style extension method with <c>this</c> parameter of type <see cref="Azure.ResourceManager.Resources.SubscriptionResource"/> and one other parameter <paramref name="cancellationToken"/>.</param>
+        /// <param name="getDataAsync"><c>GetAsync</c>-style extension method with <c>this</c> parameter of <typeparamref name="TResource"/> and one parameter <paramref name="cancellationToken"/>.</param>
+        /// <param name="getData">Accessor to the <c>Data</c> property of <typeparamref name="TResource"/>, expected to return a <typeparamref name="TResourceData"/>. Exists to avoid using reflection.</param>
+        /// <param name="predicate">Returns true when the desired <typeparamref name="TResourceData"/> is found.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="finalize">Converts <typeparamref name="TResourceData"/> to <typeparamref name="TResult"/>. Required if <typeparamref name="TResourceData"/> is not <typeparamref name="TResult"/>.</param>
         /// <returns>The <typeparamref name="TResult"/> derived from the first <typeparamref name="TResource"/> that satisfies the condition in <paramref name="predicate"/>, else <c>default</c>.</returns>
-        private static async Task<TResult> GetAzureResourceAsync<TResult, TAzManagementClient, TResource>(
-                Func<TokenCredentials, string, TAzManagementClient> clientFactory,
-                Func<TAzManagementClient, CancellationToken, Task<Microsoft.Rest.Azure.IPage<TResource>>> listAsync,
-                Func<TAzManagementClient, string, CancellationToken, Task<Microsoft.Rest.Azure.IPage<TResource>>> listNextAsync,
-                Predicate<TResource> predicate,
+        private static async Task<TResult> GetAzureResourceAsync<TResult, TResource, TResourceData>(
+                Azure.Core.TokenCredential tokenCredential,
+                ArmEnvironment armEnvironment,
+                Func<Azure.ResourceManager.Resources.SubscriptionResource, CancellationToken, AsyncPageable<TResource>> listAsync,
+                Func<TResource, CancellationToken, Task<Response<TResource>>> getDataAsync,
+                Func<TResource, TResourceData> getData,
+                Predicate<TResourceData> predicate,
                 CancellationToken cancellationToken,
-                Func<TResource, TResult> finalize = default)
-            where TAzManagementClient : Microsoft.Rest.Azure.IAzureClient, IDisposable
+                Func<TResourceData, TResult> finalize = default)
+            where TResource : ArmResource
         {
             if (typeof(TResult) == typeof(TResource))
             {
                 finalize ??= new(a => (TResult)Convert.ChangeType(a, typeof(TResult)));
             }
 
-            ArgumentNullException.ThrowIfNull(clientFactory);
+            ArgumentNullException.ThrowIfNull(tokenCredential);
+            ArgumentNullException.ThrowIfNull(armEnvironment);
             ArgumentNullException.ThrowIfNull(listAsync);
-            ArgumentNullException.ThrowIfNull(listNextAsync);
+            ArgumentNullException.ThrowIfNull(getDataAsync);
+            ArgumentNullException.ThrowIfNull(getData);
             ArgumentNullException.ThrowIfNull(predicate);
             ArgumentNullException.ThrowIfNull(finalize);
 
-            var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync(cancellationToken));
-            var azureManagementClient = await AzureManagementClientsFactory.GetAzureManagementClientAsync(cancellationToken);
+            var armClient = new ArmClient(tokenCredential, null, new ArmClientOptions { Environment = armEnvironment });
 
-            var subscriptions = (await azureManagementClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable().Select(s => s.SubscriptionId);
-
-            await foreach (var subId in subscriptions.WithCancellation(cancellationToken))
+            await foreach (var subResource in armClient.GetSubscriptions().SelectAwaitWithCancellation(async (sub, token) => (await sub.GetAsync(token)).Value).WithCancellation(CancellationToken.None))
             {
-                using var client = clientFactory(tokenCredentials, subId);
-
-                var item = await (await listAsync(client, cancellationToken))
-                    .ToAsyncEnumerable((page, ct) => listNextAsync(client, page, ct))
+                var item = await listAsync(subResource, cancellationToken)
+                    .SelectAwaitWithCancellation(async (subscriptionResource, token) => await getDataAsync(subscriptionResource, token))
+                    .Select(response => getData(response.Value))
                     .FirstOrDefaultAsync(a => predicate(a), cancellationToken);
 
                 if (item is not null)

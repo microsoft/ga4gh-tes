@@ -32,7 +32,7 @@ public class ContainerRegistryAuthorizationManagerTests
 
         mockCredentialsManager = new Mock<CredentialsManager>();
         mockCredentials = new Mock<TokenCredential>();
-        mockCredentialsManager.Setup(c => c.GetTokenCredential(It.IsAny<RuntimeOptions>()))
+        mockCredentialsManager.Setup(c => c.GetAcrPullTokenCredential(It.IsAny<RuntimeOptions>(), It.IsAny<string>()))
             .Returns(mockCredentials.Object);
 
 

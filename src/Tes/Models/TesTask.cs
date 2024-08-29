@@ -16,8 +16,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
-using Newtonsoft.Json;
+using Tes.Converters;
 using Tes.Utilities;
+using NewtonsoftJson = Newtonsoft.Json;
+using STJSerialization = System.Text.Json.Serialization;
 
 namespace Tes.Models
 {
@@ -60,53 +62,55 @@ namespace Tes.Models
         /// </summary>
         /// <value>Input files. Inputs will be downloaded and mounted into the executor container.</value>
         [DataMember(Name = "inputs")]
-        public List<TesInput> Inputs { get; set; }
+        public List<TesInput> Inputs { get; set; } = [];
 
         /// <summary>
         /// Output files. Outputs will be uploaded from the executor container to long-term storage.
         /// </summary>
         /// <value>Output files. Outputs will be uploaded from the executor container to long-term storage.</value>
         [DataMember(Name = "outputs")]
-        public List<TesOutput> Outputs { get; set; }
+        public List<TesOutput> Outputs { get; set; } = [];
 
         /// <summary>
         /// Gets or Sets Resources
         /// </summary>
         [DataMember(Name = "resources")]
-        public TesResources Resources { get; set; }
+        public TesResources Resources { get; set; } = new();
 
         /// <summary>
         /// A list of executors to be run, sequentially. Execution stops on the first error.
         /// </summary>
         /// <value>A list of executors to be run, sequentially. Execution stops on the first error.</value>
         [DataMember(Name = "executors")]
-        public List<TesExecutor> Executors { get; set; }
+        public List<TesExecutor> Executors { get; set; } = [];
 
         /// <summary>
         /// Volumes are directories which may be used to share data between Executors. Volumes are initialized as empty directories by the system when the task starts and are mounted at the same path in each Executor.  For example, given a volume defined at \&quot;/vol/A\&quot;, executor 1 may write a file to \&quot;/vol/A/exec1.out.txt\&quot;, then executor 2 may read from that file.  (Essentially, this translates to a &#x60;docker run -v&#x60; flag where the container path is the same for each executor).
         /// </summary>
         /// <value>Volumes are directories which may be used to share data between Executors. Volumes are initialized as empty directories by the system when the task starts and are mounted at the same path in each Executor.  For example, given a volume defined at \&quot;/vol/A\&quot;, executor 1 may write a file to \&quot;/vol/A/exec1.out.txt\&quot;, then executor 2 may read from that file.  (Essentially, this translates to a &#x60;docker run -v&#x60; flag where the container path is the same for each executor).</value>
         [DataMember(Name = "volumes")]
-        public List<string> Volumes { get; set; }
+        public List<string> Volumes { get; set; } = [];
 
         /// <summary>
         /// A key-value map of arbitrary tags.
         /// </summary>
         /// <value>A key-value map of arbitrary tags.</value>
         [DataMember(Name = "tags")]
-        public Dictionary<string, string> Tags { get; set; }
+        public Dictionary<string, string> Tags { get; set; } = [];
 
         /// <summary>
         /// Task logging information. Normally, this will contain only one entry, but in the case where a task fails and is retried, an entry will be appended to this list.
         /// </summary>
         /// <value>Task logging information. Normally, this will contain only one entry, but in the case where a task fails and is retried, an entry will be appended to this list.</value>
         [DataMember(Name = "logs")]
-        public List<TesTaskLog> Logs { get; set; }
+        public List<TesTaskLog> Logs { get; set; } = [];
 
         /// <summary>
         /// Date + time the task was created, in RFC 3339 format. This is set by the system, not the client.
         /// </summary>
         /// <value>Date + time the task was created, in RFC 3339 format. This is set by the system, not the client.</value>
+        [STJSerialization.JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339_JsonText))]
+        [NewtonsoftJson.JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339_Newtonsoft))]
         [DataMember(Name = "creation_time")]
         public DateTimeOffset? CreationTime { get; set; }
 
@@ -116,7 +120,7 @@ namespace Tes.Models
         /// <returns>Valid TES task ID</returns>
         public string CreateId()
         {
-            var tesTaskIdPrefix = WorkflowId is not null && Guid.TryParse(WorkflowId, out _) ? $"{WorkflowId.Substring(0, 8)}_" : string.Empty;
+            var tesTaskIdPrefix = WorkflowId is not null && Guid.TryParse(WorkflowId, out _) ? $"{WorkflowId[..8]}_" : string.Empty;
             return $"{tesTaskIdPrefix}{Guid.NewGuid():N}";
         }
 
@@ -125,7 +129,7 @@ namespace Tes.Models
         /// </summary>
         /// <param name="id">TesTask ID</param>
         /// <returns>True if valid, false if not</returns>
-        /// <remarks>Letter, digit, _, -, length 32, 36, 41.  Supports GUID for backwards compatibility.</remarks>
+        /// <remarks>Letter, digit, _, -, length 32, 36, 41.  Supports dashed GUID for backwards compatibility.</remarks>
         public static bool IsValidId(string id)
         {
             return (id.Length == 32 || id.Length == 36 || id.Length == 41) && !id.Any(c => !(char.IsLetterOrDigit(c) || c == '_' || c == '-'));
@@ -158,7 +162,7 @@ namespace Tes.Models
         /// </summary>
         /// <returns>JSON string presentation of the object</returns>
         public string ToJson()
-            => JsonConvert.SerializeObject(this, Formatting.Indented);
+            => NewtonsoftJson.JsonConvert.SerializeObject(this, NewtonsoftJson.Formatting.Indented);
 
         /// <summary>
         /// Returns true if objects are equal

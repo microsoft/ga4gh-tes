@@ -5,18 +5,20 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.ResourceManager.Batch;
 using CommonUtilities;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
 using Tes.Models;
+using TesApi.Web.Management.Batch;
 using static TesApi.Web.BatchScheduler.BatchPools;
-using BatchModels = Microsoft.Azure.Management.Batch.Models;
 
 namespace TesApi.Web
 {
@@ -25,7 +27,7 @@ namespace TesApi.Web
         [GeneratedRegex("^[a-zA-Z0-9_-]+$")]
         private static partial Regex PoolNameRegex();
 
-        internal delegate ValueTask<BatchModels.Pool> ModelPoolFactory(string poolId, CancellationToken cancellationToken);
+        internal delegate ValueTask<BatchAccountPoolData> ModelPoolFactory(string poolId, CancellationToken cancellationToken);
 
         private (string PoolKey, string DisplayName) GetPoolKey(Tes.Models.TesTask tesTask, Tes.Models.VirtualMachineInformation virtualMachineInformation, List<string> identities, CancellationToken cancellationToken)
         {
@@ -41,7 +43,7 @@ namespace TesApi.Web
 
             // Generate hash of everything that differentiates this group of pools
             var displayName = $"{label}:{vmSize}:{isPreemptable}:{identityResourceIds}";
-            var hash = SHA1.HashData(Encoding.UTF8.GetBytes(displayName)).ConvertToBase32().TrimEnd('=').ToLowerInvariant(); // This becomes 32 chars
+            var hash = SHA1.HashData(Encoding.UTF8.GetBytes(displayName + ":" + this.runnerMD5)).ConvertToBase32().TrimEnd('=').ToLowerInvariant(); // This becomes 32 chars
 
             // Build a PoolName that is of legal length, while exposing the most important metadata without requiring user to find DisplayName
             // Note that the hash covers all necessary parts to make name unique, so limiting the size of the other parts is not expected to appreciably change the risk of collisions. Those other parts are for convenience
@@ -146,9 +148,7 @@ namespace TesApi.Web
                 RandomNumberGenerator.Fill(uniquifier);
                 var poolId = $"{key}-{uniquifier.ConvertToBase32().TrimEnd('=').ToLowerInvariant()}"; // embedded '-' is required by GetKeyFromPoolId()
                 var modelPool = await modelPoolFactory(poolId, cancellationToken);
-                modelPool.Metadata ??= new List<BatchModels.MetadataItem>();
-                modelPool.Metadata.Add(new(PoolHostName, this.batchPrefix));
-                modelPool.Metadata.Add(new(PoolIsDedicated, (!isPreemptable).ToString()));
+                modelPool.Metadata.Add(new(PoolMetadata, new IBatchScheduler.PoolMetadata(this.batchPrefix, !isPreemptable, this.runnerMD5).ToString()));
                 var batchPool = _batchPoolFactory.CreateNew();
                 await batchPool.CreatePoolAndJobAsync(modelPool, isPreemptable, cancellationToken);
                 pool = batchPool;
@@ -175,16 +175,14 @@ namespace TesApi.Web
 
             try
             {
-                var pools = (await batchPools.GetAllPools()
-                        .ToAsyncEnumerable()
-                        .WhereAwait(async p => await p.CanBeDeleted(cancellationToken))
-                        .ToListAsync(cancellationToken))
+                await foreach (var pool in batchPools
+                    .GetAllPools()
+                    .ToAsyncEnumerable()
+                    .WhereAwait(async p => await p.CanBeDeleted(cancellationToken))
                     .Where(p => !assignedPools.Contains(p.PoolId))
-                    .OrderBy(p => p.GetAllocationStateTransitionTime(cancellationToken))
+                    .OrderByAwait(async p => await p.GetAllocationStateTransitionTime(cancellationToken))
                     .Take(neededPools.Count)
-                    .ToList();
-
-                foreach (var pool in pools)
+                    .WithCancellation(cancellationToken))
                 {
                     await DeletePoolAsync(pool, cancellationToken);
                     _ = RemovePoolFromList(pool);
@@ -202,13 +200,15 @@ namespace TesApi.Web
             logger.LogDebug(@"Deleting pool and job {PoolId}", pool.PoolId);
 
             return Task.WhenAll(
-                AllowIfNotFound(azureProxy.DeleteBatchPoolAsync(pool.PoolId, cancellationToken)),
+                AllowIfNotFound(batchPoolManager.DeleteBatchPoolAsync(pool.PoolId, cancellationToken)),
                 AllowIfNotFound(azureProxy.DeleteBatchJobAsync(pool.PoolId, cancellationToken)));
 
             static async Task AllowIfNotFound(Task task)
             {
                 try { await task; }
                 catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException e && e.Response.StatusCode == System.Net.HttpStatusCode.NotFound) { }
+                catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { }
+                //catch (InvalidOperationException) { } // Terra providers may also throw this
                 catch { throw; }
             }
         }

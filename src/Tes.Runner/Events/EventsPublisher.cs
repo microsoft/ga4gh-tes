@@ -20,6 +20,7 @@ public class EventsPublisher : IAsyncDisposable
     public const string UploadEndEvent = "uploadEnd";
     public const string ExecutorStartEvent = "executorStart";
     public const string ExecutorEndEvent = "executorEnd";
+    public const string TaskCommencementEvent = "taskStarted";
     public const string TaskCompletionEvent = "taskCompleted";
 
     private readonly IList<IEventSink> sinks;
@@ -39,14 +40,14 @@ public class EventsPublisher : IAsyncDisposable
     /// </summary>
     protected EventsPublisher()
     {
-        this.sinks = new List<IEventSink>();
+        this.sinks = [];
     }
 
-    public static async Task<EventsPublisher> CreateEventsPublisherAsync(NodeTask nodeTask)
+    public static async Task<EventsPublisher> CreateEventsPublisherAsync(NodeTask nodeTask, string apiVersion)
     {
-        var storageSink = await CreateAndStartStorageEventSinkFromTaskIfRequestedAsync(nodeTask);
+        var storageSink = await CreateAndStartStorageEventSinkFromTaskIfRequestedAsync(nodeTask, apiVersion);
 
-        var sinkList = new List<IEventSink>();
+        List<IEventSink> sinkList = [];
         if (storageSink != null)
         {
             sinkList.Add(storageSink);
@@ -55,7 +56,7 @@ public class EventsPublisher : IAsyncDisposable
         return new EventsPublisher(sinkList);
     }
 
-    private static async Task<IEventSink?> CreateAndStartStorageEventSinkFromTaskIfRequestedAsync(NodeTask nodeTask)
+    private static async Task<IEventSink?> CreateAndStartStorageEventSinkFromTaskIfRequestedAsync(NodeTask nodeTask, string apiVersion)
     {
         ArgumentNullException.ThrowIfNull(nodeTask);
 
@@ -71,7 +72,8 @@ public class EventsPublisher : IAsyncDisposable
 
         var transformationStrategy = UrlTransformationStrategyFactory.CreateStrategy(
             nodeTask.RuntimeOptions.StorageEventSink.TransformationStrategy,
-            nodeTask.RuntimeOptions);
+            nodeTask.RuntimeOptions,
+            apiVersion);
 
 
         var transformedUrl = await transformationStrategy.TransformUrlWithStrategyAsync(
@@ -98,7 +100,7 @@ public class EventsPublisher : IAsyncDisposable
         var eventMessage = CreateNewEventMessage(nodeTask.Id, UploadEndEvent, statusMessage,
             nodeTask.WorkflowId);
 
-        eventMessage.EventData = new Dictionary<string, string>
+        eventMessage.EventData = new()
         {
             { "numberOfFiles", numberOfFiles.ToString()},
             { "totalSizeInBytes", totalSizeInBytes.ToString()},
@@ -113,9 +115,9 @@ public class EventsPublisher : IAsyncDisposable
         var eventMessage = CreateNewEventMessage(nodeTask.Id, ExecutorStartEvent, StartedStatus,
                        nodeTask.WorkflowId);
 
-        var commands = nodeTask.CommandsToExecute ?? new List<string>();
+        var commands = nodeTask.CommandsToExecute ?? [];
 
-        eventMessage.EventData = new Dictionary<string, string>
+        eventMessage.EventData = new()
         {
             { "image", nodeTask.ImageName??string.Empty},
             { "imageTag", nodeTask.ImageTag??string.Empty},
@@ -128,7 +130,7 @@ public class EventsPublisher : IAsyncDisposable
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, ExecutorEndEvent, statusMessage,
                                   nodeTask.WorkflowId);
-        eventMessage.EventData = new Dictionary<string, string>
+        eventMessage.EventData = new()
         {
             { "image", nodeTask.ImageName??string.Empty},
             { "imageTag", nodeTask.ImageTag??string.Empty},
@@ -143,8 +145,6 @@ public class EventsPublisher : IAsyncDisposable
         var eventMessage = CreateNewEventMessage(nodeTask.Id, DownloadStartEvent, StartedStatus,
                        nodeTask.WorkflowId);
 
-        eventMessage.EventData = new Dictionary<string, string>();
-
         await PublishAsync(eventMessage);
     }
 
@@ -152,7 +152,7 @@ public class EventsPublisher : IAsyncDisposable
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, DownloadEndEvent, statusMessage,
                        nodeTask.WorkflowId);
-        eventMessage.EventData = new Dictionary<string, string>
+        eventMessage.EventData = new()
         {
             { "numberOfFiles", numberOfFiles.ToString()},
             { "totalSizeInBytes", totalSizeInBytes.ToString()},
@@ -161,11 +161,19 @@ public class EventsPublisher : IAsyncDisposable
         await PublishAsync(eventMessage);
     }
 
+    public virtual async Task PublishTaskCommencementEventAsync(NodeTask nodeTask)
+    {
+        var eventMessage = CreateNewEventMessage(nodeTask.Id, TaskCommencementEvent, StartedStatus,
+                       nodeTask.WorkflowId);
+
+        await PublishAsync(eventMessage);
+    }
+
     public async Task PublishTaskCompletionEventAsync(NodeTask tesNodeTask, TimeSpan duration, string statusMessage, string? errorMessage)
     {
         var eventMessage = CreateNewEventMessage(tesNodeTask.Id, TaskCompletionEvent, statusMessage,
             tesNodeTask.WorkflowId);
-        eventMessage.EventData = new Dictionary<string, string>
+        eventMessage.EventData = new()
         {
             { "duration", duration.ToString()},
             { "errorMessage", errorMessage??string.Empty}
@@ -174,7 +182,7 @@ public class EventsPublisher : IAsyncDisposable
         await PublishAsync(eventMessage);
     }
 
-    private EventMessage CreateNewEventMessage(string? entityId, string name, string statusMessage,
+    private static EventMessage CreateNewEventMessage(string? entityId, string name, string statusMessage,
         string? correlationId)
     {
         return new EventMessage
@@ -188,7 +196,7 @@ public class EventsPublisher : IAsyncDisposable
             Created = DateTime.UtcNow,
             EventVersion = EventVersion,
             EventDataVersion = EventDataVersion,
-            EventData = new Dictionary<string, string>()
+            EventData = []
         };
     }
 
@@ -203,7 +211,7 @@ public class EventsPublisher : IAsyncDisposable
 
         foreach (var sink in sinks)
         {
-            logger.LogInformation($"Publishing event {message.Name} to sink: {sink.GetType().Name}");
+            logger.LogInformation("Publishing event {MessageName} to sink: {SinkType}", message.Name, sink.GetType().Name);
 
             await sink.PublishEventAsync(message);
         }

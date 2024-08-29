@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Text.Json.Serialization;
 
 namespace TesApi.Web.Management.Models.Terra
@@ -130,5 +129,10 @@ namespace TesApi.Web.Management.Models.Terra
         [JsonPropertyName("sourceResourceId")]
         public Guid SourceResourceId { get; set; }
     }
+
+    [JsonSerializable(typeof(ApiCreateBatchPoolResponse))]
+    public partial class ApiCreateBatchPoolResponseContext : JsonSerializerContext
+    { }
+
 #pragma warning restore CS1591
 }

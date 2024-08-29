@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 
 namespace Tes.Runner.Events;
 
-public class EventMessage
+public sealed class EventMessage
 {
     [JsonPropertyName("eventId")]
     public string Id { get; set; } = null!;
@@ -38,3 +38,7 @@ public class EventMessage
     [JsonPropertyName("eventData")]
     public Dictionary<string, string>? EventData { get; set; }
 }
+
+[JsonSerializable(typeof(EventMessage))]
+public partial class EventMessageContext : JsonSerializerContext
+{ }

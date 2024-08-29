@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using Azure.Core;
 using Azure.Storage.Blobs;
 using Azure.Storage.Sas;
+using CommonUtilities;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Tes.ApiClients;
@@ -15,11 +16,8 @@ using TesApi.Web.Management.Models.Terra;
 
 namespace Tes.Runner.Storage
 {
-    public class TerraUrlTransformationStrategy : IUrlTransformationStrategy
+    public partial class TerraUrlTransformationStrategy : IUrlTransformationStrategy
     {
-        public const int TokenExpirationInSeconds = 3600 * 24; //1 day, max time allowed by Terra. 
-        public const int CacheExpirationInSeconds = TokenExpirationInSeconds - 1800; // 30 minutes less than token expiration
-
         private const int MaxNumberOfContainerResources = 10000;
         private const string LzStorageAccountNamePattern = "lz[0-9a-f]*";
 
@@ -29,18 +27,11 @@ namespace Tes.Runner.Storage
         private static IMemoryCache memoryCache = new MemoryCache(new MemoryCacheOptions());
         private readonly int cacheExpirationInSeconds;
 
-        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TokenCredential tokenCredential, int cacheExpirationInSeconds = CacheExpirationInSeconds)
-        {
-            ArgumentNullException.ThrowIfNull(terraRuntimeOptions);
-            ArgumentException.ThrowIfNullOrEmpty(terraRuntimeOptions.WsmApiHost, nameof(terraRuntimeOptions.WsmApiHost));
+        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig, int cacheExpirationInSeconds = TerraConfigConstants.CacheExpirationInSeconds)
+            : this(terraRuntimeOptions, TerraWsmApiClient.CreateTerraWsmApiClient(terraRuntimeOptions.WsmApiHost, tokenCredential, azureCloudIdentityConfig), cacheExpirationInSeconds)
+        { }
 
-            terraWsmApiClient = TerraWsmApiClient.CreateTerraWsmApiClient(terraRuntimeOptions.WsmApiHost, tokenCredential);
-            this.terraRuntimeOptions = terraRuntimeOptions;
-            this.cacheExpirationInSeconds = cacheExpirationInSeconds;
-        }
-
-
-        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TerraWsmApiClient terraWsmApiClient, int cacheExpirationInSeconds = CacheExpirationInSeconds)
+        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TerraWsmApiClient terraWsmApiClient, int cacheExpirationInSeconds = TerraConfigConstants.CacheExpirationInSeconds)
         {
             ArgumentNullException.ThrowIfNull(terraRuntimeOptions);
             ArgumentNullException.ThrowIfNull(terraWsmApiClient);
@@ -56,19 +47,29 @@ namespace Tes.Runner.Storage
 
             if (!IsTerraWorkspaceStorageAccount(blobUriBuilder.AccountName))
             {
-                logger.LogWarning($"The URL provide is not a valid storage account for Terra. The resolution strategy won't be applied. Host: {blobUriBuilder.Host}");
+                logger.LogWarning("The URL provide is not a valid storage account for Terra. The resolution strategy won't be applied. Host: {Host}", blobUriBuilder.Host);
                 return blobUriBuilder.ToUri();
+            }
+
+            if (BlobApiHttpUtils.UrlContainsSasToken(sourceUrl))
+            {
+                var uri = new Uri(sourceUrl);
+                logger.LogWarning("The URL provided has SAS token. The resolution strategy won't be applied. Host: {Host}", uri.Host);
+
+                return uri;
             }
 
             var blobInfo = await GetTerraBlobInfoFromContainerNameAsync(sourceUrl);
 
             return await GetMappedSasUrlFromWsmAsync(blobInfo, blobSasPermissions);
         }
-        public void ClearCache()
+
+        public static void ClearCache()
         {
             memoryCache.Dispose();
             memoryCache = new MemoryCache(new MemoryCacheOptions());
         }
+
         /// <summary>
         /// Returns a Url with a SAS token for the given input
         /// </summary>
@@ -79,7 +80,7 @@ namespace Tes.Runner.Storage
         {
             var tokenInfo = await GetWorkspaceSasTokenFromWsmAsync(blobInfo, blobSasPermissions);
 
-            logger.LogInformation($"Successfully obtained the SAS URL from Terra. WSM resource ID:{blobInfo.WsmContainerResourceId}");
+            logger.LogInformation("Successfully obtained the SAS URL from Terra. WSM resource ID:{ContainerResourceId}", blobInfo.WsmContainerResourceId);
 
             var uriBuilder = new UriBuilder(tokenInfo.Url);
 
@@ -99,7 +100,7 @@ namespace Tes.Runner.Storage
             var tokenParams = CreateTokenParamsFromOptions(sasBlobPermissions);
 
             logger.LogInformation(
-                $"Getting SAS URL from Terra. WSM workspace ID:{blobInfo.WorkspaceId}");
+                "Getting SAS URL from Terra. WSM workspace ID:{WorkspaceId}", blobInfo.WorkspaceId);
 
             var cacheKey = $"{blobInfo.WorkspaceId}-{blobInfo.WsmContainerResourceId}-{tokenParams.SasPermission}";
 
@@ -110,7 +111,7 @@ namespace Tes.Runner.Storage
                     throw new InvalidOperationException("The value retrieved from the cache is null");
                 }
 
-                logger.LogInformation($"SAS URL found in cache. WSM resource ID:{blobInfo.WsmContainerResourceId}");
+                logger.LogInformation("SAS URL found in cache. WSM resource ID:{ContainerResourceId}", blobInfo.WsmContainerResourceId);
                 return tokenInfo;
             }
 
@@ -127,13 +128,12 @@ namespace Tes.Runner.Storage
         private SasTokenApiParameters CreateTokenParamsFromOptions(BlobSasPermissions sasPermissions)
         {
             return new(
-                terraRuntimeOptions.SasAllowedIpRange ?? string.Empty,
-                TokenExpirationInSeconds,
+                terraRuntimeOptions.SasAllowedIpRange ?? string.Empty, TerraConfigConstants.TokenExpirationInSeconds,
                 //setting blob name to empty string to get a SAS token for the container
                 ToWsmBlobSasPermissions(sasPermissions), SasBlobName: String.Empty);
         }
 
-        private string ToWsmBlobSasPermissions(BlobSasPermissions blobSasPermissions)
+        private static string ToWsmBlobSasPermissions(BlobSasPermissions blobSasPermissions)
         {
             var permissions = string.Empty;
             if (blobSasPermissions.HasFlag(BlobSasPermissions.Read))
@@ -164,7 +164,7 @@ namespace Tes.Runner.Storage
             return permissions;
         }
 
-        private void CheckIfAccountIsTerraStorageAccount(string accountName)
+        private static void CheckIfAccountIsTerraStorageAccount(string accountName)
         {
             if (!IsTerraWorkspaceStorageAccount(accountName))
             {
@@ -172,12 +172,16 @@ namespace Tes.Runner.Storage
             }
         }
 
+        [GeneratedRegex(LzStorageAccountNamePattern)]
+        private static partial Regex LzStorageAccountNamePatternRegex();
+
         private static bool IsTerraWorkspaceStorageAccount(string value)
         {
-            var match = Regex.Match(value, LzStorageAccountNamePattern);
+            var match = LzStorageAccountNamePatternRegex().Match(value);
 
             return match.Success;
         }
+
         /// <summary>
         /// Creates a Terra Blob Info from the container name in the url. The url must be a Terra managed storage URL.
         /// This method assumes that the container name contains the workspace ID and validates that the storage container is a Terra workspace resource.
@@ -192,11 +196,11 @@ namespace Tes.Runner.Storage
 
             CheckIfAccountIsTerraStorageAccount(blobUriBuilder.AccountName);
 
-            logger.LogInformation($"Getting Workspace ID from the Container Name: {blobUriBuilder.BlobContainerName}");
+            logger.LogInformation("Getting Workspace ID from the Container Name: {BlobContainerName}", blobUriBuilder.BlobContainerName);
 
             var workspaceId = ToWorkspaceId(blobUriBuilder.BlobContainerName);
 
-            logger.LogInformation($"Workspace ID to use: {blobUriBuilder.BlobContainerName}");
+            logger.LogInformation("Workspace ID to use: {WorkspaceId}", workspaceId);
 
             var wsmContainerResourceId = await GetWsmContainerResourceIdFromCacheOrWsmAsync(workspaceId, blobUriBuilder.BlobContainerName);
 
@@ -212,7 +216,7 @@ namespace Tes.Runner.Storage
             }
             catch (Exception e)
             {
-                logger.LogError(e, $"Failed to parse the URL. The URL provided is not a valid Blob URL: {url}");
+                logger.LogError(e, "Failed to parse the URL. The URL provided is not a valid Blob URL: {Url}", url);
                 throw;
             }
 
@@ -225,19 +229,20 @@ namespace Tes.Runner.Storage
             {
                 ArgumentException.ThrowIfNullOrEmpty(segmentsContainerName);
 
-                var guidString = segmentsContainerName.Substring(3); // remove the sc- prefix
+                var guidString = segmentsContainerName[3..]; // remove the sc- prefix
 
                 return Guid.Parse(guidString); // throws if not a guid
             }
             catch (Exception e)
             {
-                logger.LogError(e, $"Failed to get the workspace ID from the container name. The name provided is not a valid GUID. Container Name: {segmentsContainerName}");
+                logger.LogError(e, "Failed to get the workspace ID from the container name. The name provided is not a valid GUID. Container Name: {BlobContainerName}", segmentsContainerName);
                 throw;
             }
         }
+
         private async Task<Guid> GetWsmContainerResourceIdFromCacheOrWsmAsync(Guid workspaceId, string containerName)
         {
-            logger.LogInformation($"Getting container resource information from WSM. Workspace ID: {workspaceId} Container Name: {containerName}");
+            logger.LogInformation("Getting container resource information from WSM. Workspace ID: {WorkspaceId} Container Name: {BlobContainerName}", workspaceId, containerName);
 
             try
             {
@@ -245,7 +250,7 @@ namespace Tes.Runner.Storage
 
                 if (memoryCache.TryGetValue(cacheKey, out Guid wsmContainerResourceId))
                 {
-                    logger.LogInformation($"Found the container resource ID in cache. Resource ID: {wsmContainerResourceId} Container Name: {containerName}");
+                    logger.LogInformation("Found the container resource ID in cache. Resource ID: {ContainerResourceId} Container Name: {BlobContainerName}", wsmContainerResourceId, containerName);
                     return wsmContainerResourceId;
                 }
 
@@ -258,11 +263,11 @@ namespace Tes.Runner.Storage
                     r.ResourceAttributes.AzureStorageContainer.StorageContainerName.Equals(containerName,
                         StringComparison.OrdinalIgnoreCase)).Metadata;
 
-                logger.LogInformation($"Found the resource ID for storage container resource. Resource ID: {metadata.ResourceId} Container Name: {containerName}");
+                logger.LogInformation("Found the resource ID for storage container resource. Resource ID: {ContainerResourceId} Container Name: {BlobContainerName}", metadata.ResourceId, containerName);
 
                 var resourceId = Guid.Parse(metadata.ResourceId);
 
-                memoryCache.Set(cacheKey, resourceId, TimeSpan.FromSeconds(CacheExpirationInSeconds));
+                memoryCache.Set(cacheKey, resourceId, TimeSpan.FromSeconds(TerraConfigConstants.CacheExpirationInSeconds));
 
                 return resourceId;
             }

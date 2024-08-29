@@ -16,7 +16,7 @@ namespace Tes.Runner.Events
         private const string ApiVersion = "2023-05-03";
         private readonly Uri storageUrl;
         private readonly ILogger logger = PipelineLoggerFactory.Create<BlobStorageEventSink>();
-        private readonly BlobApiHttpUtils blobApiHttpUtils = new BlobApiHttpUtils();
+        private readonly BlobApiHttpUtils blobApiHttpUtils = new();
 
 
         public BlobStorageEventSink(Uri storageUrl)
@@ -30,7 +30,7 @@ namespace Tes.Runner.Events
         {
             try
             {
-                var content = JsonSerializer.Serialize(eventMessage);
+                var content = JsonSerializer.Serialize(eventMessage, EventMessageContext.Default.EventMessage);
 
                 await blobApiHttpUtils.ExecuteHttpRequestAsync(() =>
                     BlobApiHttpUtils.CreatePutBlobRequestAsync(ToEventUrl(storageUrl, eventMessage), content, ApiVersion, ToTags(eventMessage)));
@@ -38,11 +38,11 @@ namespace Tes.Runner.Events
             catch (Exception e)
             {
                 //failure to publish event to blob storage should not fail the execution of the node task
-                logger.LogError(e, $"Failed to publish event {eventMessage.Id} to blob storage");
+                logger.LogError(e, "Failed to publish event {EventMessageId} to blob storage", eventMessage.Id);
             }
         }
 
-        private Uri ToEventUrl(Uri uri, EventMessage message)
+        private static Uri ToEventUrl(Uri uri, EventMessage message)
         {
             var blobBuilder = new BlobUriBuilder(uri);
 
@@ -58,7 +58,7 @@ namespace Tes.Runner.Events
             return blobBuilder.ToUri();
         }
 
-        private Dictionary<string, string> ToTags(EventMessage eventMessage)
+        private static Dictionary<string, string> ToTags(EventMessage eventMessage)
         {
             return new Dictionary<string, string>
             {

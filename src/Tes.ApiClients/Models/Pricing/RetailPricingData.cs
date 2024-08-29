@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Text.Json.Serialization;
+
 namespace Tes.ApiClients.Models.Pricing
 {
     /// <summary>
@@ -43,4 +45,8 @@ namespace Tes.ApiClients.Models.Pricing
         /// </summary>
         public string RequestLink { get; set; } = null!;
     }
+
+    [JsonSerializable(typeof(RetailPricingData))]
+    public partial class RetailPricingDataContext : JsonSerializerContext
+    { }
 }

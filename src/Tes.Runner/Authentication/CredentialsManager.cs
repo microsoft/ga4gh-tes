@@ -20,8 +20,6 @@ namespace Tes.Runner.Authentication
         private const int MaxRetryCount = 7;
         private const int ExponentialBackOffExponent = 2;
 
-        private const string DefaultTokenScope = @"https://management.azure.com/.default";
-
         public CredentialsManager()
         {
             retryPolicy = Policy
@@ -32,17 +30,33 @@ namespace Tes.Runner.Authentication
 
         private TimeSpan SleepDurationHandler(int attempt)
         {
-            logger.LogInformation($"Attempt {attempt} to get token credential");
+            logger.LogInformation("Attempt {Attempt} to get token credential", attempt);
             var duration = TimeSpan.FromSeconds(Math.Pow(ExponentialBackOffExponent, attempt));
-            logger.LogInformation($"Waiting {duration} before retrying");
+            logger.LogInformation("Waiting {Duration} before retrying", duration);
             return duration;
         }
 
-        public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions)
+        public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions, string? tokenScope = default)
         {
+            return GetTokenCredential(runtimeOptions, runtimeOptions.NodeManagedIdentityResourceId, tokenScope);
+        }
+
+        public virtual TokenCredential GetAcrPullTokenCredential(RuntimeOptions runtimeOptions, string? tokenScope = default)
+        {
+            var managedIdentity = runtimeOptions.NodeManagedIdentityResourceId;
+            if (!string.IsNullOrWhiteSpace(runtimeOptions.AcrPullManagedIdentityResourceId))
+            {
+                managedIdentity = runtimeOptions.AcrPullManagedIdentityResourceId;
+            }
+            return GetTokenCredential(runtimeOptions, managedIdentity, tokenScope);
+        }
+
+        public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions, string? managedIdentityResourceId, string? tokenScope = default)
+        {
+            tokenScope ??= runtimeOptions.AzureEnvironmentConfig!.TokenScope!;
             try
             {
-                return retryPolicy.Execute(() => GetTokenCredentialImpl(runtimeOptions));
+                return retryPolicy.Execute(() => GetTokenCredentialImpl(managedIdentityResourceId, tokenScope, runtimeOptions.AzureEnvironmentConfig!.AzureAuthorityHostUrl!));
             }
             catch
             {
@@ -50,27 +64,31 @@ namespace Tes.Runner.Authentication
             }
         }
 
-        private TokenCredential GetTokenCredentialImpl(RuntimeOptions runtimeOptions)
+        private TokenCredential GetTokenCredentialImpl(string? managedIdentityResourceId, string tokenScope, string azureAuthorityHost)
         {
             try
             {
                 TokenCredential tokenCredential;
+                Uri authorityHost = new(azureAuthorityHost);
 
-                if (!string.IsNullOrWhiteSpace(runtimeOptions.NodeManagedIdentityResourceId))
+                if (!string.IsNullOrWhiteSpace(managedIdentityResourceId))
                 {
-                    logger.LogInformation($"Token credentials with Managed Identity and resource ID: {runtimeOptions.NodeManagedIdentityResourceId}");
+                    logger.LogInformation("Token credentials with Managed Identity and resource ID: {NodeManagedIdentityResourceId}", managedIdentityResourceId);
+                    var tokenCredentialOptions = new TokenCredentialOptions { AuthorityHost = authorityHost };
 
-                    tokenCredential = new ManagedIdentityCredential(new ResourceIdentifier(runtimeOptions.NodeManagedIdentityResourceId));
+                    tokenCredential = new ManagedIdentityCredential(
+                        new ResourceIdentifier(managedIdentityResourceId),
+                        tokenCredentialOptions);
                 }
                 else
                 {
                     logger.LogInformation("Token credentials with DefaultAzureCredential");
-
-                    tokenCredential = new DefaultAzureCredential();
+                    var defaultAzureCredentialOptions = new DefaultAzureCredentialOptions { AuthorityHost = authorityHost };
+                    tokenCredential = new DefaultAzureCredential(defaultAzureCredentialOptions);
                 }
 
                 //Get token to verify that credentials are valid
-                tokenCredential.GetToken(new TokenRequestContext(new[] { DefaultTokenScope }), CancellationToken.None);
+                _ = tokenCredential.GetToken(new TokenRequestContext([tokenScope]), CancellationToken.None);
 
                 return tokenCredential;
             }

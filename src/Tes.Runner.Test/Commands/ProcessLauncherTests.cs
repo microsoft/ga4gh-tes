@@ -25,7 +25,7 @@ namespace Tes.Runner.Test.Commands
         public async Task LaunchProcessAndWaitAsync_ValidCommand_NoErrorSuccessExitCode()
         {
             //dotnet version must be available in windows and linux. 
-            var result = await processLauncher.LaunchProcessAndWaitAsync(new[] { "dotnet --version" });
+            var result = await processLauncher.LaunchProcessAndWaitAsync(["dotnet --version"]);
 
             Assert.AreEqual(0, result.ExitCode);
         }
@@ -34,7 +34,7 @@ namespace Tes.Runner.Test.Commands
         public async Task LaunchProcessAndWaitAsync_InvalidCommand_NoSuccessExitCode()
         {
             //dotnet version must be available in windows and linux. 
-            var result = await processLauncher.LaunchProcessAndWaitAsync(new[] { "dotnet -version" });
+            var result = await processLauncher.LaunchProcessAndWaitAsync(["dotnet -version"]);
 
             Assert.AreNotEqual(0, result.ExitCode);
         }
@@ -43,8 +43,8 @@ namespace Tes.Runner.Test.Commands
         public async Task LaunchProcessAndWaitAsync_MultipleCalls_StandardOutputIsReturnedWithLatestExecutionResult()
         {
             //dotnet version must be available in windows and linux. 
-            var result1 = await processLauncher.LaunchProcessAndWaitAsync(new[] { "dotnet --version" });
-            var result2 = await processLauncher.LaunchProcessAndWaitAsync(new[] { "dotnet --version" });
+            var result1 = await processLauncher.LaunchProcessAndWaitAsync(["dotnet --version"]);
+            var result2 = await processLauncher.LaunchProcessAndWaitAsync(["dotnet --version"]);
 
             Assert.AreEqual(result2.ExitCode, result1.ExitCode);
         }

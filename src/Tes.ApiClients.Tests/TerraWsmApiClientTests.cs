@@ -4,6 +4,7 @@
 using System.Net;
 using System.Web;
 using Azure.Core;
+using CommonUtilities;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Tes.ApiClients.Models.Terra;
@@ -19,6 +20,7 @@ namespace Tes.ApiClients.Tests
         private Mock<CachingRetryPolicyBuilder> cacheAndRetryBuilder = null!;
         private Lazy<Mock<CachingRetryHandler.CachingAsyncRetryHandlerPolicy<HttpResponseMessage>>> cacheAndRetryHandler = null!;
         private TerraApiStubData terraApiStubData = null!;
+        private AzureEnvironmentConfig azureEnvironmentConfig = null!;
 
         [TestInitialize]
         public void SetUp()
@@ -30,8 +32,10 @@ namespace Tes.ApiClients.Tests
             cache.Setup(c => c.CreateEntry(It.IsAny<object>())).Returns(new Mock<Microsoft.Extensions.Caching.Memory.ICacheEntry>().Object);
             cacheAndRetryBuilder.SetupGet(c => c.AppCache).Returns(cache.Object);
             cacheAndRetryHandler = new(TestServices.RetryHandlersHelpers.GetCachingAsyncRetryPolicyMock(cacheAndRetryBuilder, c => c.DefaultRetryHttpResponseMessagePolicyBuilder()));
+            azureEnvironmentConfig = AzureEnvironmentConfig.FromArmEnvironmentEndpoints(CommonUtilities.AzureCloud.AzureCloudConfig.FromKnownCloudNameAsync(CommonUtilities.AzureCloud.AzureCloudConfig.DefaultAzureCloudName).Result);
+
             terraWsmApiClient = new TerraWsmApiClient(TerraApiStubData.WsmApiHost, tokenCredential.Object,
-                cacheAndRetryBuilder.Object, NullLogger<TerraWsmApiClient>.Instance);
+                cacheAndRetryBuilder.Object, azureEnvironmentConfig, NullLogger<TerraWsmApiClient>.Instance);
         }
 
         [TestMethod]
