@@ -2,6 +2,7 @@
 # Add nvme device mounting (software RAID and mount all nvme devices to the task working directory ${AZ_BATCH_NODE_ROOT_DIR}/tasks/workitems)
 # Note: this nvme mounting will only work for freshly booted machines with no existing RAID arrays
 #       for testing purposes it will not work if re-run on the same machine
+# TODO: consider parts of https://learn.microsoft.com/azure/virtual-machines/enable-nvme-temp-faqs#how-can-i-format-and-initialize-temp-nvme-disks-in-linux-
 trap "echo Error trapped; exit 0" ERR
 # set -e will cause any error to exit the script
 set -e
@@ -13,7 +14,7 @@ if [ -z "$nvme_devices" ]; then
 else
     # Mount all nvme devices as RAID0 (striped) onto /mnt/batch/tasks/workitems using XFS
     md_device="/dev/md0"
-    mdadm --create $md_device --level=0 --raid-devices=$nvme_device_count $nvme_devices
+    mdadm --create $md_device --level=0 --force --raid-devices=$nvme_device_count $nvme_devices
     # Partition and format using XFS.
     partition="${md_device}p1"
     parted "${md_device}" --script mklabel gpt mkpart xfspart xfs 0% 100%

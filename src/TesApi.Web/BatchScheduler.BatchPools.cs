@@ -29,7 +29,7 @@ namespace TesApi.Web
 
         internal delegate ValueTask<BatchAccountPoolData> ModelPoolFactory(string poolId, CancellationToken cancellationToken);
 
-        private (string PoolKey, string DisplayName) GetPoolKey(Tes.Models.TesTask tesTask, Tes.Models.VirtualMachineInformation virtualMachineInformation, List<string> identities, CancellationToken cancellationToken)
+        private (string PoolKey, string DisplayName) GetPoolKey(Tes.Models.TesTask tesTask, VirtualMachineInformationWithDataDisks virtualMachineInformation, List<string> identities, CancellationToken cancellationToken)
         {
             var identityResourceIds = identities is not null && identities.Count > 0
                 ? string.Join(";", identities)
@@ -38,12 +38,15 @@ namespace TesApi.Web
             var executorImage = tesTask.Executors.First().Image;
 
             var label = string.IsNullOrWhiteSpace(batchPrefix) ? "<none>" : batchPrefix;
-            var vmSize = virtualMachineInformation.VmSize ?? "<none>";
-            var isPreemptable = virtualMachineInformation.LowPriority;
+            var vmSize = virtualMachineInformation.VM.VmSize ?? "<none>";
+            var addedDisksHashData = (virtualMachineInformation.DataDisks?.Count ?? 0) == 0
+                ? string.Empty
+                : ":" + string.Join('^', virtualMachineInformation.DataDisks.Select(disk => $"{disk.Lun.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}-{disk.CapacityInGiB.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}-{disk.StorageAccountType}-{disk.Caching}"));
+            var isPreemptable = virtualMachineInformation.VM.LowPriority;
 
             // Generate hash of everything that differentiates this group of pools
             var displayName = $"{label}:{vmSize}:{isPreemptable}:{identityResourceIds}";
-            var hash = SHA1.HashData(Encoding.UTF8.GetBytes(displayName + ":" + this.runnerMD5)).ConvertToBase32().TrimEnd('=').ToLowerInvariant(); // This becomes 32 chars
+            var hash = SHA1.HashData(Encoding.UTF8.GetBytes(displayName + addedDisksHashData + ":" + this.runnerMD5)).ConvertToBase32().TrimEnd('=').ToLowerInvariant(); // This becomes 32 chars
 
             // Build a PoolName that is of legal length, while exposing the most important metadata without requiring user to find DisplayName
             // Note that the hash covers all necessary parts to make name unique, so limiting the size of the other parts is not expected to appreciably change the risk of collisions. Those other parts are for convenience

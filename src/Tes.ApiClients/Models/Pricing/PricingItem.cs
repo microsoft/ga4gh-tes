@@ -6,7 +6,7 @@ namespace Tes.ApiClients.Models.Pricing
     /// <summary>
     /// A pricing item.
     /// </summary>
-    public class PricingItem
+    public record class PricingItem
     {
         /// <summary>
         /// Currency code. 

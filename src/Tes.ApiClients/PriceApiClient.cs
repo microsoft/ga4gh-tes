@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using Tes.ApiClients.Models.Pricing;
@@ -10,33 +11,29 @@ namespace Tes.ApiClients
     /// <summary>
     /// Azure Retail Price API client. 
     /// </summary>
-    public class PriceApiClient : HttpApiClient
+    /// <remarks>
+    /// Constructor of the Price API Client.
+    /// </remarks>
+    /// <param name="cachingRetryPolicyBuilder"><see cref="CachingRetryPolicyBuilder"/></param>
+    /// <param name="logger"><see cref="ILogger{TCategoryName}"/></param>
+    public class PriceApiClient(CachingRetryPolicyBuilder cachingRetryPolicyBuilder, ILogger<PriceApiClient> logger) : HttpApiClient(cachingRetryPolicyBuilder, logger)
     {
         private static readonly Uri ApiEndpoint = new("https://prices.azure.com/api/retail/prices");
 
         /// <summary>
-        /// Constructor of the Price API Client.
-        /// </summary>
-        /// <param name="cachingRetryPolicyBuilder"><see cref="CachingRetryPolicyBuilder"/></param>
-        /// <param name="logger"><see cref="ILogger{TCategoryName}"/></param>
-        public PriceApiClient(CachingRetryPolicyBuilder cachingRetryPolicyBuilder, ILogger<PriceApiClient> logger) : base(cachingRetryPolicyBuilder, logger)
-        {
-        }
-
-        /// <summary>
         /// Get pricing information in a region. 
         /// </summary>
+        /// <param name="serviceName">azure service.</param>
         /// <param name="region">arm region</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="cacheResults">If true results will be cached. Default is false.</param>
         /// <returns>pricing items</returns>
-        public async IAsyncEnumerable<PricingItem> GetAllPricingInformationAsync(string region, [EnumeratorCancellation] CancellationToken cancellationToken, bool cacheResults = false)
+        public async IAsyncEnumerable<PricingItem> GetAllPricingInformationAsync(string serviceName, string region, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             var skip = 0;
 
             while (true)
             {
-                var page = await GetPricingInformationPageAsync(skip, region, cancellationToken, cacheResults);
+                var page = await GetPricingInformationPageAsync(skip, serviceName, region, cancellationToken);
 
                 if (page is null || page.Items is null || page.Items.Length == 0)
                 {
@@ -53,39 +50,48 @@ namespace Tes.ApiClients
         }
 
         /// <summary>
-        /// Returns pricing information for non Windows and non spot VM..
+        /// Returns pricing information for non Windows and non spot VM.
         /// </summary>
         /// <param name="region">arm region.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="cacheResults">If true results will be cached. Default is false.</param>
         /// <returns></returns>
-        public IAsyncEnumerable<PricingItem> GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(string region, CancellationToken cancellationToken, bool cacheResults = false)
-            => GetAllPricingInformationAsync(region, cancellationToken, cacheResults)
-                .WhereAwait(p => ValueTask.FromResult(!p.productName.Contains(" Windows") && !p.meterName.Contains(" Spot")));
+        public IAsyncEnumerable<PricingItem> GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(string region, CancellationToken cancellationToken)
+            => GetAllPricingInformationAsync("Virtual Machines", region, cancellationToken)
+                .Where(p => !p.productName.Contains(" Windows") && !p.meterName.Contains(" Spot"));
+
+        /// <summary>
+        /// Returns pricing information for non Windows and non spot VM.
+        /// </summary>
+        /// <param name="region">arm region.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        public IAsyncEnumerable<PricingItem> GetAllPricingInformationForStandardStorageLRSDisksAsync(string region, CancellationToken cancellationToken)
+            => GetAllPricingInformationAsync("Storage", region, cancellationToken)
+                .Where(p => p.productName.Equals("Standard SSD Managed Disks") && p.meterName.StartsWith('E') && p.meterName.EndsWith(" LRS Disk"));
 
         /// <summary>
         /// Returns a page of pricing information starting at the requested position for a given region.
         /// </summary>
         /// <param name="skip">starting position.</param>
+        /// <param name="serviceName">azure service.</param>
         /// <param name="region">arm region.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="cacheResults">If true results will be cached for the specific request. Default is false.</param>
         /// <returns></returns>
-        public async Task<RetailPricingData> GetPricingInformationPageAsync(int skip, string region, CancellationToken cancellationToken, bool cacheResults = false)
+        public async Task<RetailPricingData> GetPricingInformationPageAsync(int skip, string serviceName, string region, CancellationToken cancellationToken)
         {
-            var builder = new UriBuilder(ApiEndpoint) { Query = BuildRequestQueryString(skip, region) };
+            var builder = new UriBuilder(ApiEndpoint) { Query = BuildRequestQueryString(skip, serviceName, region) };
 
-            var result = await HttpGetRequestAsync(builder.Uri, setAuthorizationHeader: false, cacheResults: cacheResults, typeInfo: RetailPricingDataContext.Default.RetailPricingData, cancellationToken: cancellationToken);
+            var result = await HttpGetRequestAsync(builder.Uri, setAuthorizationHeader: false, cacheResults: false, typeInfo: RetailPricingDataContext.Default.RetailPricingData, cancellationToken: cancellationToken);
 
             result.RequestLink = builder.ToString();
 
             return result;
         }
 
-        private static string BuildRequestQueryString(int skip, string region)
+        private static string BuildRequestQueryString(int skip, string serviceName, string region)
         {
             var filter = ParseFilterCondition("and",
-                ParseEq("serviceName", "Virtual Machines"),
+                ParseEq("serviceName", serviceName),
                 ParseEq("currencyCode", "USD"),
                 ParseEq("priceType", "Consumption"),
                 ParseEq("armRegionName", region),
@@ -97,7 +103,7 @@ namespace Tes.ApiClients
         }
 
         private static string ParseFilterCondition(string conditionOperator, params string[] condition)
-            => $"$filter={String.Join($" {conditionOperator} ", condition)}";
+            => $"$filter={string.Join($" {conditionOperator} ", condition)}";
 
         private static string ParseQueryStringKeyIntValue(string key, int value)
             => $"{key}={value}";

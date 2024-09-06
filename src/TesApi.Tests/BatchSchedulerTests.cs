@@ -235,7 +235,7 @@ namespace TesApi.Tests
             var batchScheduler = serviceProvider.GetT();
 
             var size = await ((BatchScheduler)batchScheduler).GetVmSizeAsync(task, CancellationToken.None);
-            GuardAssertsWithTesTask(task, () => Assert.AreEqual(vmSize, size.VmSize));
+            GuardAssertsWithTesTask(task, () => Assert.AreEqual(vmSize, size.VM.VmSize));
         }
 
         private static BatchAccountResourceInformation GetNewBatchResourceInfo()
