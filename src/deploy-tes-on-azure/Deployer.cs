@@ -708,6 +708,13 @@ namespace TesDeployer
                             await Task.Delay(longRetryWaitTime * 2, tokenSource.Token); // Give enough time for kubectl to standup the port forwarding.
                             var runTestTask = RunTestTaskAsync("localhost:8088", isPreemptible: batchAccountData.LowPriorityCoreQuota > 0);
 
+                            Task<bool> runIntegrationTestTask = default;
+
+                            if (configuration.RunIntTests)
+                            {
+                                runIntegrationTestTask = RunIntegrationTestsAsync("localhost:8088", isPreemptible: batchAccountData.LowPriorityCoreQuota > 0);
+                            }
+
                             for (var task = await Task.WhenAny(portForwardTask, runTestTask);
                                 runTestTask != task;
                                 task = await Task.WhenAny(portForwardTask, runTestTask))
@@ -726,9 +733,16 @@ namespace TesDeployer
                             }
 
                             var isTestWorkflowSuccessful = await runTestTask;
+                            bool integrationTestsSuccessful = false;
+
+                            if (configuration.RunIntTests)
+                            {
+                                integrationTestsSuccessful = await runIntegrationTestTask;
+                            }
+
                             exitCode = isTestWorkflowSuccessful ? 0 : 1;
 
-                            if (!isTestWorkflowSuccessful)
+                            if (!isTestWorkflowSuccessful || !integrationTestsSuccessful)
                             {
                                 deleteResourceGroupTask = DeleteResourceGroupIfUserConsentsAsync();
                             }
@@ -845,6 +859,29 @@ namespace TesDeployer
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1859:Use concrete types when possible for improved performance", Justification = "We are explicitly using the contract specified in the ITesClient interface.")]
+        private async Task<bool> RunNextflowTaskAsync(string tesHostname, bool isPreemptible)
+        {
+            TesTask testTesTask = new();
+            testTesTask.Resources.Preemptible = isPreemptible;
+            testTesTask.Executors.Add(new TesExecutor
+            {
+                Image = "ubuntu",
+                Command = ["/bin/sh", "-c", "cat /proc/sys/kernel/random/uuid"],
+            });
+
+            using ITesClient tesClient = new TesClient(new($"http://{tesHostname}"));
+            var completedTask = await tesClient.CreateAndWaitTilDoneAsync(testTesTask, cts.Token);
+            ConsoleEx.WriteLine($"TES Task State: {completedTask.State}");
+
+            if (completedTask.State != TesState.COMPLETE)
+            {
+                ConsoleEx.WriteLine($"Failure reason: {completedTask.FailureReason}");
+            }
+
+            return completedTask.State == TesState.COMPLETE;
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1859:Use concrete types when possible for improved performance", Justification = "We are explicitly using the contract specified in the ITesClient interface.")]
         private async Task<bool> RunTesTaskImplAsync(string tesHostname, bool isPreemptible)
         {
             TesTask testTesTask = new();
@@ -886,6 +923,33 @@ namespace TesDeployer
             {
                 ConsoleEx.WriteLine();
                 ConsoleEx.WriteLine($"Test task failed.", ConsoleColor.Red);
+                ConsoleEx.WriteLine();
+                WriteGeneralRetryMessageToConsole();
+                ConsoleEx.WriteLine();
+            }
+
+            return isTestWorkflowSuccessful;
+        }
+
+        private async Task<bool> RunIntegrationTestsAsync(string tesEndpoint, bool isPreemptible)
+        {
+            var startTime = DateTime.UtcNow;
+            var line = ConsoleEx.WriteLine("Running integration tests...");
+            var isTestWorkflowSuccessful = await RunNextflowTaskAsync(tesEndpoint, isPreemptible);
+            WriteExecutionTime(line, startTime);
+
+            if (isTestWorkflowSuccessful)
+            {
+                ConsoleEx.WriteLine();
+                ConsoleEx.WriteLine($"Integration test tasks succeeded.", ConsoleColor.Green);
+                ConsoleEx.WriteLine();
+                ConsoleEx.WriteLine("Learn more about how to use Tes on Azure: https://github.com/microsoft/ga4gh-tes");
+                ConsoleEx.WriteLine();
+            }
+            else
+            {
+                ConsoleEx.WriteLine();
+                ConsoleEx.WriteLine($"Integration test tasks failed.", ConsoleColor.Red);
                 ConsoleEx.WriteLine();
                 WriteGeneralRetryMessageToConsole();
                 ConsoleEx.WriteLine();
