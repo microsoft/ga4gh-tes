@@ -23,20 +23,20 @@ public readonly record struct StorageDiskPriceInformation()
     // https://azure.microsoft.com/pricing/details/managed-disks/
     private static readonly IEnumerable<KeyValuePair<string, int>> standardLrsSsdCapacities =
         [
-            new ("E1 LRS Disk", 4),
-            new ("E2 LRS Disk", 8),
-            new ("E3 LRS Disk", 16),
-            new ("E4 LRS Disk", 32),
-            new ("E6 LRS Disk", 64),
-            new ("E10 LRS Disk", 128),
-            new ("E15 LRS Disk", 256),
-            new ("E20 LRS Disk", 512),
-            new ("E30 LRS Disk", 1024),
-            new ("E40 LRS Disk", 2048),
-            new ("E50 LRS Disk", 4096),
-            new ("E60 LRS Disk", 8192),
-            new ("E70 LRS Disk", 16384),
-            new ("E80 LRS Disk", 32767),
+            new("E1 LRS Disk", 4),
+            new("E2 LRS Disk", 8),
+            new("E3 LRS Disk", 16),
+            new("E4 LRS Disk", 32),
+            new("E6 LRS Disk", 64),
+            new("E10 LRS Disk", 128),
+            new("E15 LRS Disk", 256),
+            new("E20 LRS Disk", 512),
+            new("E30 LRS Disk", 1024),
+            new("E40 LRS Disk", 2048),
+            new("E50 LRS Disk", 4096),
+            new("E60 LRS Disk", 8192),
+            new("E70 LRS Disk", 16384),
+            new("E80 LRS Disk", 32767),
         ];
 
     /// <summary>
