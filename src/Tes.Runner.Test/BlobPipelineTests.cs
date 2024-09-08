@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Test
@@ -13,7 +14,6 @@ namespace Tes.Runner.Test
     [TestCategory("Unit")]
     public class BlobPipelineTests
     {
-        private BlobOperationPipelineTestImpl operationPipeline = null!;
         private BlobPipelineOptions options = null!;
         private readonly int blockSize = BlobSizeUtils.MiB;
         private readonly long sourceSize = BlobSizeUtils.MiB * 10;
@@ -29,8 +29,7 @@ namespace Tes.Runner.Test
 
             memoryBuffer = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(5, blockSize);
 
-            options = new BlobPipelineOptions(blockSize, 10, 10, 10, FileHandlerPoolCapacity: 1);
-            operationPipeline = new BlobOperationPipelineTestImpl(options, memoryBuffer, sourceSize);
+            options = new(blockSize, 10, 10, 10, FileHandlerPoolCapacity: 1);
         }
 
         [TestCleanup]
@@ -43,7 +42,9 @@ namespace Tes.Runner.Test
         [TestMethod]
         public async Task ExecuteAsync_SingleOperation_CallsReaderWriterAndCompleteMethods_CorrectNumberOfTimes()
         {
-            var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), tempFile1, tempFile1, true);
+            BlobOperationPipelineTestImpl operationPipeline = new(options, memoryBuffer, sourceSize);
+
+            BlobOperationInfo blobOp = new(new Uri("https://foo.bar/con/blob"), tempFile1, tempFile1, true);
 
             await operationPipeline.ExecuteAsync([blobOp]);
 
@@ -56,7 +57,7 @@ namespace Tes.Runner.Test
         [TestMethod]
         public async Task ExecuteAsync_TwoOperations_CallsReaderWriterAndCompleteMethods_CorrectNumberOfTimes()
         {
-            var pipeline = new BlobOperationPipelineTestImpl(options, memoryBuffer, sourceSize);
+            BlobOperationPipelineTestImpl pipeline = new(options, memoryBuffer, sourceSize);
 
             var blobOps = new List<BlobOperationInfo>()
             {
@@ -75,7 +76,7 @@ namespace Tes.Runner.Test
         [ExpectedException(typeof(TaskCanceledException))]
         public async Task ExecuteAsync_ThrowsOnRead_ExecutesThrows()
         {
-            var pipeline = new BlobOperationPipelineTestImpl(options, memoryBuffer, sourceSize);
+            BlobOperationPipelineTestImpl pipeline = new(options, memoryBuffer, sourceSize);
 
             //throw on when processing the 5th block
             pipeline.ThrowOnExecuteRead<InvalidOperationException>((buffer, token) => buffer.Ordinal == 5);
@@ -144,7 +145,12 @@ namespace Tes.Runner.Test
     /// This is a test implementation of BlobPipeline.
     /// Since there is no way to mock the base class, we have to create a test implementation and capture the execution of methods directly.
     /// </summary>
-    class BlobOperationPipelineTestImpl(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBuffer, long sourceLength) : BlobOperationPipeline(pipelineOptions, memoryBuffer)
+    class BlobOperationPipelineTestImpl(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBuffer, long sourceLength)
+        : BlobOperationPipeline(pipelineOptions, new(new(), logger => HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(logger), NullLogger<BlobApiHttpUtils>.Instance), memoryBuffer,
+            pipeline => new(pipeline, NullLogger<ProcessedPartsProcessor>.Instance), (pipeline, options) => new(pipeline, options, NullLogger<PartsProducer>.Instance),
+            (pipeline, options, Channel, strategy) => new(pipeline, options, Channel, strategy, NullLogger<PartsWriter>.Instance),
+            (pipeline, options, Channel, strategy) => new(pipeline, options, Channel, strategy, NullLogger<PartsReader>.Instance),
+            NullLogger<BlobPipelineOptions>.Instance)
     {
         private readonly ConcurrentDictionary<string, List<MethodCall>> methodCalls = new();
 

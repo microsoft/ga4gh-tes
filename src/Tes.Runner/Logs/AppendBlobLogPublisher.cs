@@ -12,11 +12,10 @@ namespace Tes.Runner.Logs
     /// </summary>
     public class AppendBlobLogPublisher : StreamLogReader
     {
-        private readonly string targetUrl;
-        private readonly BlobApiHttpUtils blobApiHttpUtils = new BlobApiHttpUtils();
+        private readonly Uri targetUrl;
+        private readonly BlobApiHttpUtils blobApiHttpUtils;
         private readonly string stdOutLogNamePrefix;
         private readonly string stdErrLogNamePrefix;
-        private readonly ILogger logger = PipelineLoggerFactory.Create<AppendBlobLogPublisher>();
 
         private int currentStdOutBlockCount;
         private int currentStdErrBlockCount;
@@ -25,18 +24,20 @@ namespace Tes.Runner.Logs
         private string currentStdErrBlobName = string.Empty;
 
 
-        public AppendBlobLogPublisher(string targetUrl, string logNamePrefix)
+        public AppendBlobLogPublisher(Uri targetUrl, BlobApiHttpUtils blobApiHttpUtils, string logNamePrefix, ILogger<AppendBlobLogPublisher> logger)
+            : base(logger)
         {
-            ArgumentException.ThrowIfNullOrEmpty(targetUrl);
+            ArgumentNullException.ThrowIfNull(targetUrl);
             ArgumentException.ThrowIfNullOrEmpty(logNamePrefix);
 
             this.targetUrl = targetUrl;
             var prefixTimeStamp = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
-            stdOutLogNamePrefix = $"{logNamePrefix}_stdout_{prefixTimeStamp}";
-            stdErrLogNamePrefix = $"{logNamePrefix}_stderr_{prefixTimeStamp}";
+            this.stdOutLogNamePrefix = $"{logNamePrefix}_stdout_{prefixTimeStamp}";
+            this.stdErrLogNamePrefix = $"{logNamePrefix}_stderr_{prefixTimeStamp}";
+            this.blobApiHttpUtils = blobApiHttpUtils;
         }
 
-        private string GetBlobNameConsideringBlockCountCurrentState(int blockCount, string logName)
+        private static string GetBlobNameConsideringBlockCountCurrentState(int blockCount, string logName)
         {
             var blobNumber = blockCount / BlobSizeUtils.MaxBlobBlocksCount;
 
@@ -86,7 +87,7 @@ namespace Tes.Runner.Logs
         {
             blobNameFromCurrentState = GetBlobNameConsideringBlockCountCurrentState(currentBlockCount, baseLogName);
 
-            var blobBuilder = new BlobUriBuilder(new Uri(targetUrl));
+            var blobBuilder = new BlobUriBuilder(targetUrl);
 
             var blobName = blobNameFromCurrentState;
 
@@ -113,7 +114,7 @@ namespace Tes.Runner.Logs
         {
             if (err is not null)
             {
-                logger.LogError(err, "Failed to stream logs to blob storage");
+                Logger.LogError(err, "Failed to stream logs to blob storage");
             }
         }
     }

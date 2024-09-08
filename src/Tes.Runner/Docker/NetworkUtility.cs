@@ -3,15 +3,20 @@
 
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
-using Tes.Runner.Transfer;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Tes.Runner.Docker
 {
-    public class NetworkUtility
+    public class NetworkUtility(ILogger<NetworkUtility> logger)
     {
         private const string DefaultRuleChain = "DOCKER-USER";
         private const int DefaultLockWaitSeconds = 30;
-        private readonly ILogger logger = PipelineLoggerFactory.Create<NetworkUtility>();
+        private readonly ILogger logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+        /// <summary>
+        /// Parameter-less constructor for mocking
+        /// </summary>
+        protected NetworkUtility() : this(NullLogger<NetworkUtility>.Instance) { }
 
         /// <summary>
         /// Blocks or unblocks Docker container access to a specific IP address on linux
@@ -54,8 +59,8 @@ namespace Tes.Runner.Docker
         private async Task<bool> CheckIfIpAddressIsBlockedAsync(string ipAddress, string ruleChain = DefaultRuleChain)
         {
             var listRulesCommand = $"-S {ruleChain} --wait {DefaultLockWaitSeconds}";
-            var outputAndError = await RunIptablesCommandAsync(listRulesCommand);
-            return outputAndError.Output.Contains(ipAddress, StringComparison.OrdinalIgnoreCase);
+            var (output, _) = await RunIptablesCommandAsync(listRulesCommand);
+            return output.Contains(ipAddress, StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task AddBlockRuleAsync(string ipAddress, string ruleChain = DefaultRuleChain)
@@ -106,7 +111,7 @@ namespace Tes.Runner.Docker
                     {
                         // "Another app is currently holding the xtables lock. Perhaps you want to use the -w option?"
                         var invalidOperationException = new InvalidOperationException($"xtables is locked by another app. Error: {error}");
-                        logger.LogError(invalidOperationException, invalidOperationException.Message);
+                        logger.LogError(invalidOperationException, "{ExceptionMessage}", invalidOperationException.Message);
                         throw invalidOperationException;
                     }
 

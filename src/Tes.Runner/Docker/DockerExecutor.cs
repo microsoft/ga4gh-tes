@@ -9,10 +9,8 @@ using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Tes.Runner.Authentication;
 using Tes.Runner.Logs;
 using Tes.Runner.Models;
-using Tes.Runner.Transfer;
 using static CommonUtilities.RetryHandler;
 
 namespace Tes.Runner.Docker
@@ -22,8 +20,8 @@ namespace Tes.Runner.Docker
         internal const string LastImageFile = "last-docker-image";
         private readonly IDockerClient dockerClient = null!;
         private readonly Host.IRunnerHost runnerHost = null!;
-        private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
-        private readonly NetworkUtility networkUtility = new();
+        private readonly ILogger logger;
+        private readonly NetworkUtility networkUtility;
         private readonly AsyncRetryHandlerPolicy dockerPullRetryPolicy = null!;
         private readonly AsyncRetryHandlerPolicy gcrDockerPullRetryPolicy = null!;
         private readonly IStreamLogReader streamLogReader = null!;
@@ -49,8 +47,8 @@ namespace Tes.Runner.Docker
 
         const int LogStreamingMaxWaitTimeInSeconds = 30;
 
-        public DockerExecutor(Uri dockerHost) : this(new DockerClientConfiguration(dockerHost)
-            .CreateClient(), new ConsoleStreamLogPublisher(), new ContainerRegistryAuthorizationManager(new CredentialsManager()), Executor.RunnerHost)
+        public DockerExecutor(Uri dockerHost, Lazy<ConsoleStreamLogPublisher> streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager, NetworkUtility networkUtility, ILogger<DockerExecutor> logger)
+            : this(new DockerClientConfiguration(dockerHost).CreateClient(), (streamLogReader ?? throw new ArgumentNullException(nameof(streamLogReader))).Value, containerRegistryAuthorizationManager, Executor.RunnerHost, networkUtility, logger)
         { }
 
         // Retry for ~91s for ACR 1-minute throttle window
@@ -60,17 +58,21 @@ namespace Tes.Runner.Docker
             ExponentialBackOffExponent = 2
         };
 
-        public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager, Host.IRunnerHost runnerHost)
+        internal DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager, Host.IRunnerHost runnerHost, NetworkUtility networkUtility, ILogger logger)
         {
             ArgumentNullException.ThrowIfNull(dockerClient);
             ArgumentNullException.ThrowIfNull(streamLogReader);
             ArgumentNullException.ThrowIfNull(containerRegistryAuthorizationManager);
             ArgumentNullException.ThrowIfNull(runnerHost);
+            ArgumentNullException.ThrowIfNull(networkUtility);
+            ArgumentNullException.ThrowIfNull(logger);
 
             this.dockerClient = dockerClient;
             this.streamLogReader = streamLogReader;
             this.containerRegistryAuthorizationManager = containerRegistryAuthorizationManager;
             this.runnerHost = runnerHost;
+            this.networkUtility = networkUtility;
+            this.logger = logger;
 
             dockerPullRetryPolicy = new RetryPolicyBuilder(Options.Create(dockerPullRetryPolicyOptions))
                 .PolicyBuilder.OpinionatedRetryPolicy(Polly.Policy
@@ -95,7 +97,10 @@ namespace Tes.Runner.Docker
         /// Parameter-less constructor for mocking
         /// </summary>
         protected DockerExecutor()
-        { }
+        {
+            logger = Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
+            networkUtility = new(Microsoft.Extensions.Logging.Abstractions.NullLogger<NetworkUtility>.Instance);
+        }
 
 
         private void SetLastImage(string imagePath)
@@ -206,8 +211,8 @@ namespace Tes.Runner.Docker
         {
             return await dockerClient.Containers.AttachContainerAsync(
                 containerId,
-                false,
-                new ContainerAttachParameters
+                tty: false,
+                parameters: new()
                 {
                     Stream = true,
                     Stdout = true,
@@ -258,7 +263,7 @@ namespace Tes.Runner.Docker
                 () => dockerClient.Images.CreateImageAsync(
                     new ImagesCreateParameters() { FromImage = imageName, Tag = tag },
                     authConfig,
-                    new Progress<JSONMessage>(message => logger.LogDebug("{ProgressStatus}", message.Status))));
+                    new Progress<JSONMessage>(message => logger.LogDebug("{Progress_MessageStatus}", message.Status))));
 
             AsyncRetryHandlerPolicy GetPolicy(string imageName)
             {

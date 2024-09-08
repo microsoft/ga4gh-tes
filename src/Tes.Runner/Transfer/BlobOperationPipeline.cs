@@ -16,8 +16,8 @@ public abstract class BlobOperationPipeline : IBlobPipeline
     protected readonly Channel<ProcessedBuffer> ProcessedBufferChannel;
     protected readonly Channel<byte[]> MemoryBufferChannel;
     protected readonly BlobPipelineOptions PipelineOptions;
-    protected readonly ILogger Logger = PipelineLoggerFactory.Create<BlobOperationPipeline>();
-    protected readonly BlobApiHttpUtils BlobApiHttpUtils = new BlobApiHttpUtils();
+    protected readonly ILogger Logger;
+    protected readonly BlobApiHttpUtils BlobApiHttpUtils;
 
     private readonly PartsProducer partsProducer;
     private readonly PartsWriter partsWriter;
@@ -26,10 +26,19 @@ public abstract class BlobOperationPipeline : IBlobPipeline
     private readonly ProcessedPartsProcessor processedPartsProcessor;
 
 
-    protected BlobOperationPipeline(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBuffer)
+    protected BlobOperationPipeline(
+        BlobPipelineOptions pipelineOptions,
+        BlobApiHttpUtils blobApiHttpUtils,
+        Channel<byte[]> memoryBuffer,
+        Func<IBlobPipeline, ProcessedPartsProcessor> processedPartsProcessorFactory,
+        Func<IBlobPipeline, BlobPipelineOptions, PartsProducer> partsProducerFactory,
+        Func<IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy, PartsWriter> partsWriterFactory,
+        Func<IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy, PartsReader> partsReaderFactory, ILogger logger)
     {
         ArgumentNullException.ThrowIfNull(pipelineOptions);
 
+        this.Logger = logger;
+        this.BlobApiHttpUtils = blobApiHttpUtils;
         PipelineOptions = pipelineOptions;
 
         ReadBufferChannel = Channel.CreateBounded<PipelineBuffer>(pipelineOptions.ReadWriteBuffersCapacity);
@@ -39,10 +48,10 @@ public abstract class BlobOperationPipeline : IBlobPipeline
         MemoryBufferChannel = memoryBuffer;
         //TODO: Right now we are using MaxProcessingTimeScalingStrategy with defaults, but we should be able to use different strategies.        
         var scalingStrategy = new MaxProcessingTimeScalingStrategy();
-        partsProducer = new PartsProducer(this, pipelineOptions);
-        partsWriter = new PartsWriter(this, pipelineOptions, memoryBuffer, scalingStrategy);
-        partsReader = new PartsReader(this, pipelineOptions, memoryBuffer, scalingStrategy);
-        processedPartsProcessor = new ProcessedPartsProcessor(this);
+        partsProducer = partsProducerFactory(this, pipelineOptions);
+        partsWriter = partsWriterFactory(this, pipelineOptions, memoryBuffer, scalingStrategy);
+        partsReader = partsReaderFactory(this, pipelineOptions, memoryBuffer, scalingStrategy);
+        processedPartsProcessor = processedPartsProcessorFactory(this);
     }
 
     public abstract ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer, CancellationToken cancellationToken);

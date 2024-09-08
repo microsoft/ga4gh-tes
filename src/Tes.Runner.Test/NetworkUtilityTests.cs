@@ -12,7 +12,7 @@ namespace Tes.Runner.Test
     {
         private const string TestUrl = "https://github.com";
         private const string RuleChain = "OUTPUT";
-        private readonly NetworkUtility utility = new();
+        private readonly NetworkUtility utility = new(Microsoft.Extensions.Logging.Abstractions.NullLogger<NetworkUtility>.Instance);
 
         [TestMethod]
         [TestCategory("Unit")]

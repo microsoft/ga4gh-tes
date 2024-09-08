@@ -27,27 +27,31 @@ namespace Tes.Runner.Storage
             return Task.FromResult(sourceUri);
         }
 
-        private Uri ToGcpHttpUri(Uri sourceUri)
+        private static Uri ToGcpHttpUri(Uri sourceUri)
         {
-            var builder = new UriBuilder();
-            builder.Scheme = "https";
+            UriBuilder builder = new()
+            {
+                Scheme = "https",
 
-            builder.Host = GcpHost;
-            builder.Path = $"{sourceUri.Host}{sourceUri.AbsolutePath}";
-            builder.Query = sourceUri.Query;
+                Host = GcpHost,
+                Path = $"{sourceUri.Host}{sourceUri.AbsolutePath}",
+                Query = sourceUri.Query
+            };
 
             return builder.Uri;
         }
 
-        private Uri ToAwsS3HttpUri(Uri sourceUri)
+        private static Uri ToAwsS3HttpUri(Uri sourceUri)
         {
-            var builder = new UriBuilder();
-            builder.Scheme = "https";
+            UriBuilder builder = new()
+            {
+                Scheme = "https",
 
-            // Assume the host is the S3 bucket name
-            builder.Host = $"{sourceUri.Host}{AwsSuffix}";
-            builder.Path = sourceUri.AbsolutePath;
-            builder.Query = sourceUri.Query;
+                // Assume the host is the S3 bucket name
+                Host = $"{sourceUri.Host}{AwsSuffix}",
+                Path = sourceUri.AbsolutePath,
+                Query = sourceUri.Query
+            };
 
             return builder.Uri;
         }

@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Collections.Concurrent;
+using System.Text.Json.Serialization;
 using Azure.Core;
 using Azure.Identity;
 using Microsoft.Extensions.Logging;
@@ -8,25 +10,35 @@ using Polly;
 using Polly.Retry;
 using Tes.Runner.Exceptions;
 using Tes.Runner.Models;
-using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Authentication
 {
-    public class CredentialsManager
+    public partial class CredentialsManager
     {
-        private readonly ILogger logger = PipelineLoggerFactory.Create<CredentialsManager>();
-
+        private readonly ILogger logger;
         private readonly RetryPolicy retryPolicy;
+        private readonly ConcurrentDictionary<byte[], TokenCredential> cachedCredentals = new();
+        private readonly ConcurrentDictionary<byte[], object> inflightLocks = new();
+
         private const int MaxRetryCount = 7;
         private const int ExponentialBackOffExponent = 2;
 
-        public CredentialsManager()
+        public CredentialsManager(ILogger<CredentialsManager> logger)
         {
+            ArgumentNullException.ThrowIfNull(logger);
+
+            this.logger = logger;
             retryPolicy = Policy
                     .Handle<Exception>()
                     .WaitAndRetry(MaxRetryCount,
                     SleepDurationHandler);
         }
+
+        /// <summary>
+        /// Parameter-less constructor for mocking
+        /// </summary>
+        protected CredentialsManager() : this(Microsoft.Extensions.Logging.Abstractions.NullLogger<CredentialsManager>.Instance)
+        { }
 
         private TimeSpan SleepDurationHandler(int attempt)
         {
@@ -44,37 +56,49 @@ namespace Tes.Runner.Authentication
         public virtual TokenCredential GetAcrPullTokenCredential(RuntimeOptions runtimeOptions, string? tokenScope = default)
         {
             var managedIdentity = runtimeOptions.NodeManagedIdentityResourceId;
+
             if (!string.IsNullOrWhiteSpace(runtimeOptions.AcrPullManagedIdentityResourceId))
             {
                 managedIdentity = runtimeOptions.AcrPullManagedIdentityResourceId;
             }
+
             return GetTokenCredential(runtimeOptions, managedIdentity, tokenScope);
         }
 
         public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions, string? managedIdentityResourceId, string? tokenScope = default)
         {
             tokenScope ??= runtimeOptions.AzureEnvironmentConfig!.TokenScope!;
-            try
+            var key = MakeKey(new(runtimeOptions, tokenScope));
+
+            lock (inflightLocks.GetOrAdd(key, _ => new()))
             {
-                return retryPolicy.Execute(() => GetTokenCredentialImpl(managedIdentityResourceId, tokenScope, runtimeOptions.AzureEnvironmentConfig!.AzureAuthorityHostUrl!));
-            }
-            catch
-            {
-                throw new IdentityUnavailableException();
+                if (cachedCredentals.TryGetValue(key, out var tokenCredential))
+                {
+                    return tokenCredential;
+                }
+
+                try
+                {
+                    Uri azureAuthorityHost = new(runtimeOptions.AzureEnvironmentConfig!.AzureAuthorityHostUrl!);
+                    return retryPolicy.Execute(() => GetTokenCredentialImpl(key, managedIdentityResourceId, tokenScope, azureAuthorityHost));
+                }
+                catch
+                {
+                    throw new IdentityUnavailableException();
+                }
             }
         }
 
-        private TokenCredential GetTokenCredentialImpl(string? managedIdentityResourceId, string tokenScope, string azureAuthorityHost)
+        private TokenCredential GetTokenCredentialImpl(byte[] key, string? managedIdentityResourceId, string tokenScope, Uri azureAuthorityHost)
         {
             try
             {
                 TokenCredential tokenCredential;
-                Uri authorityHost = new(azureAuthorityHost);
 
                 if (!string.IsNullOrWhiteSpace(managedIdentityResourceId))
                 {
                     logger.LogInformation("Token credentials with Managed Identity and resource ID: {NodeManagedIdentityResourceId}", managedIdentityResourceId);
-                    var tokenCredentialOptions = new TokenCredentialOptions { AuthorityHost = authorityHost };
+                    var tokenCredentialOptions = new TokenCredentialOptions { AuthorityHost = azureAuthorityHost };
 
                     tokenCredential = new ManagedIdentityCredential(
                         new ResourceIdentifier(managedIdentityResourceId),
@@ -83,14 +107,14 @@ namespace Tes.Runner.Authentication
                 else
                 {
                     logger.LogInformation("Token credentials with DefaultAzureCredential");
-                    var defaultAzureCredentialOptions = new DefaultAzureCredentialOptions { AuthorityHost = authorityHost };
+                    var defaultAzureCredentialOptions = new DefaultAzureCredentialOptions { AuthorityHost = azureAuthorityHost };
                     tokenCredential = new DefaultAzureCredential(defaultAzureCredentialOptions);
                 }
 
                 //Get token to verify that credentials are valid
                 _ = tokenCredential.GetToken(new TokenRequestContext([tokenScope]), CancellationToken.None);
 
-                return tokenCredential;
+                return cachedCredentals.AddOrUpdate(key, tokenCredential, (_, _) => tokenCredential);
             }
             catch (Exception e)
             {
@@ -98,5 +122,16 @@ namespace Tes.Runner.Authentication
                 throw;
             }
         }
+
+        private static byte[] MakeKey(CredentialsManagerKeyType key)
+        {
+            return System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(key, KeyTypeContext.Default.CredentialsManagerKeyType));
+        }
+
+        private record struct CredentialsManagerKeyType(RuntimeOptions runtimeOptions, string tokenScope);
+
+        [JsonSerializable(typeof(CredentialsManagerKeyType))]
+        [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault)]
+        private partial class KeyTypeContext : JsonSerializerContext { }
     }
 }

@@ -173,7 +173,7 @@ namespace TesApi.Tests
             internal Func<string, FullBatchPoolAllocationState> AzureProxyGetComputeNodeAllocationState { get; set; } = null;
             internal Action<string, System.Threading.CancellationToken> AzureProxyDeleteBatchPool { get; set; } = (poolId, cancellationToken) => { };
             internal Func<string, ODATADetailLevel, IAsyncEnumerable<CloudTask>> AzureProxyListTasks { get; set; } = (jobId, detailLevel) => AsyncEnumerable.Empty<CloudTask>();
-            internal List<VirtualMachineInformation> VmSizesAndPrices { get; set; } = new();
+            internal List<VirtualMachineInformation> VmSizesAndPrices { get; set; } = [];
 
             internal static Func<string, FullBatchPoolAllocationState> AzureProxyGetComputeNodeAllocationStateDefault = id => new(Microsoft.Azure.Batch.Common.AllocationState.Steady, DateTime.MinValue.ToUniversalTime(), true, 0, 0, 0, 0);
 
@@ -361,6 +361,7 @@ namespace TesApi.Tests
         private sealed class MockServiceClient(Microsoft.Azure.Batch.Protocol.IComputeNodeOperations computeNode) : Microsoft.Azure.Batch.Protocol.BatchServiceClient
         {
             private readonly Microsoft.Azure.Batch.Protocol.IComputeNodeOperations computeNode = computeNode ?? throw new ArgumentNullException(nameof(computeNode));
+
             public override Microsoft.Azure.Batch.Protocol.IComputeNodeOperations ComputeNode => computeNode;
         }
 

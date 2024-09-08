@@ -4,7 +4,9 @@
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Tes.Runner.Models;
 using Tes.Runner.Transfer;
 
@@ -16,14 +18,28 @@ namespace Tes.Runner.Storage
         private const int BlobSasTokenExpirationInHours = 24 * 7; //7 days which is the Azure Batch node runtime;
         const int UserDelegationKeyExpirationInHours = 1;
 
-        private readonly ILogger logger = PipelineLoggerFactory.Create<ArmUrlTransformationStrategy>();
+        private readonly ILogger logger;
         private readonly Dictionary<string, UserDelegationKey> userDelegationKeyDictionary = [];
         private readonly SemaphoreSlim semaphoreSlim = new(1, 1);
         private readonly Func<Uri, BlobServiceClient> blobServiceClientFactory;
         private readonly RuntimeOptions runtimeOptions;
         private readonly string storageHostSuffix;
 
-        public ArmUrlTransformationStrategy(Func<Uri, BlobServiceClient> blobServiceClientFactory, RuntimeOptions runtimeOptions)
+        public ArmUrlTransformationStrategy(Func<RuntimeOptions, string, Azure.Core.TokenCredential> tokenCredentialFactory, RuntimeOptions runtimeOptions, [FromKeyedServices(Executor.ApiVersion)] string apiVersion, ILogger<ArmUrlTransformationStrategy> logger)
+        {
+            ArgumentNullException.ThrowIfNull(tokenCredentialFactory);
+            ArgumentNullException.ThrowIfNull(runtimeOptions);
+            ArgumentNullException.ThrowIfNull(logger);
+            ArgumentException.ThrowIfNullOrWhiteSpace(apiVersion);
+
+            this.runtimeOptions = runtimeOptions;
+            storageHostSuffix = BlobUrlPrefix + this.runtimeOptions!.AzureEnvironmentConfig!.StorageUrlSuffix;
+            this.logger = logger;
+
+            this.blobServiceClientFactory = UrlTransformationStrategyFactory.GetBlobServiceClientFactory(tokenCredentialFactory(runtimeOptions, "https://storage.azure.com/"), apiVersion);
+        }
+
+        internal ArmUrlTransformationStrategy(Func<Uri, BlobServiceClient> blobServiceClientFactory, RuntimeOptions runtimeOptions, ILogger? logger = default)
         {
             ArgumentNullException.ThrowIfNull(blobServiceClientFactory);
             ArgumentNullException.ThrowIfNull(runtimeOptions);
@@ -31,6 +47,7 @@ namespace Tes.Runner.Storage
             this.blobServiceClientFactory = blobServiceClientFactory;
             this.runtimeOptions = runtimeOptions;
             storageHostSuffix = BlobUrlPrefix + this.runtimeOptions!.AzureEnvironmentConfig!.StorageUrlSuffix;
+            this.logger = logger ?? NullLogger.Instance;
         }
 
         public async Task<Uri> TransformUrlWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions)

@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Tes.Runner.Transfer;
 
@@ -34,7 +35,7 @@ namespace Tes.Runner.Test
             int expectedParts)
         {
             var options = new BlobPipelineOptions(BlockSizeBytes: blockSizeBytes);
-            partsProducer = new PartsProducer(pipeline.Object, options);
+            partsProducer = new PartsProducer(pipeline.Object, options, NullLogger<PartsProducer>.Instance);
             pipeline.Setup(p => p.GetSourceLengthAsync(It.IsAny<string>())).ReturnsAsync(fileSize);
 
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);
@@ -59,7 +60,7 @@ namespace Tes.Runner.Test
             params int[] expectedPartSize)
         {
             var options = new BlobPipelineOptions(BlockSizeBytes: blockSize);
-            partsProducer = new PartsProducer(pipeline.Object, options);
+            partsProducer = new PartsProducer(pipeline.Object, options, NullLogger<PartsProducer>.Instance);
             pipeline.Setup(p => p.GetSourceLengthAsync(It.IsAny<string>())).ReturnsAsync(fileSize);
 
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);
@@ -84,7 +85,7 @@ namespace Tes.Runner.Test
         public async Task StartPartsProducersAsync_PartsHaveExpectedLengths(int blockSize, long fileSize)
         {
             var options = new BlobPipelineOptions(BlockSizeBytes: blockSize);
-            partsProducer = new PartsProducer(pipeline.Object, options);
+            partsProducer = new PartsProducer(pipeline.Object, options, NullLogger<PartsProducer>.Instance);
             pipeline.Setup(p => p.GetSourceLengthAsync(It.IsAny<string>())).ReturnsAsync(fileSize);
 
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);
@@ -116,7 +117,7 @@ namespace Tes.Runner.Test
         {
             var options = new BlobPipelineOptions(BlockSizeBytes: BlobSizeUtils.MiB);
 
-            partsProducer = new PartsProducer(pipeline.Object, options);
+            partsProducer = new PartsProducer(pipeline.Object, options, NullLogger<PartsProducer>.Instance);
             pipeline.Setup(p => p.GetSourceLengthAsync(It.IsAny<string>())).ReturnsAsync(0);
 
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);

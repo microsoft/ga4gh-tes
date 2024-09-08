@@ -1,9 +1,11 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Microsoft.Extensions.Logging;
+
 namespace Tes.Runner.Logs;
 
-public class ConsoleStreamLogPublisher : StreamLogReader
+public class ConsoleStreamLogPublisher(ILogger<ConsoleStreamLogPublisher> logger) : StreamLogReader(logger)
 {
     public override async Task AppendStandardOutputAsync(string data)
     {

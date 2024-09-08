@@ -6,6 +6,7 @@ using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Blobs.Specialized;
 using Azure.Storage.Sas;
+using Microsoft.Extensions.Logging.Abstractions;
 using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Test
@@ -32,8 +33,13 @@ namespace Tes.Runner.Test
 
             await blobContainerClient.CreateAsync(PublicAccessType.None);
 
-            blobUploader = new BlobUploader(blobPipelineOptions,
-                await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(10, blobPipelineOptions.BlockSizeBytes));
+            blobUploader = new(blobPipelineOptions, new(new(), logger => HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(logger), NullLogger<BlobApiHttpUtils>.Instance),
+                await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(10, blobPipelineOptions.BlockSizeBytes),
+                pipeline => new(pipeline, NullLogger<ProcessedPartsProcessor>.Instance),
+                (pipeline, options) => new(pipeline, options, NullLogger<PartsProducer>.Instance),
+                (pipeline, options, channel, strategy) => new(pipeline, options, channel, strategy, NullLogger<PartsWriter>.Instance),
+                (pipeline, options, channel, strategy) => new(pipeline, options, channel, strategy, NullLogger<PartsReader>.Instance),
+                NullLogger<BlobUploader>.Instance);
         }
 
         [TestCleanup]
