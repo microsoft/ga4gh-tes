@@ -214,30 +214,28 @@ namespace TesApi.Web.Management
                 return []; // No disks can be added
             }
 
-            diskPriceInformation = diskPriceInformation.ToList();
-            var maxCandidateDiskSize = FindSizeMinimumGreaterOrEqualIfExistsOrMaximum(capacity);
+            var diskPricesBySize = diskPriceInformation.ToDictionary(disk => disk.CapacityInGiB);
+            var maxCandidateDiskSize = FindSizeMinimumGreaterOrEqualIfExistsOrMaximum(diskPricesBySize.Keys, capacity);
 
             if (maxCandidateDiskSize * maxDataDiskCount < capacity)
             {
                 return []; // Sufficient total capacity cannot be added
             }
 
-            var perDiskCapacity = FindSizeMinimumGreaterOrEqualIfExistsOrMaximum(capacity / maxDataDiskCount);
-            var diskName = StorageDiskPriceInformation.StandardLrsSsdMeterName[perDiskCapacity];
-            return Enumerable.Repeat(diskPriceInformation.Single(disk => diskName.Equals(disk.MeterName, StringComparison.OrdinalIgnoreCase)),
-                    (int)Math.Round(capacity / perDiskCapacity, MidpointRounding.ToPositiveInfinity))
+            var perDiskCapacity = FindSizeMinimumGreaterOrEqualIfExistsOrMaximum(diskPricesBySize.Keys, capacity / maxDataDiskCount);
+            return Enumerable.Repeat(diskPricesBySize[perDiskCapacity], (int)Math.Round(capacity / perDiskCapacity, MidpointRounding.ToPositiveInfinity))
                 .Select((disk, i) => ToVmDataDisk(disk, StartingLun + i, BatchModels.BatchStorageAccountType.StandardSsdLrs, BatchModels.BatchDiskCachingType.ReadOnly))
                 .ToList();
 
-            static int FindSizeMinimumGreaterOrEqualIfExistsOrMaximum(double request)
+            static int FindSizeMinimumGreaterOrEqualIfExistsOrMaximum(IEnumerable<int> availableSizes, double request)
             {
                 try
                 {
-                    return StorageDiskPriceInformation.StandardLrsSsdMeterName.Keys.Where(size => size >= request).Min();
+                    return availableSizes.Where(size => size >= request).Min();
                 }
                 catch (InvalidOperationException)
                 {
-                    return StorageDiskPriceInformation.StandardLrsSsdMeterName.Keys.Max();
+                    return availableSizes.Max();
                 }
             }
         }
