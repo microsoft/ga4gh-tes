@@ -186,18 +186,23 @@ namespace TesApi.Web.Management
 
             try
             {
-                var pricingItems = await (appCache?.GetOrCreateAsync(StorageDisksAndPricesKey(region), async _1 => await GetPricingData()) ?? GetPricingData());
+                var pricingItems = await (appCache?.GetOrCreateAsync(StorageDisksAndPricesKey(region), async _1 => await GetPricingData(priceApiClient, region, cancellationToken)) ?? GetPricingData(priceApiClient, region, cancellationToken));
                 logger.LogInformation("Received {CountOfDataDiskPrice} pricing items", pricingItems.Count);
 
-                if (pricingItems == null || pricingItems.Count == 0)
+                if (pricingItems.Count == 0)
                 {
                     logger.LogWarning("No pricing information received from the retail pricing API. Reverting to local pricing data.");
                     return DetermineDisks(localStorageDisksAndPrices, capacity, maxDataDiskCount);
                 }
 
-                return DetermineDisks(pricingItems.Select(item => new StorageDiskPriceInformation(item.meterName, StorageDiskPriceInformation.StandardLrsSsdCapacityInGiB[item.meterName], Convert.ToDecimal(item.unitPrice))), capacity, maxDataDiskCount);
+                return DetermineDisks(pricingItems.Select(item => new StorageDiskPriceInformation(name: item.meterName, capacity: StorageDiskPriceInformation.StandardLrsSsdCapacityInGiB[item.meterName], price: Convert.ToDecimal(item.unitPrice))), capacity, maxDataDiskCount);
 
-                async Task<List<PricingItem>> GetPricingData() => await priceApiClient.GetAllPricingInformationForStandardStorageLRSDisksAsync(region, cancellationToken).ToListAsync(cancellationToken).AsTask();
+                async static Task<List<PricingItem>> GetPricingData(PriceApiClient priceApiClient, string region, CancellationToken cancellationToken)
+                {
+                    return await priceApiClient.GetAllPricingInformationForStandardStorageLRSDisksAsync(region, cancellationToken)
+                        .Where(item => StorageDiskPriceInformation.StandardLrsSsdCapacityInGiB.ContainsKey(item.meterName))
+                        .ToListAsync(cancellationToken);
+                }
             }
             catch (Exception ex)
             {
@@ -215,9 +220,8 @@ namespace TesApi.Web.Management
             }
 
             var diskPricesBySize = diskPriceInformation.ToDictionary(disk => disk.CapacityInGiB);
-            var maxCandidateDiskSize = FindSizeMinimumGreaterOrEqualIfExistsOrMaximum(diskPricesBySize.Keys, capacity);
 
-            if (maxCandidateDiskSize * maxDataDiskCount < capacity)
+            if (FindSizeMinimumGreaterOrEqualIfExistsOrMaximum(diskPricesBySize.Keys, capacity) * maxDataDiskCount < capacity)
             {
                 return []; // Sufficient total capacity cannot be added
             }

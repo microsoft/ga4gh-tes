@@ -74,11 +74,6 @@ public readonly record struct StorageDiskPriceInformation()
     public static ImmutableDictionary<string, int> StandardLrsSsdCapacityInGiB { get; } = standardLrsSsdCapacities.ToImmutableDictionary(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The meter names of each disk by capacity.
-    /// </summary>
-    public static ImmutableDictionary<int, string> StandardLrsSsdMeterName { get; } = standardLrsSsdCapacities.Select(item => new KeyValuePair<int, string>(item.Value, item.Key)).ToImmutableDictionary();
-
-    /// <summary>
     /// Converts a price per month to price per hour.
     /// </summary>
     /// <param name="pricePerMonth">The price per month.</param>

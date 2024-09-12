@@ -271,7 +271,9 @@ namespace GenerateBatchVmSkus
                         AddUpdatePrice(prices, price, price.meterName);
                     }
 
-                    diskPrices = diskPrices.Concat(prices.Values.Select(item => new StorageDiskPriceInformation(item.meterName, StorageDiskPriceInformation.StandardLrsSsdCapacityInGiB[item.meterName], Convert.ToDecimal(item.unitPrice))));
+                    diskPrices = [.. diskPrices
+                        .Concat(prices.Values.Select(item => new StorageDiskPriceInformation(item.meterName, StorageDiskPriceInformation.StandardLrsSsdCapacityInGiB[item.meterName], Convert.ToDecimal(item.unitPrice))))
+                        .OrderBy(item => item.CapacityInGiB)];
                 },
 
                 async () =>
