@@ -87,7 +87,7 @@ namespace TesApi.Web.Management
 
             logger.LogInformation("Trying to get pricing information from the cache for region: {Region}.", region);
 
-            return await appCache.GetOrCreateAsync(VmSizesAndPricesKey(region), async _1 => await GetVmSizesAndPricesImplAsync(region, cancellationToken));
+            return await appCache.GetOrCreateAsync(VmSizesAndPricesKey(region), async entry => { entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1); return await GetVmSizesAndPricesImplAsync(region, cancellationToken); });
         }
 
         /// <inheritdoc />
@@ -105,7 +105,7 @@ namespace TesApi.Web.Management
 
             logger.LogInformation("Trying to get pricing information from the cache for region: {Region}.", region);
 
-            return await appCache.GetOrCreateAsync(StorageDisksAndPricesKey(region, capacity, maxDataDiskCount), async _1 => await GetStorageDisksAndPricesImplAsync(region, capacity, maxDataDiskCount, cancellationToken));
+            return await appCache.GetOrCreateAsync(StorageDisksAndPricesKey(region, capacity, maxDataDiskCount), async entry => { entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1); return await GetStorageDisksAndPricesImplAsync(region, capacity, maxDataDiskCount, cancellationToken); });
         }
 
         private async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesImplAsync(string region, CancellationToken cancellationToken)
@@ -186,7 +186,7 @@ namespace TesApi.Web.Management
 
             try
             {
-                var pricingItems = await (appCache?.GetOrCreateAsync(StorageDisksAndPricesKey(region), async _1 => await GetPricingData(priceApiClient, region, cancellationToken)) ?? GetPricingData(priceApiClient, region, cancellationToken));
+                var pricingItems = await (appCache?.GetOrCreateAsync(StorageDisksAndPricesKey(region), async entry => { entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1); return await GetPricingData(priceApiClient, region, cancellationToken); }) ?? GetPricingData(priceApiClient, region, cancellationToken));
                 logger.LogInformation("Received {CountOfDataDiskPrice} Storage pricing items", pricingItems.Count);
 
                 if (pricingItems.Count == 0)
