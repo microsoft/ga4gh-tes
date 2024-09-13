@@ -1,13 +1,11 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Text.Json;
 using CommonUtilities.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
-using Tes.ApiClients.Models.Pricing;
 
 namespace Tes.ApiClients.Tests
 {
@@ -37,7 +35,7 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetPricingInformationPageAsync_ReturnsSinglePageWithItemsWithMaxPageSize()
         {
-            var page = await pricingApiClient.GetPricingInformationPageAsync(0, "Virtual Machines", "westus2", CancellationToken.None);
+            var page = await pricingApiClient.GetPricingInformationPageAsync(DateTime.UtcNow, 0, "Virtual Machines", "westus2", CancellationToken.None);
 
             Assert.IsNotNull(page);
             Assert.IsTrue(page.Items.Length > 0);

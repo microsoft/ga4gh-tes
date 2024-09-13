@@ -29,11 +29,12 @@ namespace Tes.ApiClients
         /// <returns>pricing items</returns>
         public async IAsyncEnumerable<PricingItem> GetAllPricingInformationAsync(string serviceName, string region, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
+            var now = DateTime.UtcNow;
             var skip = 0;
 
             while (true)
             {
-                var page = await GetPricingInformationPageAsync(skip, serviceName, region, cancellationToken);
+                var page = await GetPricingInformationPageAsync(now, skip, serviceName, region, cancellationToken);
 
                 if (page is null || page.Items is null || page.Items.Length == 0)
                 {
@@ -72,18 +73,20 @@ namespace Tes.ApiClients
         /// <summary>
         /// Returns a page of pricing information starting at the requested position for a given region.
         /// </summary>
+        /// <param name="now"></param>
         /// <param name="skip">starting position.</param>
         /// <param name="serviceName">azure service.</param>
         /// <param name="region">arm region.</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        public async Task<RetailPricingData> GetPricingInformationPageAsync(int skip, string serviceName, string region, CancellationToken cancellationToken)
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        public async Task<RetailPricingData> GetPricingInformationPageAsync(DateTime now, int skip, string serviceName, string region, CancellationToken cancellationToken)
         {
             var builder = new UriBuilder(ApiEndpoint) { Query = BuildRequestQueryString(skip, serviceName, region) };
 
             var result = await HttpGetRequestAsync(builder.Uri, setAuthorizationHeader: false, cacheResults: false, typeInfo: RetailPricingDataContext.Default.RetailPricingData, cancellationToken: cancellationToken);
 
             result.RequestLink = builder.ToString();
+            result.Items = [.. result.Items.Where(item => item.effectiveStartDate <= now)];
 
             return result;
         }

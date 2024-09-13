@@ -122,7 +122,7 @@ namespace TesApi.Web.Management
             {
                 var pricingItems = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(region, cancellationToken).ToListAsync(cancellationToken);
 
-                logger.LogInformation("Received {CountOfSkuPrice} pricing items", pricingItems.Count);
+                logger.LogInformation("Received {CountOfSkuPrice} SKU pricing items", pricingItems.Count);
 
                 if (pricingItems == null || pricingItems.Count == 0)
                 {
@@ -180,14 +180,14 @@ namespace TesApi.Web.Management
         {
             logger.LogInformation("Getting VM sizes and price information for region: {Region}", region);
 
-            var localStorageDisksAndPrices = (await GetLocalDataAsync<StorageDiskPriceInformation>("BatchDataDiskInformation.json", "Reading local storage disk information from file: {LocalStoragePriceList}", cancellationToken)).ToList();
+            var localStorageDisksAndPrices = (await GetLocalDataAsync<StorageDiskPriceInformation>("BatchDataDiskInformation.json", "Reading local storage disk information from file: {LocalStoragePriceList}", cancellationToken)).Where(disk => disk.CapacityInGiB > 0).ToList();
 
             logger.LogInformation("localStorageDisksAndPrices.Count: {CountOfLocalStorageDisks}", localStorageDisksAndPrices.Count);
 
             try
             {
                 var pricingItems = await (appCache?.GetOrCreateAsync(StorageDisksAndPricesKey(region), async _1 => await GetPricingData(priceApiClient, region, cancellationToken)) ?? GetPricingData(priceApiClient, region, cancellationToken));
-                logger.LogInformation("Received {CountOfDataDiskPrice} pricing items", pricingItems.Count);
+                logger.LogInformation("Received {CountOfDataDiskPrice} Storage pricing items", pricingItems.Count);
 
                 if (pricingItems.Count == 0)
                 {
@@ -201,6 +201,7 @@ namespace TesApi.Web.Management
                 {
                     return await priceApiClient.GetAllPricingInformationForStandardStorageLRSDisksAsync(region, cancellationToken)
                         .Where(item => StorageDiskPriceInformation.StandardLrsSsdCapacityInGiB.ContainsKey(item.meterName))
+                        .Distinct(new MeterNameStoragePricingItemEqualityComparer())
                         .ToListAsync(cancellationToken);
                 }
             }
@@ -253,6 +254,15 @@ namespace TesApi.Web.Management
 
             return JsonConvert.DeserializeObject<List<T>>(
                 await File.ReadAllTextAsync(filePath, cancellationToken));
+        }
+
+        private struct MeterNameStoragePricingItemEqualityComparer : IEqualityComparer<PricingItem>
+        {
+            readonly bool IEqualityComparer<PricingItem>.Equals(PricingItem x, PricingItem y)
+                => x.meterName.Equals(y.meterName, StringComparison.Ordinal);
+
+            readonly int IEqualityComparer<PricingItem>.GetHashCode(PricingItem obj)
+                => obj.meterName.GetHashCode();
         }
     }
 }
