@@ -56,17 +56,17 @@ public readonly record struct StorageDiskPriceInformation()
     /// <summary>
     /// Meter name.
     /// </summary>
-    public string MeterName { get; }
+    public string MeterName { get; init; }
 
     /// <summary>
     /// Capacity in GiB.
     /// </summary>
-    public int CapacityInGiB { get; }
+    public int CapacityInGiB { get; init; }
 
     /// <summary>
     /// Price per hour.
     /// </summary>
-    public decimal PricePerHour { get; }
+    public decimal PricePerHour { get; init; }
 
     /// <summary>
     /// The capacities of each disk by meter name.

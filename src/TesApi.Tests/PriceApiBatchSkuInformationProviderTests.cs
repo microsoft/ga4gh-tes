@@ -62,6 +62,19 @@ namespace TesApi.Tests
             Assert.IsTrue(results.Any(r => !r.LowPriority && r.PricePerHour is not null && r.PricePerHour > 0));
         }
 
+        [TestMethod]
+        public async Task GetStorageDisksAndPricesAsync_ReturnsExpectedRecords()
+        {
+            var results = await provider.GetStorageDisksAndPricesAsync("eastus", 1024, 4, System.Threading.CancellationToken.None);
+
+            Assert.AreEqual(4, results.Count);
+            Assert.IsTrue(results.All(disk =>
+                256 == disk.CapacityInGiB &&
+                Azure.ResourceManager.Batch.Models.BatchDiskCachingType.ReadOnly.ToString().Equals(disk.Caching, System.StringComparison.OrdinalIgnoreCase) &&
+                Azure.ResourceManager.Batch.Models.BatchStorageAccountType.StandardSsdLrs.ToString().Equals(disk.StorageAccountType, System.StringComparison.OrdinalIgnoreCase)));
+            Assert.AreEqual(results.Count, results.Select(disk => disk.Lun).Distinct().Count());
+        }
+
         [DataTestMethod]
         [DataRow(1, 0, 0, 0)]
         [DataRow(32767.5, 1, 0, 0)]
