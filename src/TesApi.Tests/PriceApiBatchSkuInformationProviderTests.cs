@@ -65,11 +65,13 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task GetStorageDisksAndPricesAsync_ReturnsExpectedRecords()
         {
-            var results = await provider.GetStorageDisksAndPricesAsync("eastus", 1024, 4, System.Threading.CancellationToken.None);
+            var totalCapacityInGiB = 1024.0; // Ensure this == maxDataDiskCount * one of the capacities (middle number) in storagePricing
+            var maxDataDiskCount = 4;
+            var results = await provider.GetStorageDisksAndPricesAsync("eastus", totalCapacityInGiB, maxDataDiskCount, System.Threading.CancellationToken.None);
 
             Assert.AreEqual(4, results.Count);
             Assert.IsTrue(results.All(disk =>
-                256 == disk.CapacityInGiB &&
+                totalCapacityInGiB / maxDataDiskCount == disk.CapacityInGiB &&
                 Azure.ResourceManager.Batch.Models.BatchDiskCachingType.ReadOnly.ToString().Equals(disk.Caching, System.StringComparison.OrdinalIgnoreCase) &&
                 Azure.ResourceManager.Batch.Models.BatchStorageAccountType.StandardSsdLrs.ToString().Equals(disk.StorageAccountType, System.StringComparison.OrdinalIgnoreCase)));
             Assert.AreEqual(results.Count, results.Select(disk => disk.Lun).Distinct().Count());
