@@ -1168,7 +1168,7 @@ namespace TesApi.Web
                     if (vmInfo.VM.GpusAvailable > 0)
                     {
                         // https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/hpccompute-gpu-linux
-                        extensions.Add(new (name: "gpu", publisher: "Microsoft.HpcCompute", extensionType: "NvidiaGpuDriverLinux") { AutoUpgradeMinorVersion = true, TypeHandlerVersion = "1.6" });
+                        extensions.Add(new(name: "gpu", publisher: "Microsoft.HpcCompute", extensionType: "NvidiaGpuDriverLinux") { AutoUpgradeMinorVersion = true, TypeHandlerVersion = "1.6" });
                         var script = nodeOs switch
                         {
                             NodeOS.Ubuntu => @"config-n-gpu-apt.sh",
