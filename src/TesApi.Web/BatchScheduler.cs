@@ -1035,7 +1035,7 @@ namespace TesApi.Web
         }.AsReadOnly();
 
         /// <summary>
-        /// Selected vmfamily groups
+        /// Selected vmFamily groups
         /// </summary>
         public enum /*StartScript*/VmFamilySeries
         {
