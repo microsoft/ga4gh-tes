@@ -400,7 +400,7 @@ namespace TesApi.Web
                 try
                 {
                     var batchPool = _batchPoolFactory.CreateNew();
-                    await batchPool.AssignPoolAsync(cloudPool, cancellationToken);
+                    await batchPool.AssignPoolAsync(cloudPool, runnerMD5, cancellationToken);
                 }
                 catch (Exception exc)
                 {
