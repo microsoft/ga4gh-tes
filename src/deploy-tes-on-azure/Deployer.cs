@@ -74,6 +74,12 @@ namespace TesDeployer
             .Handle<Exception>()
             .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(1));
 
+        private static readonly AsyncRetryPolicy internalServerErrorRetryPolicy = Policy
+            .Handle<RequestFailedException>(azureException =>
+                (int)HttpStatusCode.OK == azureException.Status &&
+                "InternalServerError".Equals(azureException.ErrorCode))
+            .WaitAndRetryAsync(3, retryAttempt => longRetryWaitTime);
+
         private static readonly TimeSpan longRetryWaitTime = TimeSpan.FromSeconds(15);
 
         public const string ConfigurationContainerName = "configuration";
@@ -1496,7 +1502,7 @@ namespace TesDeployer
 
             var server = await Execute(
                 $"Creating Azure Flexible Server for PostgreSQL: {configuration.PostgreSqlServerName}...",
-                async () => (await resourceGroup.GetPostgreSqlFlexibleServers().CreateOrUpdateAsync(WaitUntil.Completed, configuration.PostgreSqlServerName, data, cts.Token)).Value);
+                async () => (await internalServerErrorRetryPolicy.ExecuteAsync(token => resourceGroup.GetPostgreSqlFlexibleServers().CreateOrUpdateAsync(WaitUntil.Completed, configuration.PostgreSqlServerName, data, token), cts.Token)).Value);
 
             await Execute(
                 $"Creating PostgreSQL tes database: {configuration.PostgreSqlTesDatabaseName}...",
