@@ -12,6 +12,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
@@ -648,12 +649,13 @@ namespace TesDeployer
                             }
                         });
                 }
+                TesCredentials tesCredentialsObj = default;
 
                 if (configuration.OutputTesCredentialsJson.GetValueOrDefault())
                 {
                     // Write credentials to JSON file in working directory
-                    var credentialsJson = new TesCredentials(kubernetesManager.TesHostname, configuration.TesUsername, configuration.TesPassword)
-                        .Serialize();
+                    tesCredentialsObj = new TesCredentials(kubernetesManager.TesHostname, configuration.TesUsername, configuration.TesPassword);
+                    var credentialsJson = tesCredentialsObj.Serialize();
 
                     var credentialsPath = Path.Combine(Directory.GetCurrentDirectory(), TesCredentialsFileName);
                     await File.WriteAllTextAsync(credentialsPath, credentialsJson, cts.Token);
@@ -708,13 +710,6 @@ namespace TesDeployer
                             await Task.Delay(longRetryWaitTime * 2, tokenSource.Token); // Give enough time for kubectl to standup the port forwarding.
                             var runTestTask = RunTestTaskAsync("localhost:8088", isPreemptible: batchAccountData.LowPriorityCoreQuota > 0);
 
-                            Task<bool> runIntegrationTestTask = default;
-
-                            if (configuration.RunIntTests)
-                            {
-                                runIntegrationTestTask = RunIntegrationTestsAsync("localhost:8088", isPreemptible: batchAccountData.LowPriorityCoreQuota > 0);
-                            }
-
                             for (var task = await Task.WhenAny(portForwardTask, runTestTask);
                                 runTestTask != task;
                                 task = await Task.WhenAny(portForwardTask, runTestTask))
@@ -733,18 +728,30 @@ namespace TesDeployer
                             }
 
                             var isTestWorkflowSuccessful = await runTestTask;
-                            bool integrationTestsSuccessful = false;
-
-                            if (configuration.RunIntTests)
-                            {
-                                integrationTestsSuccessful = await runIntegrationTestTask;
-                            }
-
                             exitCode = isTestWorkflowSuccessful ? 0 : 1;
 
-                            if (!isTestWorkflowSuccessful || !integrationTestsSuccessful)
+                            if (!isTestWorkflowSuccessful)
                             {
                                 deleteResourceGroupTask = DeleteResourceGroupIfUserConsentsAsync();
+                            }
+                            else
+                            {
+                                if (configuration.RunIntTests)
+                                {
+                                    var runIntegrationTestTask = RunIntegrationTestsAsync(
+                                        "localhost:8088",
+                                        tesCredentialsObj,
+                                        isPreemptible: batchAccountData.LowPriorityCoreQuota > 0,
+                                        storageAccount,
+                                        managedIdentity.Data.ClientId?.ToString("D"));
+
+                                    var integrationTestsSuccessful = await runIntegrationTestTask;
+                                    
+                                    if (!integrationTestsSuccessful)
+                                    {
+                                        deleteResourceGroupTask = DeleteResourceGroupIfUserConsentsAsync();
+                                    }
+                                }
                             }
                         }
                         catch (Exception e)
@@ -859,17 +866,38 @@ namespace TesDeployer
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1859:Use concrete types when possible for improved performance", Justification = "We are explicitly using the contract specified in the ITesClient interface.")]
-        private async Task<bool> RunNextflowTaskAsync(string tesHostname, bool isPreemptible)
+        private async Task<bool> RunNextflowTaskAsync(string localHost, TesCredentials tesCredentials, bool isPreemptible, StorageAccountResource storageAccount, string userAssignedManagedIdentityClientId)
         {
+            var sb = new StringBuilder();
+            sb.AppendLine("plugins{id'nf-ga4gh'}");
+            sb.AppendLine("process{executor='tes'}");
+            sb.AppendLine($"azure{{managedIdentity{{clientId='{userAssignedManagedIdentityClientId}'}}storage{{accountName='{storageAccount.Id.Name}'}}}}");
+            sb.AppendLine($"tes.endpoint=https://{tesCredentials.TesHostname}");
+            sb.AppendLine($"tes.basicUsername={tesCredentials.TesUsername}");
+            sb.AppendLine($"tes.basicPassword={tesCredentials.TesPassword}");
+            sb.AppendLine("process{container=\"docker.io/library/ubuntu:latest\"}");
+            var configText = sb.ToString();
+            var blobClient = GetBlobClient(storageAccount.Data, TesInternalContainerName, $"{ConfigurationContainerName}/tes.config");
+            await UploadTextToStorageAccountAsync(blobClient, configText, cts.Token);
             TesTask testTesTask = new();
             testTesTask.Resources.Preemptible = isPreemptible;
+            testTesTask.Resources.CpuCores = 4;
+            testTesTask.Resources.RamGb = 16;
+            testTesTask.Resources.DiskGb = 100;
+
             testTesTask.Executors.Add(new TesExecutor
             {
-                Image = "ubuntu",
-                Command = ["/bin/sh", "-c", "cat /proc/sys/kernel/random/uuid"],
+                Image = "nextflow/nextflow:24.04.4",
+                Command = ["/bin/sh", "-c", "nextflow run hello -c /tmp/tes.config -w 'az://work'"],
             });
 
-            using ITesClient tesClient = new TesClient(new($"http://{tesHostname}"));
+            testTesTask.Inputs.Add(new TesInput
+            {
+                Path = "/tmp/tes.config",
+                Url = blobClient.Uri.ToString()
+            });
+
+            using ITesClient tesClient = new TesClient(new($"http://{localHost}"));
             var completedTask = await tesClient.CreateAndWaitTilDoneAsync(testTesTask, cts.Token);
             ConsoleEx.WriteLine($"TES Task State: {completedTask.State}");
 
@@ -931,11 +959,11 @@ namespace TesDeployer
             return isTestWorkflowSuccessful;
         }
 
-        private async Task<bool> RunIntegrationTestsAsync(string tesEndpoint, bool isPreemptible)
+        private async Task<bool> RunIntegrationTestsAsync(string localHost, TesCredentials tesCredentials, bool isPreemptible, StorageAccountResource storageAccount, string userAssignedManagedIdentityClientId)
         {
             var startTime = DateTime.UtcNow;
             var line = ConsoleEx.WriteLine("Running integration tests...");
-            var isTestWorkflowSuccessful = await RunNextflowTaskAsync(tesEndpoint, isPreemptible);
+            var isTestWorkflowSuccessful = await RunNextflowTaskAsync(localHost, tesCredentials, isPreemptible, storageAccount, userAssignedManagedIdentityClientId);
             WriteExecutionTime(line, startTime);
 
             if (isTestWorkflowSuccessful)
