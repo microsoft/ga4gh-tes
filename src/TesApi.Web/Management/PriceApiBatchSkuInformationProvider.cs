@@ -68,7 +68,7 @@ namespace TesApi.Web.Management
 
             logger.LogInformation("Trying to get pricing information from the cache for region: {Region}.", region);
 
-            return await appCache.GetOrCreateAsync(region, async _1 => await GetVmSizesAndPricesAsyncImpl(region, cancellationToken));
+            return await appCache.GetOrCreateAsync(region, async entry => { entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1); return await GetVmSizesAndPricesAsyncImpl(region, cancellationToken); });
         }
 
         private async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsyncImpl(string region, CancellationToken cancellationToken)

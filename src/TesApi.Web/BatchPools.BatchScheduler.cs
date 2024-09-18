@@ -15,8 +15,6 @@ using Azure.ResourceManager.Batch;
 using CommonUtilities;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
-using Tes.Models;
-using TesApi.Web.Management.Batch;
 using static TesApi.Web.BatchScheduler.BatchPools;
 
 namespace TesApi.Web
@@ -148,9 +146,8 @@ namespace TesApi.Web
                 var poolId = $"{key}-{uniquifier.ConvertToBase32().TrimEnd('=').ToLowerInvariant()}"; // embedded '-' is required by GetKeyFromPoolId()
                 var modelPool = await modelPoolFactory(poolId, cancellationToken);
                 modelPool.Metadata.Add(new(PoolMetadata, new IBatchScheduler.PoolMetadata(this.batchPrefix, !isPreemptable, this.runnerMD5).ToString()));
-                var batchPool = batchPoolFactory();
-                await batchPool.CreatePoolAndJobAsync(modelPool, isPreemptable, cancellationToken);
-                pool = batchPool;
+                pool = batchPoolFactory();
+                await pool.CreatePoolAndJobAsync(modelPool, isPreemptable, runnerMD5, cancellationToken);
             }
 
             return pool;

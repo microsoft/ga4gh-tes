@@ -706,7 +706,7 @@ namespace TesApi.Web
             => (await _azureProxy.GetFullAllocationStateAsync(PoolId, cancellationToken)).AllocationStateTransitionTime ?? DateTime.UtcNow;
 
         /// <inheritdoc/>
-        public async ValueTask CreatePoolAndJobAsync(BatchAccountPoolData poolModel, bool isPreemptible, CancellationToken cancellationToken)
+        public async ValueTask CreatePoolAndJobAsync(BatchAccountPoolData poolModel, bool isPreemptible, string runnerMD5, CancellationToken cancellationToken)
         {
             var jobId = poolModel.Metadata.Single(i => string.IsNullOrEmpty(i.Name)).Value;
 
@@ -722,7 +722,7 @@ namespace TesApi.Web
                         pool = await _azureProxy.GetBatchPoolAsync(poolId, cancellationToken, new ODATADetailLevel { SelectClause = CloudPoolSelectClause });
                     }, cancellationToken));
 
-                Configure(pool, false);
+                Configure(pool, runnerMD5, false);
             }
             catch (AggregateException ex)
             {
@@ -769,7 +769,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async ValueTask AssignPoolAsync(CloudPool pool, bool forceRemove, CancellationToken cancellationToken)
+        public async ValueTask AssignPoolAsync(CloudPool pool, string runnerMD5, bool forceRemove, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(pool);
 
@@ -818,15 +818,16 @@ namespace TesApi.Web
                 throw new InvalidOperationException($"Active Job not found for Pool {pool.Id}");
             }
 
-            Configure(pool, forceRemove);
+            Configure(pool, runnerMD5, forceRemove);
         }
 
-        private void Configure(CloudPool pool, bool forceRemove)
+        private void Configure(CloudPool pool, string runnerMD5, bool forceRemove)
         {
             ArgumentNullException.ThrowIfNull(pool);
 
             PoolId = pool.Id;
-            IsAvailable = !forceRemove && DetermineIsAvailable(pool.CreationTime);
+            IsAvailable = !forceRemove && DetermineIsAvailable(pool.CreationTime) &&
+                runnerMD5.Equals(IBatchScheduler.PoolMetadata.Create(pool.Metadata.Single(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)).Value).RunnerMD5, StringComparison.OrdinalIgnoreCase);
             //IReadOnlyDictionary<string, string> Identity = pool.Identity.UserAssignedIdentities.ToDictionary(identity => identity.ResourceId, identity => identity.ClientId, StringComparer.OrdinalIgnoreCase).AsReadOnly();
 
             if (IsAvailable)

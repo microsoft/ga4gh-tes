@@ -32,6 +32,7 @@
     <SelfContained>true</SelfContained>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <AssemblyTitle>$(Product) task runner</AssemblyTitle>
   </PropertyGroup>
 
   <ItemGroup>
