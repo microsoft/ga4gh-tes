@@ -1102,6 +1102,7 @@ namespace TesApi.Web
 
             var nodeOs = GetNodeOS(machineConfiguration);
             var vmFamilySeries = GetVmFamily(vmInfo.VM.VmFamily);
+            var vmGen = (vmInfo.VM.HyperVGenerations ?? []).OrderBy(g => g, StringComparer.OrdinalIgnoreCase).LastOrDefault() ?? "<missing>";
 
             var globalStartTaskConfigured = !string.IsNullOrWhiteSpace(globalStartTaskPath);
 
@@ -1139,6 +1140,7 @@ namespace TesApi.Web
                 };
 
                 var script = "config-docker.sh";
+                // TODO: optimize this by uploading all vmfamily scripts when uploading runner binary rather then for each individual pool as relevant
                 cmd.Append($" && {DownloadAndExecuteScriptAsync(await UploadScriptAsync(script, await ReadScriptAsync("config-docker.sh", sb => sb.Replace("{PackageInstalls}", packageInstallScript))), $"{BatchNodeTaskWorkingDirEnvVar}/{script}")}");
             }
 
@@ -1157,7 +1159,7 @@ namespace TesApi.Web
             {
                 var script = "config-vmfamily.sh";
                 // TODO: optimize this by uploading all vmfamily scripts when uploading runner binary rather then for each individual pool as relevant
-                cmd.Append($" && {DownloadAndExecuteScriptAsync(await UploadScriptAsync(script, await ReadScriptAsync(vmFamilyStartupScript, sb => sb.Replace("{DataDiskDevices}", string.Join(' ', vmInfo.DataDisks.Select(d => $"/dev/sd{'c' + d.Lun}"))))), $"{BatchNodeTaskWorkingDirEnvVar}/{script}")}");
+                cmd.Append($" && {DownloadAndExecuteScriptAsync(await UploadScriptAsync(script, await ReadScriptAsync(vmFamilyStartupScript, sb => sb.Replace("{HctlPrefix}", vmGen switch { "V1" => "3:0:0", "V2" => "1:0:0", _ => throw new InvalidOperationException($"Unrecognized VM Generation. Please send open an issue @ 'https://github.com/microsoft/ga4gh-tes/issues' with this message ({vmGen})") }))), $"{BatchNodeTaskWorkingDirEnvVar}/{script}")}");
             }
 
             switch (vmFamilySeries)
@@ -1285,7 +1287,7 @@ namespace TesApi.Web
                 Identity = poolIdentity,
                 VmSize = vmInfo.VM.VmSize,
                 ScaleSettings = new() { AutoScale = new(BatchPool.AutoPoolFormula(vmInfo.VM.LowPriority, 1)) { EvaluationInterval = BatchPool.AutoScaleEvaluationInterval } },
-                DeploymentConfiguration = new() { VmConfiguration = vmConfig },
+                DeploymentVmConfiguration = vmConfig,
                 //ApplicationPackages = ,
                 StartTask = await GetStartTaskAsync(name, vmConfig, vmInfo, cancellationToken),
                 TargetNodeCommunicationMode = BatchModels.NodeCommunicationMode.Simplified,

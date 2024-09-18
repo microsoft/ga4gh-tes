@@ -229,7 +229,7 @@ namespace TesApi.Web.Management
 
             var perDiskCapacity = FindSizeMinimumGreaterOrEqualIfExistsOrMaximum(diskPricesBySize.Keys, capacity / maxDataDiskCount);
             return Enumerable.Repeat(diskPricesBySize[perDiskCapacity], (int)Math.Round(capacity / perDiskCapacity, MidpointRounding.ToPositiveInfinity))
-                .Select((disk, i) => ToVmDataDisk(disk, StartingLun + i, BatchModels.BatchStorageAccountType.StandardLrs, BatchModels.BatchDiskCachingType.ReadOnly))
+                .Select((disk, i) => ToVmDataDisk(disk, StartingLun + i, BatchModels.BatchStorageAccountType.StandardSsdLrs, BatchModels.BatchDiskCachingType.ReadOnly))
                 .ToList();
 
             static int FindSizeMinimumGreaterOrEqualIfExistsOrMaximum(IEnumerable<int> availableSizes, double request)

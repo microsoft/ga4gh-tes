@@ -6,7 +6,12 @@ trap "echo Error trapped; exit 0" ERR
 # set -e will cause any error to exit the script
 set -e
 # Get disk device paths without jq being installed
-disk_devices="{DataDiskDevices}"
+disk_devices=`lsblk -o NAME,HCTL | awk '
+NR > 1 {
+    if ($1 ~ /^sd*/ && $2 ~ /^{HctlPrefix}:*/) {
+        printf "/dev/%s ", $1
+    }
+}'`
 disk_device_count=$(echo $disk_devices | wc -w)
 if [ -z "$disk_devices" ]; then
     echo "No Disk devices found"

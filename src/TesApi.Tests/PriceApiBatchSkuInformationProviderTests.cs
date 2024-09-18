@@ -73,7 +73,7 @@ namespace TesApi.Tests
             Assert.IsTrue(results.All(disk =>
                 totalCapacityInGiB / maxDataDiskCount == disk.CapacityInGiB &&
                 Azure.ResourceManager.Batch.Models.BatchDiskCachingType.ReadOnly.ToString().Equals(disk.Caching, System.StringComparison.OrdinalIgnoreCase) &&
-                Azure.ResourceManager.Batch.Models.BatchStorageAccountType.StandardLrs.ToString().Equals(disk.StorageAccountType, System.StringComparison.OrdinalIgnoreCase)));
+                Azure.ResourceManager.Batch.Models.BatchStorageAccountType.StandardSsdLrs.ToString().Equals(disk.StorageAccountType, System.StringComparison.OrdinalIgnoreCase)));
             Assert.AreEqual(results.Count, results.Select(disk => disk.Lun).Distinct().Count());
         }
 
