@@ -633,7 +633,7 @@ namespace TesDeployer
                         {
                             // Deploy an ubuntu pod to run PSQL commands, then delete it
                             const string deploymentNamespace = "default";
-                            var (deploymentName, ubuntuDeployment) = KubernetesManager.GetUbuntuDeploymentTemplate();
+                            var (deploymentName, ubuntuDeployment) = KubernetesManager.GetUbuntuDeploymentTemplate(configuration.PrivatePSQLUbuntuImage);
                             await kubernetesClient.AppsV1.CreateNamespacedDeploymentAsync(ubuntuDeployment, deploymentNamespace, cancellationToken: cts.Token);
                             await ExecuteQueriesOnAzurePostgreSQLDbFromK8(kubernetesClient, deploymentName, deploymentNamespace);
                             await kubernetesClient.AppsV1.DeleteNamespacedDeploymentAsync(deploymentName, deploymentNamespace, cancellationToken: cts.Token);
@@ -857,7 +857,7 @@ namespace TesDeployer
             testTesTask.Resources.Preemptible = isPreemptible;
             testTesTask.Executors.Add(new TesExecutor
             {
-                Image = "ubuntu",
+                Image = configuration.PrivateTestUbuntuImage,
                 Command = ["/bin/sh", "-c", "cat /proc/sys/kernel/random/uuid"],
             });
 

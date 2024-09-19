@@ -87,6 +87,8 @@ namespace TesDeployer
         public string DeploymentOrganizationUrl { get; set; }
         public string DeploymentContactUri { get; set; }
         public string DeploymentEnvironment { get; set; }
+        public string PrivateTestUbuntuImage { get; set; } = "mcr.microsoft.com/mirror/docker/library/ubuntu:latest";
+        public string PrivatePSQLUbuntuImage { get; set; } = "mcr.microsoft.com/mirror/docker/library/ubuntu:latest";
 
         public static Configuration BuildConfiguration(string[] args)
         {
