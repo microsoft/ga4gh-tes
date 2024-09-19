@@ -543,7 +543,7 @@ namespace TesApi.Web
 
 
                 var useGen2 = virtualMachineInfo.VM.HyperVGenerations?.Contains("V2", StringComparer.OrdinalIgnoreCase);
-                poolId = (await GetOrAddPoolAsync(
+                var pool = (await GetOrAddPoolAsync(
                     key: poolKey,
                     isPreemptable: virtualMachineInfo.VM.LowPriority,
                     modelPoolFactory: (id, ct) => GetPoolSpecification(
@@ -554,7 +554,14 @@ namespace TesApi.Web
                         nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                         cancellationToken: ct),
                     cancellationToken: cancellationToken)
-                    ).PoolId;
+                    );
+                poolId = pool.PoolId;
+
+                if (virtualMachineInfo.DataDisks.Count != pool.DataDisks.Count)
+                {
+                    throw new TesException("DataDisksNotProvided", "Failed to provide disks in API.");
+                }
+
                 var jobOrTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
 
                 tesTask.PoolId = poolId;
@@ -1280,6 +1287,11 @@ namespace TesApi.Web
             }
 
             vmConfig.DataDisks.AddRange(vmInfo.DataDisks.Select(VirtualMachineInformationWithDataDisks.ToBatchVmDataDisk));
+
+            if (vmConfig.DataDisks.Count != vmInfo.DataDisks.Count)
+            {
+                throw new TesException("DataDisksNotProvided", "Failed to transfer disks to API");
+            }
 
             BatchAccountPoolData poolSpecification = new()
             {
