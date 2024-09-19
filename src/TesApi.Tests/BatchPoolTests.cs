@@ -180,7 +180,7 @@ namespace TesApi.Tests
             internal bool PoolStateExists(string poolId)
                 => poolState.ContainsKey(poolId);
 
-            private readonly Dictionary<string, (int? CurrentDedicatedNodes, int? CurrentLowPriorityNodes, int? TargetDedicatedNodes, int? TargetLowPriorityNodes, Microsoft.Azure.Batch.Common.AllocationState? AllocationState, DateTime? AllocationStateTransitionTime, Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun AutoScaleRun, bool? EnableAutoScale, DateTime? CreationTime, IList<MetadataItem> PoolMetadata)> poolState = [];
+            private readonly Dictionary<string, (int? CurrentDedicatedNodes, int? CurrentLowPriorityNodes, int? TargetDedicatedNodes, int? TargetLowPriorityNodes, Microsoft.Azure.Batch.Common.AllocationState? AllocationState, DateTime? AllocationStateTransitionTime, Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun AutoScaleRun, bool? EnableAutoScale, DateTime? CreationTime, IList<MetadataItem> PoolMetadata, IList<DataDisk> DataDisks)> poolState = [];
 
             internal void SetPoolState(
                 string id,
@@ -193,7 +193,8 @@ namespace TesApi.Tests
                 Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun autoScaleRun = default,
                 bool? enableAutoScale = default,
                 DateTime? creationTime = default,
-                IList<MetadataItem> poolMetadata = default)
+                IList<MetadataItem> poolMetadata = default,
+                IList<DataDisk> dataDisks = default)
             {
                 if (poolState.TryGetValue(id, out var state))
                 {
@@ -220,14 +221,15 @@ namespace TesApi.Tests
                         autoScaleRun ?? state.AutoScaleRun,
                         enableAutoScale ?? state.EnableAutoScale,
                         creationTime ?? state.CreationTime,
-                        metadata.Count == 0 ? null : metadata.Select(ConvertMetadata).ToList());
+                        metadata.Count == 0 ? null : metadata.Select(ConvertMetadata).ToList(),
+                        dataDisks ?? []);
 
                     static MetadataItem ConvertMetadata(KeyValuePair<string, string> pair)
                         => new(pair.Key, pair.Value);
                 }
                 else
                 {
-                    poolState.Add(id, (currentDedicatedNodes, currentLowPriorityNodes, targetDedicatedNodes, targetLowPriorityNodes, allocationState, allocationStateTransitionTime, autoScaleRun, true, creationTime, poolMetadata));
+                    poolState.Add(id, (currentDedicatedNodes, currentLowPriorityNodes, targetDedicatedNodes, targetLowPriorityNodes, allocationState, allocationStateTransitionTime, autoScaleRun, true, creationTime, poolMetadata, dataDisks ?? []));
                 }
             }
 
@@ -242,11 +244,14 @@ namespace TesApi.Tests
                 var poolIdItem = pool.Metadata.Single(i => string.IsNullOrEmpty(i.Name));
                 pool.Metadata.Remove(poolIdItem);
 
-                poolState.Add(poolIdItem.Value, (default, default, default, default, Microsoft.Azure.Batch.Common.AllocationState.Steady, default, default, true, default, pool.Metadata?.Select(ConvertMetadata).ToList()));
+                poolState.Add(poolIdItem.Value, (default, default, default, default, Microsoft.Azure.Batch.Common.AllocationState.Steady, default, default, true, default, pool.Metadata?.Select(ConvertMetadata).ToList(), (pool.DeploymentVmConfiguration ?? new(new(), "nodeAgentSkuId")).DataDisks.Select(ConvertDataDisk).ToList()));
                 return poolIdItem.Value;
 
                 static MetadataItem ConvertMetadata(Azure.ResourceManager.Batch.Models.BatchAccountPoolMetadataItem item)
                     => new(item.Name, item.Value);
+
+                static DataDisk ConvertDataDisk(Azure.ResourceManager.Batch.Models.BatchVmDataDisk disk)
+                    => new(disk.Lun, disk.DiskSizeInGB, (Microsoft.Azure.Batch.Common.CachingType)disk.Caching, (Microsoft.Azure.Batch.Common.StorageAccountType)disk.StorageAccountType);
             }
 
             internal CloudPool GetBatchPoolImpl(string poolId)
@@ -266,7 +271,8 @@ namespace TesApi.Tests
                     autoScaleRun: state.AutoScaleRun,
                     enableAutoScale: state.EnableAutoScale,
                     creationTime: state.CreationTime,
-                    metadata: state.PoolMetadata);
+                    metadata: state.PoolMetadata,
+                    dataDisks: state.DataDisks);
             }
         }
 
@@ -375,7 +381,8 @@ namespace TesApi.Tests
             Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun autoScaleRun = default,
             bool? enableAutoScale = default,
             DateTime? creationTime = default,
-            IList<MetadataItem> metadata = default)
+            IList<MetadataItem> metadata = default,
+            IList<DataDisk> dataDisks = default)
         {
             if (default == creationTime)
             {
@@ -400,13 +407,17 @@ namespace TesApi.Tests
                 autoScaleRun: autoScaleRun,
                 enableAutoScale: enableAutoScale,
                 creationTime: creationTime,
-                metadata: metadata.Select(ConvertMetadata).ToList());
+                metadata: metadata.Select(ConvertMetadata).ToList(),
+                virtualMachineConfiguration: new() { DataDisks = dataDisks?.Select(ConvertDataDisk).ToList() ?? [] });
             var pool = (CloudPool)typeof(CloudPool).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, [typeof(BatchClient), typeof(Microsoft.Azure.Batch.Protocol.Models.CloudPool), typeof(IEnumerable<BatchClientBehavior>)], default)
                 .Invoke([parentClient, modelPool, null]);
             return pool;
 
             static Microsoft.Azure.Batch.Protocol.Models.MetadataItem ConvertMetadata(MetadataItem item)
                 => item is null ? default : new(item.Name, item.Value);
+
+            static Microsoft.Azure.Batch.Protocol.Models.DataDisk ConvertDataDisk(DataDisk disk)
+                => disk is null ? default : new(disk.Lun, disk.DiskSizeGB, (Microsoft.Azure.Batch.Protocol.Models.CachingType)disk.Caching, (Microsoft.Azure.Batch.Protocol.Models.StorageAccountType)disk.StorageAccountType);
         }
 
         internal static CloudTask GenerateTask(string jobId, string id, DateTime stateTransitionTime = default)
