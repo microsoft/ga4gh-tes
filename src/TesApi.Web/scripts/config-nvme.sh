@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-# Add nvme device mounting (software RAID and mount all nvme devices to the task working directory ${AZ_BATCH_NODE_ROOT_DIR}/tasks/workitems)
+# Add nvme device mounting (software RAID and mount all nvme devices to the task working directory ${AZ_BATCH_NODE_ROOT_DIR}/workitems)
 # Note: this nvme mounting will only work for freshly booted machines with no existing RAID arrays
 #       for testing purposes it will not work if re-run on the same machine
 # TODO: consider parts of https://learn.microsoft.com/azure/virtual-machines/enable-nvme-temp-faqs#how-can-i-format-and-initialize-temp-nvme-disks-in-linux-
@@ -21,7 +21,7 @@ else
     mkfs.xfs "${partition}"
     partprobe "${partition}"
     # Save permissions of the existing /mnt/batch/tasks/workitems/
-    mount_dir="${AZ_BATCH_NODE_ROOT_DIR}/tasks/workitems"
+    mount_dir="${AZ_BATCH_NODE_ROOT_DIR}/workitems"
     permissions=$(stat -c "%a" $mount_dir)
     owner=$(stat -c "%U" $mount_dir)
     group=$(stat -c "%G" $mount_dir)

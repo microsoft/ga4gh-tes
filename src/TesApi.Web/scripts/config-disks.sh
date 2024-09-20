@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-# Add data disk mounting (software RAID and mount all attached devices to the task working directory ${AZ_BATCH_NODE_ROOT_DIR}/tasks/workitems)
+# Add data disk mounting (software RAID and mount all attached devices to the task working directory ${AZ_BATCH_NODE_ROOT_DIR}/workitems)
 # Note: this is based on config-nvme.sh
 #       for testing purposes it will not work if re-run on the same machine
 trap "echo Error trapped; exit 0" ERR
@@ -25,7 +25,7 @@ else
     mkfs.xfs "${partition}"
     partprobe "${partition}"
     # Save permissions of the existing /mnt/batch/tasks/workitems/
-    mount_dir="${AZ_BATCH_NODE_ROOT_DIR}/tasks/workitems"
+    mount_dir="${AZ_BATCH_NODE_ROOT_DIR}/workitems"
     permissions=$(stat -c "%a" $mount_dir)
     owner=$(stat -c "%U" $mount_dir)
     group=$(stat -c "%G" $mount_dir)
