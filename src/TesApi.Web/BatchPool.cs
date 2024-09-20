@@ -787,7 +787,7 @@ namespace TesApi.Web
         {
             ArgumentNullException.ThrowIfNull(pool);
 
-            DataDisks = pool.VirtualMachineConfiguration.DataDisks;
+            DataDisks = pool.VirtualMachineConfiguration.DataDisks ?? [];
             PoolId = pool.Id;
             IsAvailable = DetermineIsAvailable(pool.CreationTime) &&
                 runnerMD5.Equals(IBatchScheduler.PoolMetadata.Create(pool.Metadata.Single(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)).Value).RunnerMD5, StringComparison.OrdinalIgnoreCase);
