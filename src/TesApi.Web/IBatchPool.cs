@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
@@ -23,11 +22,6 @@ namespace TesApi.Web
         /// Provides the <see cref="CloudPool.Id"/> for the pool.
         /// </summary>
         string PoolId { get; }
-
-        /// <summary>
-        /// Delete Me
-        /// </summary>
-        IList<DataDisk> DataDisks { get; }
 
         /// <summary>
         /// Creates an Azure Batch pool and associated job in the Batch Account.

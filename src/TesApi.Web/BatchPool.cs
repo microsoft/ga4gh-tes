@@ -25,7 +25,7 @@ namespace TesApi.Web
         /// <summary>
         /// Minimum property set required for <see cref="CloudPool"/> provided to constructors of this class
         /// </summary>
-        public const string CloudPoolSelectClause = "creationTime,id,identity,metadata,virtualMachineConfiguration";
+        public const string CloudPoolSelectClause = "creationTime,id,identity,metadata";
 
         /// <summary>
         /// Autoscale evalutation interval
@@ -504,9 +504,6 @@ namespace TesApi.Web
         public string PoolId { get; private set; }
 
         /// <inheritdoc/>
-        public IList<DataDisk> DataDisks { get; private set; }
-
-        /// <inheritdoc/>
         public async ValueTask<bool> CanBeDeleted(CancellationToken cancellationToken = default)
         {
             if (await GetTasksAsync(includeCompleted: true).AnyAsync(cancellationToken))
@@ -787,7 +784,6 @@ namespace TesApi.Web
         {
             ArgumentNullException.ThrowIfNull(pool);
 
-            DataDisks = pool.VirtualMachineConfiguration.DataDisks ?? [];
             PoolId = pool.Id;
             IsAvailable = DetermineIsAvailable(pool.CreationTime) &&
                 runnerMD5.Equals(IBatchScheduler.PoolMetadata.Create(pool.Metadata.Single(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)).Value).RunnerMD5, StringComparison.OrdinalIgnoreCase);
