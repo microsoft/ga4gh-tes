@@ -28,15 +28,17 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="pool"></param>
         /// <param name="isPreemptible"></param>
+        /// <param name="runnerMD5"></param>
         /// <param name="cancellationToken"></param>
-        ValueTask CreatePoolAndJobAsync(Azure.ResourceManager.Batch.BatchAccountPoolData pool, bool isPreemptible, CancellationToken cancellationToken);
+        ValueTask CreatePoolAndJobAsync(Azure.ResourceManager.Batch.BatchAccountPoolData pool, bool isPreemptible, string runnerMD5, CancellationToken cancellationToken);
 
         /// <summary>
         /// Connects to the provided pool and associated job in the Batch Account.
         /// </summary>
         /// <param name="pool">The <see cref="CloudPool"/> to connect to.</param>
+        /// <param name="runnerMD5"></param>
         /// <param name="cancellationToken"></param>
-        ValueTask AssignPoolAsync(CloudPool pool, CancellationToken cancellationToken);
+        ValueTask AssignPoolAsync(CloudPool pool, string runnerMD5, CancellationToken cancellationToken);
 
         /// <summary>
         /// Indicates that the pool is not scheduled to run tasks nor running tasks.
