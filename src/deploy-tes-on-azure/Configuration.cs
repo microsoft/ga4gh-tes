@@ -57,6 +57,7 @@ namespace TesDeployer
         public int AksPoolSize { get; set; } = 2;
         public bool? CrossSubscriptionAKSDeployment { get; set; } = null;
         public bool Silent { get; set; }
+        public bool RunIntTests { get; set; }
         public bool DeleteResourceGroupOnFailure { get; set; }
         public string TesImageName { get; set; }
         public bool SkipTestWorkflow { get; set; } = false;
