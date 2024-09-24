@@ -868,8 +868,7 @@ namespace TesDeployer
             }
         }
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1859:Use concrete types when possible for improved performance", Justification = "We are explicitly using the contract specified in the ITesClient interface.")]
-        private async Task<bool> RunNextflowTaskAsync(string tesHostname, TesCredentials tesCredentials, bool isPreemptible, StorageAccountResource storageAccount, string userAssignedManagedIdentityClientId)
+        private async ValueTask<BlobClient> CreateNextflowConfig(TesCredentials tesCredentials, StorageAccountResource storageAccount, string userAssignedManagedIdentityClientId)
         {
             StringBuilder sb = new();
             sb.AppendLine(@"plugins {");
@@ -884,7 +883,6 @@ namespace TesDeployer
             sb.AppendLine(@"  }");
             sb.AppendLine(@"  storage {");
             sb.AppendLine($"    accountName='{storageAccount.Id.Name}'");
-            //sb.AppendLine($"    accountKey='{(await storageAccount.GetKeysAsync(cancellationToken: cts.Token).FirstOrDefaultAsync(key => Storage.StorageAccountKeyPermission.Full == key.Permissions)).Value}'");
             sb.AppendLine(@"  }");
             sb.AppendLine(@"}");
             sb.AppendLine($"tes.endpoint='https://{tesCredentials.TesHostname}'");
@@ -894,8 +892,14 @@ namespace TesDeployer
             sb.AppendLine(@"  container='docker.io/library/ubuntu:latest'");
             sb.AppendLine(@"}");
             var configText = sb.ToString();
-            var blobClient = GetBlobClient(storageAccount.Data, InputsContainerName, "test/nextflow/tes.config");
-            await UploadTextToStorageAccountAsync(blobClient, configText, cts.Token);
+            var tesConfig = GetBlobClient(storageAccount.Data, InputsContainerName, "test/nextflow/tes.config");
+            await UploadTextToStorageAccountAsync(tesConfig, configText, cts.Token);
+            return tesConfig;
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1859:Use concrete types when possible for improved performance", Justification = "We are explicitly using the contract specified in the ITesClient interface.")]
+        private async Task<bool> RunNextflowTaskAsync(string tesHostname, bool isPreemptible, StorageAccountResource storageAccount, BlobClient tesConfig)
+        {
             TesTask testTesTask = new();
             testTesTask.Resources.Preemptible = isPreemptible;
             testTesTask.Resources.CpuCores = 2;
@@ -912,7 +916,7 @@ namespace TesDeployer
             testTesTask.Inputs.Add(new()
             {
                 Path = "/tmp/tes.config",
-                Url = blobClient.Uri.ToString()
+                Url = tesConfig.Uri.ToString()
             });
 
             using ITesClient tesClient = new TesClient(new($"http://{tesHostname}"));
@@ -932,7 +936,7 @@ namespace TesDeployer
         {
             TesTask testTesTask = new();
             testTesTask.Resources.Preemptible = isPreemptible;
-            testTesTask.Executors.Add(new TesExecutor
+            testTesTask.Executors.Add(new()
             {
                 Image = "ubuntu",
                 Command = ["/bin/sh", "-c", "cat /proc/sys/kernel/random/uuid"],
@@ -977,11 +981,26 @@ namespace TesDeployer
             return isTestWorkflowSuccessful;
         }
 
+        private async Task<bool> RunNextflowIntegrationTestAsync(string tesEndpoint, TesCredentials tesCredentials, bool isPreemptible, StorageAccountResource storageAccount, string userAssignedManagedIdentityClientId)
+        {
+            var tesConfig = await CreateNextflowConfig(tesCredentials, storageAccount, userAssignedManagedIdentityClientId);
+
+            try
+            {
+                return await RunNextflowTaskAsync(tesEndpoint, isPreemptible, storageAccount, tesConfig);
+            }
+            finally
+            {
+                await tesConfig.DeleteIfExistsAsync(cancellationToken: CancellationToken.None);
+            }
+        }
+
         private async Task<bool> RunIntegrationTestsAsync(string tesEndpoint, TesCredentials tesCredentials, bool isPreemptible, StorageAccountResource storageAccount, string userAssignedManagedIdentityClientId)
         {
             var startTime = DateTime.UtcNow;
             var line = ConsoleEx.WriteLine("Running integration tests...");
-            var isTestWorkflowSuccessful = await RunNextflowTaskAsync(tesEndpoint, tesCredentials, isPreemptible, storageAccount, userAssignedManagedIdentityClientId);
+            // TODO: Add more integration tests here
+            var isTestWorkflowSuccessful = await RunNextflowIntegrationTestAsync(tesEndpoint, tesCredentials, isPreemptible, storageAccount, userAssignedManagedIdentityClientId);
             WriteExecutionTime(line, startTime);
 
             if (isTestWorkflowSuccessful)
