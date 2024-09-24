@@ -709,14 +709,14 @@ namespace TesDeployer
 
                             var portForwardTask = startPortForward(tokenSource.Token);
                             await Task.Delay(longRetryWaitTime * 2, tokenSource.Token); // Give enough time for kubectl to standup the port forwarding.
-                            var tasksToRun = Enumerable.Empty<Func<Task<bool>>>()
+                            var testsToRun = Enumerable.Empty<Func<Task<bool>>>()
                                 .Append(() => RunTestTaskAsync(
                                     "localhost:8088",
                                     isPreemptible: batchAccountData.LowPriorityCoreQuota > 0));
 
                             if (configuration.RunIntTests)
                             {
-                                tasksToRun = tasksToRun.Append(() => RunIntegrationTestsAsync(
+                                testsToRun = testsToRun.Append(() => RunIntegrationTestsAsync(
                                         "localhost:8088",
                                         tesCredentials,
                                         isPreemptible: !(batchAccountData.DedicatedCoreQuota >= 2 && maxPerFamilyQuota.Append(0).Max() >= 2),
@@ -726,9 +726,9 @@ namespace TesDeployer
 
                             var isTestWorkflowSuccessful = true;
 
-                            foreach (var taskFactory in tasksToRun)
+                            foreach (var testFactory in testsToRun)
                             {
-                                var runTestTask = taskFactory();
+                                var runTestTask = testFactory();
 
                                 for (var task = await Task.WhenAny(portForwardTask, runTestTask);
                                     isTestWorkflowSuccessful && runTestTask != task;
