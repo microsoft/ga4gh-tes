@@ -259,14 +259,14 @@ namespace TesDeployer
                         kubernetesManager.TesHostname = tesHostname;
                         configuration.EnableIngress = bool.TryParse(enableIngress, out var parsed) ? parsed : null;
 
-                        var tesCredentials = new FileInfo(Path.Combine(Directory.GetCurrentDirectory(), TesCredentialsFileName));
-                        tesCredentials.Refresh();
+                        var tesCredentialsFile = new FileInfo(Path.Combine(Directory.GetCurrentDirectory(), TesCredentialsFileName));
+                        tesCredentialsFile.Refresh();
 
-                        if (configuration.EnableIngress.GetValueOrDefault() && tesCredentials.Exists)
+                        if (configuration.EnableIngress.GetValueOrDefault() && tesCredentialsFile.Exists)
                         {
                             try
                             {
-                                using var stream = tesCredentials.OpenRead();
+                                using var stream = tesCredentialsFile.OpenRead();
                                 var (hostname, tesUsername, tesPassword) = TesCredentials.Deserialize(stream);
 
                                 if (kubernetesManager.TesHostname.Equals(hostname, StringComparison.InvariantCultureIgnoreCase) && string.IsNullOrEmpty(configuration.TesPassword))
@@ -649,13 +649,14 @@ namespace TesDeployer
                             }
                         });
                 }
-                TesCredentials tesCredentialsObj = default;
+
+                TesCredentials tesCredentials = default;
 
                 if (configuration.OutputTesCredentialsJson.GetValueOrDefault())
                 {
                     // Write credentials to JSON file in working directory
-                    tesCredentialsObj = new TesCredentials(kubernetesManager.TesHostname, configuration.TesUsername, configuration.TesPassword);
-                    var credentialsJson = tesCredentialsObj.Serialize();
+                    tesCredentials = new TesCredentials(kubernetesManager.TesHostname, configuration.TesUsername, configuration.TesPassword);
+                    var credentialsJson = tesCredentials.Serialize();
 
                     var credentialsPath = Path.Combine(Directory.GetCurrentDirectory(), TesCredentialsFileName);
                     await File.WriteAllTextAsync(credentialsPath, credentialsJson, cts.Token);
@@ -708,50 +709,52 @@ namespace TesDeployer
 
                             var portForwardTask = startPortForward(tokenSource.Token);
                             await Task.Delay(longRetryWaitTime * 2, tokenSource.Token); // Give enough time for kubectl to standup the port forwarding.
-                            var runTestTask = RunTestTaskAsync("localhost:8088", isPreemptible: batchAccountData.LowPriorityCoreQuota > 0);
+                            var tasksToRun = Enumerable.Empty<Func<Task<bool>>>()
+                                .Append(() => RunTestTaskAsync(
+                                    "localhost:8088",
+                                    isPreemptible: batchAccountData.LowPriorityCoreQuota > 0));
 
-                            for (var task = await Task.WhenAny(portForwardTask, runTestTask);
-                                runTestTask != task;
-                                task = await Task.WhenAny(portForwardTask, runTestTask))
+                            if (configuration.RunIntTests)
                             {
-                                try
-                                {
-                                    await portForwardTask;
-                                }
-                                catch (Exception ex)
-                                {
-                                    ConsoleEx.WriteLine($"kubectl stopped unexpectedly ({ex.Message}).", ConsoleColor.Red);
-                                }
-
-                                ConsoleEx.WriteLine($"Restarting kubectl...");
-                                portForwardTask = startPortForward(tokenSource.Token);
+                                tasksToRun = tasksToRun.Append(() => RunIntegrationTestsAsync(
+                                        "localhost:8088",
+                                        tesCredentials,
+                                        isPreemptible: !(batchAccountData.DedicatedCoreQuota >= 2 && maxPerFamilyQuota.Append(0).Max() >= 2),
+                                        storageAccount,
+                                        managedIdentity.Data.ClientId?.ToString("D")));
                             }
 
-                            var isTestWorkflowSuccessful = await runTestTask;
+                            var isTestWorkflowSuccessful = true;
+
+                            foreach (var taskFactory in tasksToRun)
+                            {
+                                var runTestTask = taskFactory();
+
+                                for (var task = await Task.WhenAny(portForwardTask, runTestTask);
+                                    isTestWorkflowSuccessful && runTestTask != task;
+                                    task = await Task.WhenAny(portForwardTask, runTestTask))
+                                {
+                                    try
+                                    {
+                                        await portForwardTask;
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        ConsoleEx.WriteLine($"kubectl stopped unexpectedly ({ex.Message}).", ConsoleColor.Red);
+                                    }
+
+                                    ConsoleEx.WriteLine($"Restarting kubectl...");
+                                    portForwardTask = startPortForward(tokenSource.Token);
+                                }
+
+                                isTestWorkflowSuccessful &= await runTestTask;
+                            }
+
                             exitCode = isTestWorkflowSuccessful ? 0 : 1;
 
                             if (!isTestWorkflowSuccessful)
                             {
                                 deleteResourceGroupTask = DeleteResourceGroupIfUserConsentsAsync();
-                            }
-                            else
-                            {
-                                if (configuration.RunIntTests)
-                                {
-                                    var runIntegrationTestTask = RunIntegrationTestsAsync(
-                                        "localhost:8088",
-                                        tesCredentialsObj,
-                                        isPreemptible: batchAccountData.LowPriorityCoreQuota > 0,
-                                        storageAccount,
-                                        managedIdentity.Data.ClientId?.ToString("D"));
-
-                                    var integrationTestsSuccessful = await runIntegrationTestTask;
-                                    
-                                    if (!integrationTestsSuccessful)
-                                    {
-                                        deleteResourceGroupTask = DeleteResourceGroupIfUserConsentsAsync();
-                                    }
-                                }
                             }
                         }
                         catch (Exception e)
@@ -866,38 +869,53 @@ namespace TesDeployer
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1859:Use concrete types when possible for improved performance", Justification = "We are explicitly using the contract specified in the ITesClient interface.")]
-        private async Task<bool> RunNextflowTaskAsync(string localHost, TesCredentials tesCredentials, bool isPreemptible, StorageAccountResource storageAccount, string userAssignedManagedIdentityClientId)
+        private async Task<bool> RunNextflowTaskAsync(string tesHostname, TesCredentials tesCredentials, bool isPreemptible, StorageAccountResource storageAccount, string userAssignedManagedIdentityClientId)
         {
-            var sb = new StringBuilder();
-            sb.AppendLine("plugins{id'nf-ga4gh'}");
-            sb.AppendLine("process{executor='tes'}");
-            sb.AppendLine($"azure{{managedIdentity{{clientId='{userAssignedManagedIdentityClientId}'}}storage{{accountName='{storageAccount.Id.Name}'}}}}");
-            sb.AppendLine($"tes.endpoint=https://{tesCredentials.TesHostname}");
-            sb.AppendLine($"tes.basicUsername={tesCredentials.TesUsername}");
-            sb.AppendLine($"tes.basicPassword={tesCredentials.TesPassword}");
-            sb.AppendLine("process{container=\"docker.io/library/ubuntu:latest\"}");
+            StringBuilder sb = new();
+            sb.AppendLine(@"plugins {");
+            sb.AppendLine(@"  id 'nf-ga4gh'");
+            sb.AppendLine(@"}");
+            sb.AppendLine(@"process {");
+            sb.AppendLine(@"  executor = 'tes'");
+            sb.AppendLine(@"}");
+            sb.AppendLine(@"azure {");
+            sb.AppendLine(@"  managedIdentity {");
+            sb.AppendLine($"    clientId='{userAssignedManagedIdentityClientId}'");
+            sb.AppendLine(@"  }");
+            sb.AppendLine(@"  storage {");
+            sb.AppendLine($"    accountName='{storageAccount.Id.Name}'");
+            //sb.AppendLine($"    accountKey='{(await storageAccount.GetKeysAsync(cancellationToken: cts.Token).FirstOrDefaultAsync(key => Storage.StorageAccountKeyPermission.Full == key.Permissions)).Value}'");
+            sb.AppendLine(@"  }");
+            sb.AppendLine(@"}");
+            sb.AppendLine($"tes.endpoint='https://{tesCredentials.TesHostname}'");
+            sb.AppendLine($"tes.basicUsername='{tesCredentials.TesUsername}'");
+            sb.AppendLine($"tes.basicPassword='{tesCredentials.TesPassword}'");
+            sb.AppendLine(@"process {");
+            sb.AppendLine(@"  container='docker.io/library/ubuntu:latest'");
+            sb.AppendLine(@"}");
             var configText = sb.ToString();
-            var blobClient = GetBlobClient(storageAccount.Data, TesInternalContainerName, $"{ConfigurationContainerName}/tes.config");
+            var blobClient = GetBlobClient(storageAccount.Data, InputsContainerName, "test/nextflow/tes.config");
             await UploadTextToStorageAccountAsync(blobClient, configText, cts.Token);
             TesTask testTesTask = new();
             testTesTask.Resources.Preemptible = isPreemptible;
-            testTesTask.Resources.CpuCores = 4;
-            testTesTask.Resources.RamGb = 16;
+            testTesTask.Resources.CpuCores = 2;
+            testTesTask.Resources.RamGb = 32;
             testTesTask.Resources.DiskGb = 100;
 
-            testTesTask.Executors.Add(new TesExecutor
+            testTesTask.Executors.Add(new()
             {
-                Image = "nextflow/nextflow:24.04.4",
-                Command = ["/bin/sh", "-c", "nextflow run hello -c /tmp/tes.config -w 'az://work'"],
+                //Image = "nextflow/nextflow:24.04.4",
+                Image = "nextflow/nextflow:24.08.0-edge",
+                Command = ["/bin/sh", "-c", "nextflow run hello -c /tmp/tes.config -w 'az://outputs' || cat .nextflow.log"],
             });
 
-            testTesTask.Inputs.Add(new TesInput
+            testTesTask.Inputs.Add(new()
             {
                 Path = "/tmp/tes.config",
                 Url = blobClient.Uri.ToString()
             });
 
-            using ITesClient tesClient = new TesClient(new($"http://{localHost}"));
+            using ITesClient tesClient = new TesClient(new($"http://{tesHostname}"));
             var completedTask = await tesClient.CreateAndWaitTilDoneAsync(testTesTask, cts.Token);
             ConsoleEx.WriteLine($"TES Task State: {completedTask.State}");
 
@@ -959,19 +977,17 @@ namespace TesDeployer
             return isTestWorkflowSuccessful;
         }
 
-        private async Task<bool> RunIntegrationTestsAsync(string localHost, TesCredentials tesCredentials, bool isPreemptible, StorageAccountResource storageAccount, string userAssignedManagedIdentityClientId)
+        private async Task<bool> RunIntegrationTestsAsync(string tesEndpoint, TesCredentials tesCredentials, bool isPreemptible, StorageAccountResource storageAccount, string userAssignedManagedIdentityClientId)
         {
             var startTime = DateTime.UtcNow;
             var line = ConsoleEx.WriteLine("Running integration tests...");
-            var isTestWorkflowSuccessful = await RunNextflowTaskAsync(localHost, tesCredentials, isPreemptible, storageAccount, userAssignedManagedIdentityClientId);
+            var isTestWorkflowSuccessful = await RunNextflowTaskAsync(tesEndpoint, tesCredentials, isPreemptible, storageAccount, userAssignedManagedIdentityClientId);
             WriteExecutionTime(line, startTime);
 
             if (isTestWorkflowSuccessful)
             {
                 ConsoleEx.WriteLine();
                 ConsoleEx.WriteLine($"Integration test tasks succeeded.", ConsoleColor.Green);
-                ConsoleEx.WriteLine();
-                ConsoleEx.WriteLine("Learn more about how to use Tes on Azure: https://github.com/microsoft/ga4gh-tes");
                 ConsoleEx.WriteLine();
             }
             else
