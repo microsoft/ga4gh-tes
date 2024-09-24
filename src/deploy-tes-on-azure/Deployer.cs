@@ -906,7 +906,7 @@ namespace TesDeployer
             {
                 //Image = "nextflow/nextflow:24.04.4",
                 Image = "nextflow/nextflow:24.08.0-edge",
-                Command = ["/bin/sh", "-c", "nextflow run hello -c /tmp/tes.config -w 'az://outputs' || cat .nextflow.log"],
+                Command = ["/bin/sh", "-c", "nextflow run seqeralabs/nf-canary -r main -c /tmp/tes.config -w 'az://outputs' || cat .nextflow.log"],
             });
 
             testTesTask.Inputs.Add(new()
