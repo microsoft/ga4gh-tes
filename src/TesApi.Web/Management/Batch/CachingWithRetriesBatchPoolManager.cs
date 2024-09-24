@@ -41,7 +41,7 @@ namespace TesApi.Web.Management.Batch
             {
                 await cachingAsyncRetryExceptWhenNotFound.ExecuteWithRetryAsync(ct => batchPoolManager.DeleteBatchPoolAsync(poolId, ct), cancellationToken);
             }
-            catch (BatchException exc) when (BatchErrorCodeStrings.TaskNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
+            catch (BatchException exc) when (BatchErrorCodeStrings.PoolNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
             { }
         }
 

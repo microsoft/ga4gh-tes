@@ -71,9 +71,7 @@ namespace TesApi.Web.Management.Batch
                 logger.LogInformation(
                     @"Deleting pool with the id/name:{PoolName} in Batch account:{BatchAccountName}", poolId, azureClientsFactory.BatchAccountInformation.Name);
 
-                _ = await batchManagementClient.GetBatchAccountPools().Get(BatchAccountPoolResource.CreateResourceIdentifier(
-                        azureClientsFactory.BatchAccountInformation.SubscriptionId, azureClientsFactory.BatchAccountInformation.ResourceGroupName,
-                        azureClientsFactory.BatchAccountInformation.Name, poolId), cancellationToken: cancellationToken).Value
+                _ = await batchManagementClient.GetBatchAccountPools().Get(poolId, cancellationToken: cancellationToken).Value
                     .DeleteAsync(Azure.WaitUntil.Completed, cancellationToken);
 
                 logger.LogInformation(
