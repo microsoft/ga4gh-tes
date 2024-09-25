@@ -302,6 +302,8 @@ namespace TesApi.Web.Runner
                     continue;
                 }
 
+                await ResolveInputType(input, cancellationToken);
+
                 preparedInput = PrepareLocalFileInput(input, defaultStorageAccountName);
 
                 if (preparedInput != null)
@@ -328,6 +330,23 @@ namespace TesApi.Web.Runner
             }
 
             return [.. inputs.Values];
+        }
+
+        private async Task ResolveInputType(TesInput input, CancellationToken cancellationToken)
+        {
+            var uri = await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, default, default, getContainerSas: true);
+
+            if (uri is null)
+            {
+                return; // Not azure storage. We'll let other parts of the system handle it.
+            }
+
+            input.Type = (await storageAccessProvider.GetBlobUrlsAsync(
+                    uri,
+                    cancellationToken))
+                .Any()
+                ? TesFileType.DIRECTORY
+                : TesFileType.FILE;
         }
 
         /// <summary>
@@ -531,7 +550,7 @@ namespace TesApi.Web.Runner
 
             foreach (var input in inputs)
             {
-                if (input?.Type == TesFileType.FILE)
+                if (input.Type == TesFileType.FILE)
                 {
                     AddInputToBuilder(input.Path, input.Url);
                 }

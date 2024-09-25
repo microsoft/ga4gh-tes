@@ -160,11 +160,6 @@ namespace TesApi.Controllers
                 {
                     return BadRequest("Content inputs cannot be directories.");
                 }
-
-                if (input.Type == default)
-                {
-                    await ResolveInputType(input);
-                }
             }
 
             foreach (var output in tesTask.Outputs ?? Enumerable.Empty<TesOutput>())
@@ -239,16 +234,6 @@ namespace TesApi.Controllers
             logger.LogDebug("Creating task with id {TesTask} state {TesTaskState}", tesTask.Id, tesTask.State);
             await repository.CreateItemAsync(tesTask, cancellationToken);
             return StatusCode(200, new TesCreateTaskResponse { Id = tesTask.Id });
-
-            async Task ResolveInputType(TesInput input)
-            {
-                input.Type = (await storageAccessProvider.GetBlobUrlsAsync(
-                        await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, default, default, getContainerSas: true),
-                        default))
-                    .Any()
-                    ? TesFileType.DIRECTORY
-                    : TesFileType.FILE;
-            }
         }
 
         /// <summary>
