@@ -5,21 +5,23 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
-using System.Text.RegularExpressions;
+using Tes.Converters;
 using Tes.Repository;
+using Tes.TaskSubmitters;
+using NewtonsoftJson = Newtonsoft.Json;
+using STJSerialization = System.Text.Json.Serialization;
 
 namespace Tes.Models
 {
     public partial class TesTask : RepositoryItem<TesTask>
     {
-        private static readonly Regex CromwellTaskInstanceNameRegex = new("(.*):[^:]*:[^:]*");
-        private static readonly Regex CromwellShardRegex = new(".*:([^:]*):[^:]*");
-        private static readonly Regex CromwellAttemptRegex = new(".*:([^:]*)");
-        public static readonly List<TesState> ActiveStates = new List<TesState> {
-            TesState.QUEUEDEnum,
-            TesState.RUNNINGEnum,
-            TesState.PAUSEDEnum,
-            TesState.INITIALIZINGEnum};
+        public static readonly List<TesState> ActiveStates =
+        [
+            TesState.QUEUED,
+            TesState.RUNNING,
+            TesState.PAUSED,
+            TesState.INITIALIZING
+        ];
 
         /// <summary>
         /// Number of retries attempted
@@ -37,14 +39,23 @@ namespace Tes.Models
         /// Date + time the task was completed, in RFC 3339 format. This is set by the system, not the client.
         /// </summary>
         /// <value>Date + time the task was completed, in RFC 3339 format. This is set by the system, not the client.</value>
+        [STJSerialization.JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339_JsonText))]
+        [NewtonsoftJson.JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339_Newtonsoft))]
         [DataMember(Name = "end_time")]
         public DateTimeOffset? EndTime { get; set; }
 
         /// <summary>
         /// Top-most parent workflow ID from the workflow engine
         /// </summary>
-        [DataMember(Name = "workflow_id")]
-        public string WorkflowId { get; set; }
+        [IgnoreDataMember]
+        public string WorkflowId => TaskSubmitter?.WorkflowId;
+
+        /// <summary>
+        /// Workflow engine task metadata
+        /// </summary>
+        [NewtonsoftJson.JsonConverter(typeof(JsonValueConverterTaskSubmitter))]
+        [DataMember(Name = "task_submitter")]
+        public TaskSubmitter TaskSubmitter { get; set; }
 
         /// <summary>
         /// Assigned Azure Batch PoolId
@@ -74,19 +85,19 @@ namespace Tes.Models
         /// Cromwell task description without shard and attempt numbers
         /// </summary>
         [IgnoreDataMember]
-        public string CromwellTaskInstanceName => this.Description == null ? null : CromwellTaskInstanceNameRegex.Match(this.Description).Groups[1].Value;
+        public string CromwellTaskInstanceName => (TaskSubmitter as CromwellTaskSubmitter)?.CromwellTaskInstanceName;
 
         /// <summary>
         /// Cromwell shard number
         /// </summary>
         [IgnoreDataMember]
-        public int? CromwellShard => this.Description == null ? null : (int.TryParse(CromwellShardRegex.Match(this.Description).Groups[1].Value, out var result) ? result : null);
+        public int? CromwellShard => (TaskSubmitter as CromwellTaskSubmitter)?.CromwellShard;
 
         /// <summary>
         /// Cromwell attempt number
         /// </summary>
         [IgnoreDataMember]
-        public int? CromwellAttempt => this.Description == null ? null : (int.TryParse(CromwellAttemptRegex.Match(this.Description).Groups[1].Value, out var result) ? result : null);
+        public int? CromwellAttempt => (TaskSubmitter as CromwellTaskSubmitter)?.CromwellAttempt;
 
         public bool IsActiveState()
         {

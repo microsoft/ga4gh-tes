@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Text.Json.Serialization;
 
 namespace TesApi.Web.Management.Models.Terra;
@@ -35,3 +34,7 @@ public class QuotaApiResponse
     [JsonPropertyName("quotaValues")]
     public QuotaValuesApiResponse QuotaValues { get; set; }
 }
+
+[JsonSerializable(typeof(QuotaApiResponse))]
+public partial class QuotaApiResponseContext : JsonSerializerContext
+{ }

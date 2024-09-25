@@ -19,24 +19,26 @@ namespace TesApi.Web
         bool IsAvailable { get; }
 
         /// <summary>
-        /// Provides the <see cref="PoolInformation"/> for the pool.
+        /// Provides the <see cref="CloudPool.Id"/> for the pool.
         /// </summary>
-        PoolInformation Pool { get; }
+        string PoolId { get; }
 
         /// <summary>
         /// Creates an Azure Batch pool and associated job in the Batch Account.
         /// </summary>
         /// <param name="pool"></param>
         /// <param name="isPreemptible"></param>
+        /// <param name="runnerMD5"></param>
         /// <param name="cancellationToken"></param>
-        ValueTask CreatePoolAndJobAsync(Microsoft.Azure.Management.Batch.Models.Pool pool, bool isPreemptible, CancellationToken cancellationToken);
+        ValueTask CreatePoolAndJobAsync(Azure.ResourceManager.Batch.BatchAccountPoolData pool, bool isPreemptible, string runnerMD5, CancellationToken cancellationToken);
 
         /// <summary>
         /// Connects to the provided pool and associated job in the Batch Account.
         /// </summary>
         /// <param name="pool">The <see cref="CloudPool"/> to connect to.</param>
+        /// <param name="runnerMD5"></param>
         /// <param name="cancellationToken"></param>
-        ValueTask AssignPoolAsync(CloudPool pool, CancellationToken cancellationToken);
+        ValueTask AssignPoolAsync(CloudPool pool, string runnerMD5, CancellationToken cancellationToken);
 
         /// <summary>
         /// Indicates that the pool is not scheduled to run tasks nor running tasks.
@@ -55,7 +57,7 @@ namespace TesApi.Web
         /// Removes and returns the next available start task failure.
         /// </summary>
         /// <returns>The first <see cref="TaskFailureInformation"/> in the list, or null if the list is empty.</returns>
-        TaskFailureInformation PopNextStartTaskFailure();
+        StartTaskFailureInformation PopNextStartTaskFailure();
 
         /// <summary>
         /// Updates this instance based on changes to its environment.
@@ -70,5 +72,12 @@ namespace TesApi.Web
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         ValueTask<DateTime> GetAllocationStateTransitionTime(CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// <see cref="TaskFailureInformation"/> paired with compute node Id.
+        /// </summary>
+        /// <param name="NodeId">Compute node Id</param>
+        /// <param name="TaskFailureInformation"><see cref="TaskFailureInformation"/></param>
+        public record struct StartTaskFailureInformation(string NodeId, TaskFailureInformation TaskFailureInformation);
     }
 }

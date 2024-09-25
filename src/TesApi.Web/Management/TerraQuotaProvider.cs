@@ -22,30 +22,30 @@ namespace TesApi.Web.Management
         private const string BatchAccountResourceType = @"Microsoft.Batch/batchAccounts";
         private const string SharedResourcePurpose = "SHARED_RESOURCE";
 
-        private readonly TerraLandingZoneApiClient terraLandingZoneClient;
-        private readonly Guid landingZoneId;
+        private readonly Lazy<TerraWsmApiClient> terraWsmClient;
+        private readonly Guid workspaceId;
 
         /// <summary>
         /// Constructor of TerraQuotaProvider
         /// </summary>
-        /// <param name="terraLandingZoneClient"></param>
+        /// <param name="terraWsmClient"></param>
         /// <param name="terraOptions"></param>
         /// <exception cref="ArgumentException"></exception>
-        public TerraQuotaProvider(TerraLandingZoneApiClient terraLandingZoneClient, IOptions<TerraOptions> terraOptions)
+        public TerraQuotaProvider(Lazy<TerraWsmApiClient> terraWsmClient, IOptions<TerraOptions> terraOptions)
         {
             ArgumentNullException.ThrowIfNull(terraOptions);
-            ArgumentNullException.ThrowIfNull(terraLandingZoneClient);
-            if (string.IsNullOrEmpty(terraOptions.Value.LandingZoneId))
+            ArgumentNullException.ThrowIfNull(terraWsmClient);
+            if (string.IsNullOrEmpty(terraOptions.Value.WorkspaceId))
             {
-                throw new ArgumentException("The landing zone id is missing. Please check the app configuration.", nameof(terraOptions));
+                throw new ArgumentException("The workspace id is missing. Please check the app configuration.", nameof(terraOptions));
             }
-            if (string.IsNullOrEmpty(terraOptions.Value.LandingZoneApiHost))
+            if (string.IsNullOrEmpty(terraOptions.Value.WsmApiHost))
             {
-                throw new ArgumentException("The landing zone id is missing. Please check the app configuration.", nameof(terraOptions));
+                throw new ArgumentException("The WSM API Host is missing. Please check the app configuration.", nameof(terraOptions));
             }
 
-            this.terraLandingZoneClient = terraLandingZoneClient;
-            landingZoneId = Guid.Parse(terraOptions.Value.LandingZoneId);
+            this.terraWsmClient = terraWsmClient;
+            workspaceId = Guid.Parse(terraOptions.Value.WorkspaceId);
         }
 
         /// <inheritdoc />
@@ -89,19 +89,19 @@ namespace TesApi.Web.Management
         {
             var batchResourceId = await GetBatchAccountResourceIdFromLandingZone(cancellationToken);
 
-            return await terraLandingZoneClient.GetResourceQuotaAsync(landingZoneId, batchResourceId, cacheResults: true, cancellationToken: cancellationToken);
+            return await terraWsmClient.Value.GetResourceQuotaAsync(workspaceId, batchResourceId, cacheResults: true, cancellationToken: cancellationToken);
         }
 
         private async Task<string> GetBatchAccountResourceIdFromLandingZone(CancellationToken cancellationToken)
         {
-            var resources = await terraLandingZoneClient.GetLandingZoneResourcesAsync(landingZoneId, cancellationToken);
+            var resources = await terraWsmClient.Value.GetLandingZoneResourcesAsync(workspaceId, cancellationToken);
 
             var sharedResources = resources.Resources.FirstOrDefault(r => r.Purpose.Equals(SharedResourcePurpose));
 
             if (sharedResources is null)
             {
                 throw new InvalidOperationException(
-                    $"The Terra landing zone: {landingZoneId} does not contain shared resources");
+                    $"The Terra landing zone associated with workspace: {workspaceId} does not contain shared resources");
             }
 
             var batchResource = sharedResources.DeployedResources.FirstOrDefault(r =>
@@ -109,7 +109,7 @@ namespace TesApi.Web.Management
 
             if (batchResource is null)
             {
-                throw new InvalidOperationException($"The Terra landing zone: {landingZoneId} does not contain a shared batch account");
+                throw new InvalidOperationException($"The Terra landing zone associated with workspace: {workspaceId} does not contain a shared batch account");
             }
 
             return batchResource.ResourceId;

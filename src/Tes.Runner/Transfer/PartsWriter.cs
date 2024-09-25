@@ -13,7 +13,7 @@ public class PartsWriter : PartsProcessor
 {
     private readonly ILogger logger = PipelineLoggerFactory.Create<PartsWriter>();
 
-    public PartsWriter(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel) : base(blobPipeline, blobPipelineOptions, memoryBufferChannel)
+    public PartsWriter(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel, IScalingStrategy scalingStrategy) : base(blobPipeline, blobPipelineOptions, memoryBufferChannel, scalingStrategy)
     {
     }
 
@@ -25,8 +25,10 @@ public class PartsWriter : PartsProcessor
     /// </summary>
     /// <param name="writeBufferChannel">Source channel from which the parts are read to perform the write operation on the pipeline</param>
     /// <param name="processedBufferChannel">Target channel where processed parts are written</param>
+    /// <param name="cancellationSource">Cancellation source used to cancel working threads if an error occurs</param>
     /// <returns>A task that completes when all the writer tasks complete</returns>
-    public async Task StartPartsWritersAsync(Channel<PipelineBuffer> writeBufferChannel, Channel<ProcessedBuffer> processedBufferChannel)
+    public async Task StartPartsWritersAsync(Channel<PipelineBuffer> writeBufferChannel,
+        Channel<ProcessedBuffer> processedBufferChannel, CancellationTokenSource cancellationSource)
     {
         async Task WritePartAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
         {
@@ -37,11 +39,9 @@ public class PartsWriter : PartsProcessor
             await MemoryBufferChannel.Writer.WriteAsync(buffer.Data, cancellationToken);
         }
 
-        var tasks = StartProcessors(BlobPipelineOptions.NumberOfWriters, writeBufferChannel, WritePartAsync);
-
         try
         {
-            await Task.WhenAll(tasks);
+            await StartProcessorsWithScalingStrategyAsync(BlobPipelineOptions.NumberOfReaders, writeBufferChannel, WritePartAsync, cancellationSource);
         }
         catch (Exception e)
         {

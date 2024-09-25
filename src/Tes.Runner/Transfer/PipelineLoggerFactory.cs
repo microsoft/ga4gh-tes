@@ -11,7 +11,7 @@ namespace Tes.Runner.Transfer
         private static readonly ILoggerFactory SLogFactory = LoggerFactory.Create(builder =>
         {
             builder
-                .AddSystemdConsole(options =>
+                .AddSimpleConsole(options =>
                 {
                     options.IncludeScopes = true;
                     options.TimestampFormat = "yyyy-MM-dd HH:mm:ss.fff ";
@@ -31,6 +31,11 @@ namespace Tes.Runner.Transfer
         public static ILogger<T> Create<T>()
         {
             return SLogFactory.CreateLogger<T>();
+        }
+
+        public static ILogger Create(string category)
+        {
+            return SLogFactory.CreateLogger(category);
         }
     }
 }

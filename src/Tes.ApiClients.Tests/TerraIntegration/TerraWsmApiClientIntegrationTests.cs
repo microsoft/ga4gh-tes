@@ -1,9 +1,10 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using CommonUtilities;
+using CommonUtilities.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
-using Tes.ApiClients.Options;
 
 namespace Tes.ApiClients.Tests.TerraIntegration
 {
@@ -19,13 +20,11 @@ namespace Tes.ApiClients.Tests.TerraIntegration
         {
             envInfo = new TestTerraEnvInfo();
 
-
             var retryOptions = Microsoft.Extensions.Options.Options.Create(new RetryPolicyOptions());
             var memoryCache = new MemoryCache(new MemoryCacheOptions());
-
+            var config = AzureEnvironmentConfig.FromArmEnvironmentEndpoints(CommonUtilities.AzureCloud.AzureCloudConfig.FromKnownCloudNameAsync(retryPolicyOptions: retryOptions).Result);
             wsmApiClient = new TerraWsmApiClient(envInfo.WsmApiHost, new TestEnvTokenCredential(),
-                new CachingRetryHandler(memoryCache, retryOptions), TestLoggerFactory.Create<TerraWsmApiClient>());
-
+                new CachingRetryPolicyBuilder(memoryCache, retryOptions), config, TestLoggerFactory.Create<TerraWsmApiClient>());
         }
 
         [TestMethod]

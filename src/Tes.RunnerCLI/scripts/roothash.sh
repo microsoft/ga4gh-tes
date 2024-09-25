@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 
 filename=$1
 blocksize=${2:-4194304} # 4 MiB by default

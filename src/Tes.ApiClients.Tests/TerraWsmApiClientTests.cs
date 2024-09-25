@@ -4,6 +4,7 @@
 using System.Net;
 using System.Web;
 using Azure.Core;
+using CommonUtilities;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Tes.ApiClients.Models.Terra;
@@ -16,17 +17,25 @@ namespace Tes.ApiClients.Tests
     {
         private TerraWsmApiClient terraWsmApiClient = null!;
         private Mock<TokenCredential> tokenCredential = null!;
-        private Mock<CachingRetryHandler> cacheAndRetryHandler = null!;
+        private Mock<CachingRetryPolicyBuilder> cacheAndRetryBuilder = null!;
+        private Lazy<Mock<CachingRetryHandler.CachingAsyncRetryHandlerPolicy<HttpResponseMessage>>> cacheAndRetryHandler = null!;
         private TerraApiStubData terraApiStubData = null!;
+        private AzureEnvironmentConfig azureEnvironmentConfig = null!;
 
         [TestInitialize]
         public void SetUp()
         {
             terraApiStubData = new TerraApiStubData();
             tokenCredential = new Mock<TokenCredential>();
-            cacheAndRetryHandler = new Mock<CachingRetryHandler>();
+            cacheAndRetryBuilder = new Mock<CachingRetryPolicyBuilder>();
+            var cache = new Mock<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
+            cache.Setup(c => c.CreateEntry(It.IsAny<object>())).Returns(new Mock<Microsoft.Extensions.Caching.Memory.ICacheEntry>().Object);
+            cacheAndRetryBuilder.SetupGet(c => c.AppCache).Returns(cache.Object);
+            cacheAndRetryHandler = new(TestServices.RetryHandlersHelpers.GetCachingAsyncRetryPolicyMock(cacheAndRetryBuilder, c => c.DefaultRetryHttpResponseMessagePolicyBuilder()));
+            azureEnvironmentConfig = AzureEnvironmentConfig.FromArmEnvironmentEndpoints(CommonUtilities.AzureCloud.AzureCloudConfig.FromKnownCloudNameAsync(CommonUtilities.AzureCloud.AzureCloudConfig.DefaultAzureCloudName).Result);
+
             terraWsmApiClient = new TerraWsmApiClient(TerraApiStubData.WsmApiHost, tokenCredential.Object,
-                cacheAndRetryHandler.Object, NullLogger<TerraWsmApiClient>.Instance);
+                cacheAndRetryBuilder.Object, azureEnvironmentConfig, NullLogger<TerraWsmApiClient>.Instance);
         }
 
         [TestMethod]
@@ -84,13 +93,8 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetSasTokenAsync_ValidRequest_ReturnsPayload()
         {
-            var response = new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(terraApiStubData.GetWsmSasTokenApiResponseInJson())
-            };
-
-            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(response);
+            cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryAndConversionAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<WsmSasTokenApiResponse>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
+                .ReturnsAsync(System.Text.Json.JsonSerializer.Deserialize<WsmSasTokenApiResponse>(terraApiStubData.GetWsmSasTokenApiResponseInJson())!);
 
             var apiResponse = await terraWsmApiClient.GetSasTokenAsync(terraApiStubData.WorkspaceId,
                 terraApiStubData.ContainerResourceId, null!, CancellationToken.None);
@@ -103,13 +107,8 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetContainerResourcesAsync_ValidRequest_ReturnsPayload()
         {
-            var response = new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(terraApiStubData.GetContainerResourcesApiResponseInJson())
-            };
-
-            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(response);
+            cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryAndConversionAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<WsmListContainerResourcesResponse>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
+                .ReturnsAsync(System.Text.Json.JsonSerializer.Deserialize<WsmListContainerResourcesResponse>(terraApiStubData.GetContainerResourcesApiResponseInJson())!);
 
             var apiResponse = await terraWsmApiClient.GetContainerResourcesAsync(terraApiStubData.WorkspaceId,
                 offset: 0, limit: 10, CancellationToken.None);
@@ -125,7 +124,7 @@ namespace Tes.ApiClients.Tests
             var wsmResourceId = Guid.NewGuid();
             var response = new HttpResponseMessage(HttpStatusCode.NoContent);
 
-            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>()))
+            cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
                 .ReturnsAsync(response);
 
             await terraWsmApiClient.DeleteBatchPoolAsync(terraApiStubData.WorkspaceId, wsmResourceId, CancellationToken.None);
@@ -143,5 +142,67 @@ namespace Tes.ApiClients.Tests
             Assert.AreEqual(expectedUrl, url);
         }
 
+        [TestMethod]
+        public async Task GetResourceQuotaAsync_ValidResourceIdReturnsQuotaInformationAndGetsAuthToken()
+        {
+            cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryConversionAndCachingAsync(It.IsAny<string>(),
+                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<QuotaApiResponse>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
+                .ReturnsAsync(System.Text.Json.JsonSerializer.Deserialize<QuotaApiResponse>(terraApiStubData.GetResourceQuotaApiResponseInJson())!);
+
+            var quota = await terraWsmApiClient.GetResourceQuotaAsync(terraApiStubData.WorkspaceId, terraApiStubData.BatchAccountId, cacheResults: true, cancellationToken: CancellationToken.None);
+
+            Assert.IsNotNull(quota);
+            Assert.AreEqual(terraApiStubData.LandingZoneId, quota.LandingZoneId);
+            Assert.AreEqual(terraApiStubData.BatchAccountId, quota.AzureResourceId);
+            Assert.AreEqual("Microsoft.Batch/batchAccounts", quota.ResourceType);
+            Assert.AreEqual(100, quota.QuotaValues.PoolQuota);
+            Assert.IsTrue(quota.QuotaValues.DedicatedCoreQuotaPerVmFamilyEnforced);
+            Assert.AreEqual(300, quota.QuotaValues.ActiveJobAndJobScheduleQuota);
+            Assert.AreEqual(350, quota.QuotaValues.DedicatedCoreQuota);
+            Assert.AreEqual(59, quota.QuotaValues.DedicatedCoreQuotaPerVmFamily.Count);
+            Assert.AreEqual("standardLSv2Family", quota.QuotaValues.DedicatedCoreQuotaPerVmFamily.Keys.First());
+            Assert.AreEqual(0, quota.QuotaValues.DedicatedCoreQuotaPerVmFamily.Values.First());
+            tokenCredential.Verify(t => t.GetTokenAsync(It.IsAny<TokenRequestContext>(),
+                    It.IsAny<CancellationToken>()),
+                Times.Once);
+        }
+
+        [TestMethod]
+        public async Task GetLandingZoneResourcesAsync_ListOfLandingZoneResourcesAndGetsAuthToken()
+        {
+            cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryConversionAndCachingAsync(It.IsAny<string>(),
+                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<LandingZoneResourcesApiResponse>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
+                .ReturnsAsync(System.Text.Json.JsonSerializer.Deserialize<LandingZoneResourcesApiResponse>(terraApiStubData.GetResourceApiResponseInJson())!);
+
+            var resources = await terraWsmApiClient.GetLandingZoneResourcesAsync(terraApiStubData.WorkspaceId, CancellationToken.None);
+
+            Assert.IsNotNull(resources);
+            Assert.AreEqual(terraApiStubData.LandingZoneId, resources.Id);
+            Assert.AreEqual(5, resources.Resources.Length);
+            tokenCredential.Verify(t => t.GetTokenAsync(It.IsAny<TokenRequestContext>(),
+                    It.IsAny<CancellationToken>()),
+                Times.Once);
+
+        }
+
+        [TestMethod]
+        public void GetLandingZoneResourcesApiUrl_CorrectUrlIsParsed()
+        {
+            var url = terraWsmApiClient.GetLandingZoneResourcesApiUrl(terraApiStubData.WorkspaceId);
+            var expectedUrl = $"{TerraApiStubData.WsmApiHost}/api/workspaces/v1/{terraApiStubData.WorkspaceId}/resources/controlled/azure/landingzone";
+
+            Assert.AreEqual(expectedUrl, url.ToString());
+
+        }
+
+        [TestMethod]
+        public void GetQuotaApiUrl_CorrectUrlIsParsed()
+        {
+            var url = terraWsmApiClient.GetQuotaApiUrl(terraApiStubData.WorkspaceId, terraApiStubData.BatchAccountId);
+            var expectedUrl = $"{TerraApiStubData.WsmApiHost}/api/workspaces/v1/{terraApiStubData.WorkspaceId}/resources/controlled/azure/landingzone/quota?azureResourceId={Uri.EscapeDataString(terraApiStubData.BatchAccountId)}";
+
+            Assert.AreEqual(expectedUrl, url.ToString());
+
+        }
     }
 }

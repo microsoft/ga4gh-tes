@@ -3,14 +3,12 @@
 
 using System;
 using System.Net;
-using System.Runtime.Serialization;
 
 using Azure;
 using Microsoft.Azure.Batch.Common;
 
 namespace TesApi.Web
 {
-    [Serializable]
     internal class AzureBatchPoolCreationException : Exception
     {
         public static bool IsJobQuotaException(string code)
@@ -59,29 +57,13 @@ namespace TesApi.Web
             IsPoolQuota = state.isPoolQuota;
             IsTimeout = state.isTimeout;
 
-            (bool isJobQuota, bool isPoolQuota, bool isTimeout) GetState(string code)
+            static (bool isJobQuota, bool isPoolQuota, bool isTimeout) GetState(string code)
                 => (IsJobQuotaException(code), IsPoolQuotaException(code), IsTimeoutException(code));
         }
 
         public AzureBatchPoolCreationException(string message, bool isTimeout, Exception innerException)
             : this(message, innerException)
             => IsTimeout = isTimeout;
-
-        protected AzureBatchPoolCreationException(SerializationInfo info, StreamingContext context)
-            : base(info, context)
-        {
-            IsJobQuota = info.GetBoolean(nameof(IsJobQuota));
-            IsPoolQuota = info.GetBoolean(nameof(IsPoolQuota));
-            IsTimeout = info.GetBoolean(nameof(IsTimeout));
-        }
-
-        public override void GetObjectData(SerializationInfo info, StreamingContext context)
-        {
-            base.GetObjectData(info, context);
-            info.AddValue(nameof(IsJobQuota), IsJobQuota);
-            info.AddValue(nameof(IsPoolQuota), IsPoolQuota);
-            info.AddValue(nameof(IsTimeout), IsTimeout);
-        }
 
         public bool IsJobQuota { get; }
 

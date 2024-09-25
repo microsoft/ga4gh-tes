@@ -17,14 +17,14 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task GetStorageAccountKeyAsync_UsesCache()
         {
-            var storageAccountInfo = new StorageAccountInfo { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = "https://defaultstorageaccount/", SubscriptionId = "SubId" };
+            var storageAccountInfo = new StorageAccountInfo { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = new("https://defaultstorageaccount/"), SubscriptionId = "SubId" };
             var storageAccountKey = "key";
             using var serviceProvider = new TestServices.TestServiceProvider<CachingWithRetriesAzureProxy>(azureProxy: a =>
             {
                 PrepareAzureProxy(a);
                 a.Setup(a => a.GetStorageAccountKeyAsync(It.IsAny<StorageAccountInfo>(), It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult(storageAccountKey));
             });
-            var cachingAzureProxy = serviceProvider.GetT();
+            var cachingAzureProxy = (IAzureProxy)serviceProvider.GetT();
 
             var key1 = await cachingAzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, System.Threading.CancellationToken.None);
             var key2 = await cachingAzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, System.Threading.CancellationToken.None);
@@ -37,13 +37,13 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task GetStorageAccountInfoAsync_UsesCache()
         {
-            var storageAccountInfo = new StorageAccountInfo { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = "https://defaultstorageaccount/", SubscriptionId = "SubId" };
+            var storageAccountInfo = new StorageAccountInfo { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = new("https://defaultstorageaccount/"), SubscriptionId = "SubId" };
             using var serviceProvider = new TestServices.TestServiceProvider<CachingWithRetriesAzureProxy>(azureProxy: a =>
             {
                 PrepareAzureProxy(a);
                 a.Setup(a => a.GetStorageAccountInfoAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult(storageAccountInfo));
             });
-            var cachingAzureProxy = serviceProvider.GetT();
+            var cachingAzureProxy = (IAzureProxy)serviceProvider.GetT();
 
             var info1 = await cachingAzureProxy.GetStorageAccountInfoAsync("defaultstorageaccount", System.Threading.CancellationToken.None);
             var info2 = await cachingAzureProxy.GetStorageAccountInfoAsync("defaultstorageaccount", System.Threading.CancellationToken.None);
@@ -61,10 +61,10 @@ namespace TesApi.Tests
                 PrepareAzureProxy(a);
                 a.Setup(a => a.GetStorageAccountInfoAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult((StorageAccountInfo)null));
             });
-            var cachingAzureProxy = serviceProvider.GetT();
+            var cachingAzureProxy = (IAzureProxy)serviceProvider.GetT();
             var info1 = await cachingAzureProxy.GetStorageAccountInfoAsync("defaultstorageaccount", System.Threading.CancellationToken.None);
 
-            var storageAccountInfo = new StorageAccountInfo { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = "https://defaultstorageaccount/", SubscriptionId = "SubId" };
+            var storageAccountInfo = new StorageAccountInfo { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = new("https://defaultstorageaccount/"), SubscriptionId = "SubId" };
             serviceProvider.AzureProxy.Setup(a => a.GetStorageAccountInfoAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult(storageAccountInfo));
             var info2 = await cachingAzureProxy.GetStorageAccountInfoAsync("defaultstorageaccount", System.Threading.CancellationToken.None);
 
@@ -83,7 +83,7 @@ namespace TesApi.Tests
                 PrepareAzureProxy(a);
                 a.Setup(a => a.GetBatchActivePoolCount()).Throws<Exception>();
             });
-            var cachingAzureProxy = serviceProvider.GetT();
+            var cachingAzureProxy = (IAzureProxy)serviceProvider.GetT();
 
             Assert.ThrowsException<Exception>(() => cachingAzureProxy.GetBatchActivePoolCount());
             serviceProvider.AzureProxy.Verify(mock => mock.GetBatchActivePoolCount(), Times.Exactly(4));
@@ -99,7 +99,7 @@ namespace TesApi.Tests
                 PrepareAzureProxy(a);
                 a.Setup(a => a.GetBatchActiveJobCount()).Throws<Exception>();
             });
-            var cachingAzureProxy = serviceProvider.GetT();
+            var cachingAzureProxy = (IAzureProxy)serviceProvider.GetT();
 
             Assert.ThrowsException<Exception>(() => cachingAzureProxy.GetBatchActiveJobCount());
             serviceProvider.AzureProxy.Verify(mock => mock.GetBatchActiveJobCount(), Times.Exactly(4));

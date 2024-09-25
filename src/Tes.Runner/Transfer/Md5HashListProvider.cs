@@ -43,7 +43,7 @@ namespace Tes.Runner.Transfer
 
             var rootHash = CreateBlockMd5CheckSumValue(data, 0, data.Length);
 
-            logger.LogInformation($"Root Hash: {rootHash} set in property: {BlobBlockApiHttpUtils.RootHashMetadataName}");
+            logger.LogInformation($"Root Hash: {rootHash} set in property: {BlobApiHttpUtils.RootHashMetadataName}");
 
             return rootHash;
         }

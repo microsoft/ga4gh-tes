@@ -22,16 +22,16 @@ namespace Tes.Runner.Test.Storage
         [TestInitialize]
         public void SetUp()
         {
-            resolutionPolicyHandler = new ResolutionPolicyHandler(new RuntimeOptions());
+            resolutionPolicyHandler = new(new(), BlobPipelineOptions.DefaultApiVersion);
 
-            singleFileInput = new FileInput
+            singleFileInput = new()
             {
                 Path = "/foo/bar",
                 SourceUrl = "https://foo.bar/cont?sig=sasToken",
-                SasStrategy = TransformationStrategy.None,
+                TransformationStrategy = TransformationStrategy.None,
             };
 
-            singleFileOutput = new FileOutput
+            singleFileOutput = new()
             {
                 Path = "/foo/bar",
                 TargetUrl = "https://foo.bar/cont/bar?sig=sasToken",
@@ -39,7 +39,7 @@ namespace Tes.Runner.Test.Storage
                 FileType = FileType.File
             };
 
-            directoryFileOutput = new FileOutput
+            directoryFileOutput = new()
             {
                 Path = "/foo/",
                 TargetUrl = "https://foo.bar/cont?sig=sasToken",
@@ -47,7 +47,7 @@ namespace Tes.Runner.Test.Storage
                 FileType = FileType.Directory
             };
 
-            patternFileOutput = new FileOutput
+            patternFileOutput = new()
             {
                 Path = "/data/*",
                 TargetUrl = "https://foo.bar/cont?sig=sasToken",
@@ -55,20 +55,19 @@ namespace Tes.Runner.Test.Storage
                 FileType = FileType.File
             };
 
-            fileInfoProvider = new Mock<IFileInfoProvider>();
+            fileInfoProvider = new();
 
             fileInfoProvider.Setup(x => x.GetExpandedFileName(It.IsAny<string>())).Returns<string>(f => f);
             fileInfoProvider.Setup(x => x.GetRootPathPair("/foo/bar"))
-                .Returns(() => new RootPathPair("/", "foo/bar"));
+                .Returns(() => new("/", "foo/bar"));
             fileInfoProvider.Setup(x => x.GetRootPathPair("/data/*"))
-                .Returns(() => new RootPathPair("/", "data/*"));
-
+                .Returns(() => new("/", "data/*"));
         }
 
         [TestMethod]
         public async Task ResolveOutputsAsync_FileOutputProvided_TargetUrlIsUsed()
         {
-            var nodeTask = new NodeTask() { Outputs = new List<FileOutput> { singleFileOutput } };
+            NodeTask nodeTask = new() { Outputs = [singleFileOutput] };
 
             //the path in the setup is /foo/bar, and the target URL is https://foo.bar/cont/bar?sig=sasToken
             //therefore the expected output URL is the target URL:
@@ -77,7 +76,7 @@ namespace Tes.Runner.Test.Storage
 
             fileInfoProvider.Setup(p =>
                     p.GetFilesBySearchPattern(It.IsAny<string>(), It.IsAny<string>()))
-                     .Returns(new List<FileResult> { new FileResult(singleFileOutput.Path!, "bar", "/") });
+                     .Returns([new(singleFileOutput.Path!, "bar", "/")]);
             fileInfoProvider.Setup(x => x.FileExists(singleFileOutput.Path!)).Returns(true);  // single file output exists
 
             var fileOperationInfoResolver =
@@ -97,17 +96,17 @@ namespace Tes.Runner.Test.Storage
         {
             var nodeTask = new NodeTask()
             {
-                Outputs = new List<FileOutput>
-                {
+                Outputs =
+                [
                     patternFileOutput // path: /data/*, target URL: https://foo.bar/cont/data?sig=sasToken
-                }
+                ]
             };
 
             fileInfoProvider.Setup(x => x.GetFilesBySearchPattern("/", "data/*"))
-                .Returns(new List<FileResult> {
-                    new FileResult("/data/foo.foo", "foo.foo", "/"),  //result of pattern file output
-                    new FileResult("/data/dir1/bar.foo", "dir1/bar.foo", "/")
-                });
+                .Returns([
+                    new("/data/foo.foo", "foo.foo", "/"),  //result of pattern file output
+                    new("/data/dir1/bar.foo", "dir1/bar.foo", "/")
+                ]);
 
             var fileOperationInfoResolver =
                 new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
@@ -129,17 +128,17 @@ namespace Tes.Runner.Test.Storage
         [TestMethod]
         public async Task ResolveOutputsAsync_DirectoryOutputProvided_TargetUrlDoesNotContainRootDirInPathProperty()
         {
-            var nodeTask = new NodeTask() { Outputs = new List<FileOutput> { directoryFileOutput } };
+            NodeTask nodeTask = new() { Outputs = [directoryFileOutput] };
             var rootDir = directoryFileOutput.Path;
             var file1 = "/dir1/file1.tmp";
             var file2 = "/dir1/dir2/file2.tmp";
 
             fileInfoProvider.Setup(x => x.GetAllFilesInDirectory(It.IsAny<string>()))
-                .Returns(new List<FileResult>
-                {
-                    new FileResult($"{rootDir}{file1}", $"{file1.TrimStart('/')}", $"{rootDir}"),
-                    new FileResult($"{rootDir}{file2}", $"{file2.TrimStart('/')}", $"{rootDir}")
-                });
+                .Returns(
+                [
+                    new($"{rootDir}{file1}", $"{file1.TrimStart('/')}", $"{rootDir}"),
+                    new($"{rootDir}{file2}", $"{file2.TrimStart('/')}", $"{rootDir}")
+                ]);
 
             var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
             var resolvedOutputs = await fileOperationInfoResolver.ResolveOutputsAsync();
@@ -155,24 +154,26 @@ namespace Tes.Runner.Test.Storage
         [TestMethod]
         public async Task ResolveOutputsAsync_PatternAndFileOutputProvided_FileOperationsAreResolved()
         {
-            var nodeTask = new NodeTask()
+            NodeTask nodeTask = new()
             {
-                Outputs = new List<FileOutput>
-                {
+                Outputs =
+                [
                     patternFileOutput,  // path: /data/*, target URL: https://foo.bar/cont/data?sig=sasToken
                     singleFileOutput    // path: /foo/bar, target URL: https://foo.bar/cont/bar?sig=sasToken
-                }
+                ]
             };
 
             fileInfoProvider.Setup(x => x.GetFilesBySearchPattern("/", "data/*"))
-                .Returns(new List<FileResult> {
-                    new FileResult("/data/foo.foo", "foo.foo", "/"),  //result of pattern file output
+                .Returns(
+                [
+                    new("/data/foo.foo", "foo.foo", "/"),  //result of pattern file output
                     new FileResult("/data/dir1/bar.foo", "dir1/bar.foo", "/")
-                });
+                ]);
             fileInfoProvider.Setup(x => x.GetFilesBySearchPattern("/", "foo/bar"))
-                .Returns(new List<FileResult> {
-                    new FileResult("/foo/bar", "bar", "/") // result of the single file output
-                });
+                .Returns(
+                [
+                    new("/foo/bar", "bar", "/") // result of the single file output
+                ]);
             fileInfoProvider.Setup(x => x.FileExists(singleFileOutput.Path!)).Returns(true);  // single file output exists
 
             var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
@@ -188,14 +189,49 @@ namespace Tes.Runner.Test.Storage
         }
 
         [TestMethod]
+        public async Task ResolveOutputsAsync_PatternAndFileOutputProvided_FileDoesntExist_FileOperationsAreResolved()
+        {
+            NodeTask nodeTask = new()
+            {
+                Outputs =
+                [
+                    patternFileOutput,  // path: /data/*, target URL: https://foo.bar/cont/data?sig=sasToken
+                    singleFileOutput    // path: /foo/bar, target URL: https://foo.bar/cont/bar?sig=sasToken
+                ]
+            };
+
+            fileInfoProvider.Setup(x => x.GetFilesBySearchPattern("/", "data/*"))
+                .Returns(
+                [
+                    new("/data/foo.foo", "foo.foo", "/"),  //result of pattern file output
+                    new("/data/dir1/bar.foo", "dir1/bar.foo", "/")
+                ]);
+            fileInfoProvider.Setup(x => x.GetFilesBySearchPattern("/", "foo/bar"))
+                .Returns(
+                [
+                    new("/foo/bar", "bar", "/") // result of the single file output
+                ]);
+            fileInfoProvider.Setup(x => x.FileExists(singleFileOutput.Path!)).Returns(false);  // single file output does NOT exist
+
+            var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
+            var resolvedOutputs = await fileOperationInfoResolver.ResolveOutputsAsync();
+
+            Assert.AreEqual(2, resolvedOutputs?.Count);
+            Assert.IsTrue(resolvedOutputs!.Any(r => r.FullFilePath.Equals("/data/foo.foo", StringComparison.OrdinalIgnoreCase)));
+            Assert.IsTrue(resolvedOutputs!.Any(r => r.FullFilePath.Equals("/data/dir1/bar.foo", StringComparison.OrdinalIgnoreCase)));
+            Assert.IsTrue(resolvedOutputs!.Any(r => r.TargetUri.ToString().Equals(@"https://foo.bar/cont/foo.foo?sig=sasToken", StringComparison.OrdinalIgnoreCase)));
+            Assert.IsTrue(resolvedOutputs!.Any(r => r.TargetUri.ToString().Equals(@"https://foo.bar/cont/dir1/bar.foo?sig=sasToken", StringComparison.OrdinalIgnoreCase)));
+        }
+
+        [TestMethod]
         public async Task ResolveInputsAsync_FileInputProvided_FileOperationsAreResolved()
         {
-            var nodeTask = new NodeTask()
+            NodeTask nodeTask = new()
             {
-                Inputs = new List<FileInput>
-                {
+                Inputs =
+                [
                     singleFileInput
-                }
+                ]
             };
 
             var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
