@@ -1,29 +1,24 @@
-﻿namespace TesApi.Web
-{
-    using System.Threading.Tasks;
-    using Microsoft.AspNetCore.Http;
-    using Tes.Repository;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+using Tes.Repository;
+
+namespace TesApi.Web.Controllers
+{
     /// <summary>
     /// Handles any controllers that throws an exception of type DatabaseOverloadedException
     /// </summary>
-    public class DatabaseOverloadedExceptionMiddleware
+    /// <param name="next">A function that can process an HTTP request.</param>
+    public class DatabaseOverloadedExceptionMiddleware(RequestDelegate next)
     {
-        private readonly RequestDelegate nextRequestDelegate;
-
-        /// <summary>
-        /// Default constructor
-        /// </summary>
-        /// <param name="next"></param>
-        public DatabaseOverloadedExceptionMiddleware(RequestDelegate next)
-        {
-            this.nextRequestDelegate = next;
-        }
+        private readonly RequestDelegate nextRequestDelegate = next;
 
         /// <summary>
         /// Default InvokeAsync implementation
         /// </summary>
-        /// <param name="context"></param>
+        /// <param name="context">Encapsulates all HTTP-specific information about an individual HTTP request.</param>
         /// <returns></returns>
         public async Task InvokeAsync(HttpContext context)
         {
