@@ -478,6 +478,7 @@ namespace TesApi.Web
                     {
                         c.RouteTemplate = "swagger/{documentName}/openapi.json";
                     })
+                    .UseMiddleware<Controllers.DatabaseOverloadedExceptionMiddleware>()
 
                     .IfThenElse(hostingEnvironment.IsDevelopment(),
                         s =>
