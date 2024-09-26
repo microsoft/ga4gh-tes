@@ -21,7 +21,7 @@ namespace TesApi.Web.Storage
         /// <summary>
         /// The storage account blob endpoint
         /// </summary>
-        public string BlobEndpoint { get; set; }
+        public System.Uri BlobEndpoint { get; set; }
 
         /// <summary>
         /// The subscription id associated with the storage account

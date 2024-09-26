@@ -1,0 +1,19 @@
+name: Format check on pull request
+on: pull_request
+jobs:
+  dotnet-format:
+    runs-on: ubuntu-latest
+
+    steps:     
+      - name: Check out code
+        uses: actions/checkout@v3.3.0
+        
+      - name: Remove nuget.config
+        uses: JesseTG/rm@v1.0.3
+        with:
+          path: nuget.config
+
+      - name: Run dotnet format
+        shell: bash
+        run: |
+            dotnet format --verify-no-changes --verbosity detailed

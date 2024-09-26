@@ -20,7 +20,6 @@ namespace TesApi.Web
     {
         private readonly IBatchScheduler _batchScheduler;
         private readonly ILogger _logger;
-        private readonly bool _isDisabled;
 
         /// <summary>
         /// Interval between each call to <see cref="IBatchPool.ServicePoolAsync(CancellationToken)"/>.
@@ -38,17 +37,12 @@ namespace TesApi.Web
         {
             _batchScheduler = batchScheduler ?? throw new ArgumentNullException(nameof(batchScheduler));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _isDisabled = batchSchedulingOptions.Value.Disable || batchSchedulingOptions.Value.UseLegacyAutopools;
         }
 
         /// <inheritdoc />
         public override Task StartAsync(CancellationToken cancellationToken)
         {
-            if (_isDisabled)
-            {
-                return Task.CompletedTask;
-            }
-
+            _logger.LogInformation("Batch Pools starting...");
             return base.StartAsync(cancellationToken);
         }
 
@@ -63,7 +57,7 @@ namespace TesApi.Web
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("Batch Pools started.");
-            _batchScheduler.LoadExistingPoolsAsync().Wait(stoppingToken); // Delay starting Scheduler until this completes to finish initializing BatchScheduler.
+            _batchScheduler.LoadExistingPoolsAsync(stoppingToken).Wait(stoppingToken); // Delay starting Scheduler until this completes to finish initializing BatchScheduler.
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -109,7 +103,7 @@ namespace TesApi.Web
                 }
                 catch (Exception exc)
                 {
-                    _logger.LogError(exc, "Batch pool {PoolId} threw an exception in ServiceBatchPools.", pool.Pool?.PoolId);
+                    _logger.LogError(exc, "Batch pool {PoolId} threw an exception in ServiceBatchPools.", pool.PoolId);
                 }
             }
 

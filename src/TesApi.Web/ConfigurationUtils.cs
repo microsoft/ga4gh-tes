@@ -3,9 +3,10 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.Models;
@@ -20,87 +21,86 @@ namespace TesApi.Web
     /// </summary>
     public class ConfigurationUtils
     {
-        private readonly IConfiguration configuration;
-        private readonly string defaultStorageAccountName;
         private readonly IStorageAccessProvider storageAccessProvider;
         private readonly ILogger<ConfigurationUtils> logger;
         private readonly IBatchQuotaProvider quotaProvider;
         private readonly IBatchSkuInformationProvider skuInformationProvider;
         private readonly BatchAccountResourceInformation batchAccountResourceInformation;
+        private readonly Uri allowedVmSizesOverride;
 
         /// <summary>
         /// The constructor
         /// </summary>
-        /// <param name="configuration"><see cref="IConfiguration"/></param>
-        /// <param name="defaultStorageOptions">Configuration of <see cref="Options.StorageOptions"/></param>
         /// <param name="storageAccessProvider"><see cref="IStorageAccessProvider"/></param>
         /// <param name="quotaProvider"><see cref="IBatchQuotaProvider"/>></param>
         /// <param name="skuInformationProvider"><see cref="IBatchSkuInformationProvider"/>></param>
         /// <param name="batchAccountResourceInformation"><see cref="BatchAccountResourceInformation"/></param>
+        /// <param name="terraOptions"><see cref="Management.Configuration.TerraOptions"/></param>
         /// <param name="logger"><see cref="ILogger"/></param>
         public ConfigurationUtils(
-            IConfiguration configuration,
-            IOptions<Options.StorageOptions> defaultStorageOptions,
             IStorageAccessProvider storageAccessProvider,
             IBatchQuotaProvider quotaProvider,
             IBatchSkuInformationProvider skuInformationProvider,
             BatchAccountResourceInformation batchAccountResourceInformation,
+            IOptions<Management.Configuration.TerraOptions> terraOptions,
             ILogger<ConfigurationUtils> logger)
         {
-            ArgumentNullException.ThrowIfNull(configuration);
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
             ArgumentNullException.ThrowIfNull(quotaProvider);
             ArgumentNullException.ThrowIfNull(batchAccountResourceInformation);
+
             if (string.IsNullOrEmpty(batchAccountResourceInformation.Region))
             {
                 throw new ArgumentException(
-                    $"The batch information provided does not include region. Batch information:{batchAccountResourceInformation}");
+                    $"The batch information provided does not include region. Batch information:{batchAccountResourceInformation}",
+                    nameof(batchAccountResourceInformation));
             }
+
             ArgumentNullException.ThrowIfNull(logger);
 
-            this.configuration = configuration;
-            this.defaultStorageAccountName = defaultStorageOptions.Value.DefaultAccountName;
             this.storageAccessProvider = storageAccessProvider;
             this.logger = logger;
             this.quotaProvider = quotaProvider;
             this.skuInformationProvider = skuInformationProvider;
             this.batchAccountResourceInformation = batchAccountResourceInformation;
+            this.allowedVmSizesOverride = string.IsNullOrWhiteSpace(terraOptions.Value.AllowedVmSizes) ? default : new(terraOptions.Value.AllowedVmSizes);
         }
 
         /// <summary>
         /// Combines the allowed-vm-sizes configuration file and list of supported+available VMs to produce the supported-vm-sizes file and tag incorrect 
         /// entries in the allowed-vm-sizes file with a warning. Sets the AllowedVmSizes configuration key.
         /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        public async Task ProcessAllowedVmSizesConfigurationFileAsync()
+        public async Task<List<string>> ProcessAllowedVmSizesConfigurationFileAsync(CancellationToken cancellationToken)
         {
-            var supportedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/supported-vm-sizes";
-            var allowedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/allowed-vm-sizes";
+            var supportedVmSizesUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync("/configuration/supported-vm-sizes", cancellationToken);
+            var allowedVmSizesUrl = allowedVmSizesOverride is null ? await storageAccessProvider.GetInternalTesBlobUrlAsync("/configuration/allowed-vm-sizes", cancellationToken) : allowedVmSizesOverride;
 
-            var supportedVmSizes = (await skuInformationProvider.GetVmSizesAndPricesAsync(batchAccountResourceInformation.Region)).ToList();
-            var batchAccountQuotas = await quotaProvider.GetVmCoreQuotaAsync(lowPriority: false);
+            var supportedVmSizes = (await skuInformationProvider.GetVmSizesAndPricesAsync(batchAccountResourceInformation.Region, cancellationToken)).ToList();
+            var batchAccountQuotas = await quotaProvider.GetVmCoreQuotaAsync(lowPriority: false, cancellationToken: cancellationToken);
             var supportedVmSizesFileContent = VirtualMachineInfoToFixedWidthColumns(supportedVmSizes.OrderBy(v => v.VmFamily).ThenBy(v => v.VmSize), batchAccountQuotas);
 
             try
             {
-                await storageAccessProvider.UploadBlobAsync(supportedVmSizesFilePath, supportedVmSizesFileContent);
+                await storageAccessProvider.UploadBlobAsync(supportedVmSizesUrl, supportedVmSizesFileContent, cancellationToken);
             }
             catch
             {
-                logger.LogWarning($"Failed to write {supportedVmSizesFilePath}. Updated VM size information will not be available in the configuration directory. This will not impact the workflow execution.");
+                logger.LogWarning("Failed to write {SupportedVmSizesUrl}. Updated VM size information will not be available in the configuration directory. This will not impact the workflow execution.", supportedVmSizesUrl.AbsolutePath);
             }
 
-            var allowedVmSizesFileContent = await storageAccessProvider.DownloadBlobAsync(allowedVmSizesFilePath);
+            var allowedVmSizesFileContent = await storageAccessProvider.DownloadBlobAsync(allowedVmSizesUrl, cancellationToken);
 
             if (allowedVmSizesFileContent is null)
             {
-                logger.LogWarning($"Unable to read from {allowedVmSizesFilePath}. All supported VM sizes will be eligible for Azure Batch task scheduling.");
-                return;
+                logger.LogWarning("Unable to read from {AllowedVmSizesUrl}. All supported VM sizes will be eligible for Azure Batch task scheduling.", allowedVmSizesUrl.AbsolutePath);
+                return supportedVmSizes.Select(v => v.VmSize).Distinct().ToList();
             }
 
             // Read the allowed-vm-sizes configuration file and remove any previous warnings (those start with "<" following the VM size or family name)
             var allowedVmSizesLines = allowedVmSizesFileContent
-                .Split(new[] { '\r', '\n' })
+                .Split(['\r', '\n'])
                 .Select(line => line.Split('<', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault() ?? string.Empty)
                 .ToList();
 
@@ -118,7 +118,7 @@ namespace TesApi.Web
 
             if (allowedVmSizesButNotSupported.Any())
             {
-                logger.LogWarning($"The following VM sizes or families are listed in {allowedVmSizesFilePath}, but are either misspelled or not supported in your region: {string.Join(", ", allowedVmSizesButNotSupported)}. These will be ignored.");
+                logger.LogWarning("The following VM sizes or families are listed in {AllowedVmSizesUrl}, but are either misspelled or not supported in your region: {AllowedVmSizesButNotSupported}. These will be ignored.", allowedVmSizesUrl.AbsolutePath, string.Join(", ", allowedVmSizesButNotSupported));
 
                 var linesWithWarningsAdded = allowedVmSizesLines.ConvertAll(line =>
                     allowedVmSizesButNotSupported.Contains(line, StringComparer.OrdinalIgnoreCase)
@@ -132,19 +132,16 @@ namespace TesApi.Web
                 {
                     try
                     {
-                        await storageAccessProvider.UploadBlobAsync(allowedVmSizesFilePath, allowedVmSizesFileContentWithWarningsAdded);
+                        await storageAccessProvider.UploadBlobAsync(allowedVmSizesUrl, allowedVmSizesFileContentWithWarningsAdded, cancellationToken);
                     }
                     catch
                     {
-                        logger.LogWarning($"Failed to write warnings to {allowedVmSizesFilePath}.");
+                        logger.LogWarning("Failed to write warnings to {AllowedVmSizesUrl}.", allowedVmSizesUrl.AbsolutePath);
                     }
                 }
             }
 
-            if (allowedAndSupportedVmSizes.Any())
-            {
-                this.configuration["AllowedVmSizes"] = string.Join(',', allowedAndSupportedVmSizes);
-            }
+            return allowedAndSupportedVmSizes;
         }
 
         /// <summary>
@@ -163,14 +160,14 @@ namespace TesApi.Web
                 {
                     v.VmInfoWithDedicatedPrice.VmSize,
                     v.VmInfoWithDedicatedPrice.VmFamily,
-                    PricePerHourDedicated = v.VmInfoWithDedicatedPrice.PricePerHour?.ToString("###0.000"),
-                    PricePerHourLowPri = v.PricePerHourLowPri is not null ? v.PricePerHourLowPri?.ToString("###0.000") : "N/A",
-                    MemoryInGiB = v.VmInfoWithDedicatedPrice.MemoryInGiB?.ToString(),
-                    NumberOfCores = v.VmInfoWithDedicatedPrice.VCpusAvailable.ToString(),
-                    ResourceDiskSizeInGiB = v.VmInfoWithDedicatedPrice.ResourceDiskSizeInGiB.ToString(),
+                    PricePerHourDedicated = v.VmInfoWithDedicatedPrice.PricePerHour?.ToString("###0.000", CultureInfo.InvariantCulture),
+                    PricePerHourLowPri = v.PricePerHourLowPri is not null ? v.PricePerHourLowPri?.ToString("###0.000", CultureInfo.InvariantCulture) : "N/A",
+                    MemoryInGiB = v.VmInfoWithDedicatedPrice.MemoryInGiB?.ToString(CultureInfo.InvariantCulture),
+                    NumberOfCores = NullableIntToString(v.VmInfoWithDedicatedPrice.VCpusAvailable),
+                    ResourceDiskSizeInGiB = NullableDoubleToString(v.VmInfoWithDedicatedPrice.ResourceDiskSizeInGiB),
                     DedicatedQuota = batchAccountQuotas.IsDedicatedAndPerVmFamilyCoreQuotaEnforced
-                        ? batchAccountQuotas.DedicatedCoreQuotas.FirstOrDefault(q => q.VmFamilyName.Equals(v.VmInfoWithDedicatedPrice.VmFamily, StringComparison.OrdinalIgnoreCase))?.CoreQuota.ToString() ?? "N/A"
-                        : batchAccountQuotas.NumberOfCores.ToString()
+                        ? batchAccountQuotas.DedicatedCoreQuotas.FirstOrDefault(q => q.VmFamilyName.Equals(v.VmInfoWithDedicatedPrice.VmFamily, StringComparison.OrdinalIgnoreCase))?.CoreQuota.ToString(CultureInfo.InvariantCulture) ?? "N/A"
+                        : batchAccountQuotas.NumberOfCores.ToString(CultureInfo.InvariantCulture)
                 });
 
             vmInfosAsStrings = vmInfosAsStrings.Prepend(new { VmSize = string.Empty, VmFamily = string.Empty, PricePerHourDedicated = "dedicated", PricePerHourLowPri = "low pri", MemoryInGiB = "(GiB)", NumberOfCores = string.Empty, ResourceDiskSizeInGiB = "(GiB)", DedicatedQuota = $"quota {(batchAccountQuotas.IsDedicatedAndPerVmFamilyCoreQuotaEnforced ? "(per fam.)" : "(total)")}" });
@@ -188,6 +185,12 @@ namespace TesApi.Web
             var fixedWidthVmInfos = vmInfosAsStrings.Select(v => $"{v.VmSize.PadRight(sizeColWidth)} {v.VmFamily.PadRight(seriesColWidth)} {v.PricePerHourDedicated.PadLeft(priceDedicatedColumnWidth)}  {v.PricePerHourLowPri.PadLeft(priceLowPriColumnWidth)}  {v.MemoryInGiB.PadLeft(memoryColumnWidth)}  {v.NumberOfCores.PadLeft(coresColumnWidth)}  {v.ResourceDiskSizeInGiB.PadLeft(diskColumnWidth)}  {v.DedicatedQuota.PadLeft(dedicatedQuotaColumnWidth)}");
 
             return string.Join('\n', fixedWidthVmInfos);
+
+            static string NullableDoubleToString(double? value)
+                => value.HasValue ? value.Value.ToString(CultureInfo.InvariantCulture) : string.Empty;
+
+            static string NullableIntToString(int? value)
+                => value.HasValue ? value.Value.ToString(CultureInfo.InvariantCulture) : string.Empty;
         }
     }
 }

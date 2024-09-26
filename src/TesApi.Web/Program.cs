@@ -2,6 +2,12 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
+using Azure.ResourceManager;
+using CommonUtilities;
+using CommonUtilities.AzureCloud;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -9,6 +15,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.ApplicationInsights;
+using TesApi.Web.Management;
+using TesApi.Web.Options;
+using TesApi.Web.Runner;
 
 namespace TesApi.Web
 {
@@ -21,8 +30,18 @@ namespace TesApi.Web
         /// Main
         /// </summary>
         /// <param name="args"></param>
-        public static void Main(string[] args)
-            => CreateWebHostBuilder(args).Build().Run();
+        public static async Task Main(string[] args)
+        {
+            try
+            {
+                await CreateWebHostBuilder(args).Build().RunAsync();
+            }
+            catch (Exception exc)
+            {
+                Console.WriteLine($"Main critical error: {exc.Message} {exc}");
+                throw;
+            }
+        }
 
         /// <summary>
         /// Create the web host builder.
@@ -31,24 +50,36 @@ namespace TesApi.Web
         /// <returns><see cref="IWebHostBuilder"/></returns>
         public static IWebHostBuilder CreateWebHostBuilder(string[] args)
         {
+            Console.WriteLine($"TES v{Startup.TesVersion} Build: {Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>().InformationalVersion}");
+
             Options.ApplicationInsightsOptions applicationInsightsOptions = default;
             var builder = WebHost.CreateDefaultBuilder<Startup>(args);
 
-            builder.ConfigureAppConfiguration((context, config) =>
+            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
             {
-                config.AddEnvironmentVariables(); // For Docker-Compose
-                applicationInsightsOptions = GetApplicationInsightsConnectionString(config.Build());
+                builder.UseUrls("http://0.0.0.0:80");
+            }
+
+            builder.ConfigureAppConfiguration((context, configBuilder) =>
+            {
+                configBuilder.AddEnvironmentVariables();
+                var config = configBuilder.Build();
+                Startup.AzureCloudConfig = GetAzureCloudConfig(config);
+                StorageUrlUtils.BlobEndpointHostNameSuffix = $".blob.{Startup.AzureCloudConfig.Suffixes.StorageSuffix}";
+                applicationInsightsOptions = GetApplicationInsightsConnectionString(
+                    config,
+                    Startup.AzureCloudConfig.ArmEnvironment.Value,
+                    string.IsNullOrWhiteSpace(config["AzureServicesAuthConnectionString"]) ? null : new AzureServicesConnectionStringCredential(new(config, Startup.AzureCloudConfig)));
 
                 if (!string.IsNullOrEmpty(applicationInsightsOptions?.ConnectionString))
                 {
-                    config.AddApplicationInsightsSettings(applicationInsightsOptions.ConnectionString, developerMode: context.HostingEnvironment.IsDevelopment() ? true : null);
+                    configBuilder.AddApplicationInsightsSettings(applicationInsightsOptions.ConnectionString, developerMode: context.HostingEnvironment.IsDevelopment() ? true : null);
                 }
 
-                static Options.ApplicationInsightsOptions GetApplicationInsightsConnectionString(IConfiguration configuration)
+                static ApplicationInsightsOptions GetApplicationInsightsConnectionString(IConfiguration configuration, ArmEnvironment armEnvironment, Azure.Core.TokenCredential credential)
                 {
                     var applicationInsightsOptions = configuration.GetSection(Options.ApplicationInsightsOptions.SectionName).Get<Options.ApplicationInsightsOptions>();
                     var applicationInsightsAccountName = applicationInsightsOptions?.AccountName;
-                    Console.WriteLine($"ApplicationInsightsAccountName: {applicationInsightsAccountName}");
 
                     if (applicationInsightsAccountName is null || !string.IsNullOrWhiteSpace(applicationInsightsOptions?.ConnectionString))
                     {
@@ -57,17 +88,15 @@ namespace TesApi.Web
 
                     var applicationInsightsConnectionString = configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
 
+                    if (string.IsNullOrWhiteSpace(applicationInsightsConnectionString) && credential is not null)
+                    {
+                        applicationInsightsConnectionString = ArmResourceInformationFinder.GetAppInsightsConnectionStringFromAccountNameAsync(applicationInsightsAccountName, credential, armEnvironment, CancellationToken.None).Result;
+                    }
+
                     if (!string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
                     {
                         applicationInsightsOptions ??= new Options.ApplicationInsightsOptions();
                         applicationInsightsOptions.ConnectionString = applicationInsightsConnectionString;
-                        return applicationInsightsOptions;
-                    }
-
-                    var instrumentationKey = AzureProxy.GetAppInsightsInstrumentationKeyAsync(applicationInsightsAccountName).Result;
-                    if (!string.IsNullOrWhiteSpace(instrumentationKey))
-                    {
-                        applicationInsightsOptions.ConnectionString = $"InstrumentationKey={instrumentationKey}";
                     }
 
                     return applicationInsightsOptions;
@@ -93,8 +122,11 @@ namespace TesApi.Web
                         logging.AddConsole();
                     }
 
-                    // Optional: Apply filters to configure LogLevel Trace or above is sent to
-                    // ApplicationInsights for all categories.
+                    // Optional: Apply filters to configure LogLevel
+                    // Trace or above is sent to ApplicationInsights for all categories.
+
+                    // Additional filtering For category starting in "System",
+                    // only Warning or above will be sent to Application Insights.
                     logging.AddFilter<ApplicationInsightsLoggerProvider>("System", LogLevel.Warning);
 
                     // Additional filtering For category starting in "Microsoft",
@@ -104,6 +136,10 @@ namespace TesApi.Web
                     // The following configures LogLevel Information or above to be sent to
                     // Application Insights for categories starting with "TesApi".
                     logging.AddFilter<ApplicationInsightsLoggerProvider>("TesApi", LogLevel.Information);
+
+                    // The following configures LogLevel Information or above to be sent to
+                    // Application Insights for categories starting with "Tes".
+                    logging.AddFilter<ApplicationInsightsLoggerProvider>("Tes", LogLevel.Information);
                 }
                 catch (Exception exc)
                 {
@@ -113,6 +149,14 @@ namespace TesApi.Web
             });
 
             return builder;
+
+            static AzureCloudConfig GetAzureCloudConfig(IConfiguration configuration)
+            {
+                var tesOptions = new GeneralOptions();
+                configuration.Bind(GeneralOptions.SectionName, tesOptions);
+                Console.WriteLine($"tesOptions.AzureCloudName: {tesOptions.AzureCloudName}");
+                return AzureCloudConfig.FromKnownCloudNameAsync(cloudName: tesOptions.AzureCloudName, azureCloudMetadataUrlApiVersion: tesOptions.AzureCloudMetadataUrlApiVersion).Result;
+            }
         }
     }
 }

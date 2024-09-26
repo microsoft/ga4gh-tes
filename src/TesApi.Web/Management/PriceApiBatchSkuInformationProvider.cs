@@ -5,12 +5,14 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using LazyCache;
+using CommonUtilities.AzureCloud;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Tes.ApiClients;
 using Tes.Models;
-using TesApi.Web.Management.Clients;
 
 namespace TesApi.Web.Management
 {
@@ -20,7 +22,8 @@ namespace TesApi.Web.Management
     public class PriceApiBatchSkuInformationProvider : IBatchSkuInformationProvider
     {
         private readonly PriceApiClient priceApiClient;
-        private readonly IAppCache appCache;
+        private readonly IMemoryCache appCache;
+        private readonly AzureCloudConfig azureCloudConfig;
         private readonly ILogger logger;
 
         /// <summary>
@@ -28,15 +31,18 @@ namespace TesApi.Web.Management
         /// </summary>
         /// <param name="appCache">Cache instance. If null, calls to the retail pricing API won't be cached.</param>
         /// <param name="priceApiClient">Retail pricing API client.</param>
+        /// <param name="azureCloudConfig"></param>
         /// <param name="logger">Logger instance. </param>
-        public PriceApiBatchSkuInformationProvider(IAppCache appCache, PriceApiClient priceApiClient,
+        public PriceApiBatchSkuInformationProvider(IMemoryCache appCache, PriceApiClient priceApiClient, AzureCloudConfig azureCloudConfig,
             ILogger<PriceApiBatchSkuInformationProvider> logger)
         {
             ArgumentNullException.ThrowIfNull(priceApiClient);
+            ArgumentNullException.ThrowIfNull(azureCloudConfig);
             ArgumentNullException.ThrowIfNull(logger);
 
             this.appCache = appCache;
             this.priceApiClient = priceApiClient;
+            this.azureCloudConfig = azureCloudConfig;
             this.logger = logger;
         }
 
@@ -44,65 +50,82 @@ namespace TesApi.Web.Management
         /// Constructor of PriceApiBatchSkuInformationProvider.
         /// </summary>
         /// <param name="priceApiClient">Retail pricing API client.</param>
+        /// <param name="azureCloudConfig"></param>
         /// <param name="logger">Logger instance.</param>
-        public PriceApiBatchSkuInformationProvider(PriceApiClient priceApiClient,
+        public PriceApiBatchSkuInformationProvider(PriceApiClient priceApiClient, AzureCloudConfig azureCloudConfig,
             ILogger<PriceApiBatchSkuInformationProvider> logger)
-            : this(null, priceApiClient, logger)
+            : this(null, priceApiClient, azureCloudConfig, logger)
         {
         }
 
         /// <inheritdoc />
-        public async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsync(string region)
+        public async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsync(string region, CancellationToken cancellationToken)
         {
             if (appCache is null)
             {
-                return await GetVmSizesAndPricesAsyncImpl(region);
+                return await GetVmSizesAndPricesAsyncImpl(region, cancellationToken);
             }
 
-            logger.LogInformation($"Trying to get pricing information from the cache for region: {region}.");
+            logger.LogInformation("Trying to get pricing information from the cache for region: {Region}.", region);
 
-            return await appCache.GetOrAddAsync(region, async () => await GetVmSizesAndPricesAsyncImpl(region));
+            return await appCache.GetOrCreateAsync(region, async entry => { entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1); return await GetVmSizesAndPricesAsyncImpl(region, cancellationToken); });
         }
 
-        private async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsyncImpl(string region)
+        private async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsyncImpl(string region, CancellationToken cancellationToken)
         {
-            logger.LogInformation($"Getting VM sizes and price information for region:{region}");
+            logger.LogInformation("Getting VM sizes and price information for region: {Region}", region);
 
-            var localVmSizeInfoForBatchSupportedSkus = (await GetLocalVmSizeInformationForBatchSupportedSkusAsync()).Where(x => x.RegionsAvailable.Contains(region, StringComparer.OrdinalIgnoreCase));
-            var pricingItems = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(region)
-                .ToListAsync();
+            var localVmSizeInfoForBatchSupportedSkus = (await GetLocalVmSizeInformationForBatchSupportedSkusAsync(cancellationToken)).Where(x => x.RegionsAvailable.Contains(region, StringComparer.OrdinalIgnoreCase)).ToList();
 
-            logger.LogInformation($"Received {pricingItems.Count} pricing items");
+            logger.LogInformation("localVmSizeInfoForBatchSupportedSkus.Count: {CountOfPrepreparedSkuRecordsInRegion}", localVmSizeInfoForBatchSupportedSkus.Count);
 
-            var vmInfoList = new List<VirtualMachineInformation>();
-
-            foreach (var vm in localVmSizeInfoForBatchSupportedSkus)
+            try
             {
+                var pricingItems = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(region, cancellationToken).ToListAsync(cancellationToken);
 
-                var instancePricingInfo = pricingItems.Where(p => p.armSkuName == vm.VmSize).ToList();
-                var normalPriorityInfo = instancePricingInfo.FirstOrDefault(s =>
-                    s.skuName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase));
-                var lowPriorityInfo = instancePricingInfo.FirstOrDefault(s =>
-                    !s.skuName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase));
+                logger.LogInformation("Received {CountOfSkuPrice} pricing items", pricingItems.Count);
 
-                if (lowPriorityInfo is not null)
+                if (pricingItems == null || pricingItems.Count == 0)
                 {
-                    vmInfoList.Add(CreateVirtualMachineInfoFromReference(vm, true,
-                        Convert.ToDecimal(lowPriorityInfo.unitPrice)));
+                    logger.LogWarning("No pricing information received from the retail pricing API. Reverting to local pricing data.");
+                    return new List<VirtualMachineInformation>(localVmSizeInfoForBatchSupportedSkus);
                 }
 
-                if (normalPriorityInfo is not null)
+                var vmInfoList = new List<VirtualMachineInformation>();
+
+                foreach (var vm in localVmSizeInfoForBatchSupportedSkus.Where(v => !v.LowPriority))
                 {
-                    vmInfoList.Add(CreateVirtualMachineInfoFromReference(vm, false,
-                        Convert.ToDecimal(normalPriorityInfo.unitPrice)));
+
+                    var instancePricingInfo = pricingItems.Where(p => p.armSkuName == vm.VmSize && p.effectiveStartDate < DateTime.UtcNow).ToList();
+                    var normalPriorityInfo = instancePricingInfo.Where(s =>
+                        !s.skuName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase)).MaxBy(p => p.effectiveStartDate);
+                    var lowPriorityInfo = instancePricingInfo.Where(s =>
+                        s.skuName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase)).MaxBy(p => p.effectiveStartDate);
+
+                    if (lowPriorityInfo is not null)
+                    {
+                        vmInfoList.Add(CreateVirtualMachineInfoFromReference(vm, true,
+                            Convert.ToDecimal(lowPriorityInfo.unitPrice)));
+                    }
+
+                    if (normalPriorityInfo is not null)
+                    {
+                        vmInfoList.Add(CreateVirtualMachineInfoFromReference(vm, false,
+                            Convert.ToDecimal(normalPriorityInfo.unitPrice)));
+                    }
                 }
+
+                logger.LogInformation(
+                    "Returning {CountOfSupportedVmSkus} Vm information entries with pricing for Azure Batch Supported Vm types", vmInfoList.Count);
+
+                return vmInfoList;
             }
-
-            logger.LogInformation(
-                $"Returning {vmInfoList.Count} Vm information entries with pricing for Azure Batch Supported Vm types");
-
-            return vmInfoList;
-
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    $"Exception encountered retrieving live pricing data, reverting to local pricing data.");
+                return new(localVmSizeInfoForBatchSupportedSkus.Select(sku => { sku.RegionsAvailable = []; return sku; }));
+            }
         }
 
         private static VirtualMachineInformation CreateVirtualMachineInfoFromReference(
@@ -117,15 +140,18 @@ namespace TesApi.Web.Management
                 ResourceDiskSizeInGiB = vmReference.ResourceDiskSizeInGiB,
                 VmFamily = vmReference.VmFamily,
                 VmSize = vmReference.VmSize,
-                RegionsAvailable = vmReference.RegionsAvailable,
-                HyperVGenerations = vmReference.HyperVGenerations
+                RegionsAvailable = [], // Not used by TES outside of this method & this array inflates object sizes in task returns and task repository needlessly.
+                HyperVGenerations = vmReference.HyperVGenerations,
+                EncryptionAtHostSupported = vmReference.EncryptionAtHostSupported
             };
 
-        private static async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync()
+        private async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync(CancellationToken cancellationToken)
         {
+            var filePath = Path.Combine(AppContext.BaseDirectory, $"BatchSupportedVmSizeInformation_{azureCloudConfig.Name.ToUpperInvariant()}.json");
+            logger.LogInformation("Reading local VM size information from file: {0}", filePath);
+
             return JsonConvert.DeserializeObject<List<VirtualMachineInformation>>(
-                await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,
-                    "BatchSupportedVmSizeInformation.json")));
+                await File.ReadAllTextAsync(filePath, cancellationToken));
         }
     }
 }

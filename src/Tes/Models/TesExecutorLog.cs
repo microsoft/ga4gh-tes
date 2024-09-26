@@ -14,8 +14,10 @@
 using System;
 using System.Runtime.Serialization;
 using System.Text;
-using Newtonsoft.Json;
+using Tes.Converters;
 using Tes.Utilities;
+using NewtonsoftJson = Newtonsoft.Json;
+using STJSerialization = System.Text.Json.Serialization;
 
 namespace Tes.Models
 {
@@ -32,6 +34,8 @@ namespace Tes.Models
         /// Time the executor started, in RFC 3339 format.
         /// </summary>
         /// <value>Time the executor started, in RFC 3339 format.</value>
+        [STJSerialization.JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339_JsonText))]
+        [NewtonsoftJson.JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339_Newtonsoft))]
         [DataMember(Name = "start_time")]
         public DateTimeOffset? StartTime { get; set; }
 
@@ -39,6 +43,8 @@ namespace Tes.Models
         /// Time the executor ended, in RFC 3339 format.
         /// </summary>
         /// <value>Time the executor ended, in RFC 3339 format.</value>
+        [STJSerialization.JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339_JsonText))]
+        [NewtonsoftJson.JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339_Newtonsoft))]
         [DataMember(Name = "end_time")]
         public DateTimeOffset? EndTime { get; set; }
 
@@ -83,7 +89,7 @@ namespace Tes.Models
         /// </summary>
         /// <returns>JSON string presentation of the object</returns>
         public string ToJson()
-            => JsonConvert.SerializeObject(this, Formatting.Indented);
+            => NewtonsoftJson.JsonConvert.SerializeObject(this, NewtonsoftJson.Formatting.Indented);
 
         /// <summary>
         /// Returns true if objects are equal

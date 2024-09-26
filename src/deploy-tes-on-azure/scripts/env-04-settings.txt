@@ -1,6 +1,4 @@
-﻿UsePreemptibleVmsOnly=false
-DisableBatchScheduling=false
-AzureOfferDurableId=MS-AZR-0003p
+UsePreemptibleVmsOnly=false
 Gen2BatchImageOffer=ubuntu-hpc
 Gen2BatchImagePublisher=microsoft-dsvm
 Gen2BatchImageSku=2004
@@ -13,8 +11,6 @@ Gen1BatchImageVersion=latest
 Gen1BatchNodeAgentSkuId=batch.node.ubuntu 20.04
 BatchPoolRotationForcedDays=7
 BatchPrefix={DefaultName}
-MarthaUrl=
-MarthaKeyVaultName=
-MarthaSecretName=
+DrsHubUrl=
 GlobalStartTaskPath=/configuration/start-task.sh
 GlobalManagedIdentity=

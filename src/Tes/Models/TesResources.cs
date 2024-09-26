@@ -30,14 +30,14 @@ namespace Tes.Models
         public TesResources()
             => NewtonsoftJsonSafeInit.SetDefaultSettings();
 
-        public enum SupportedBackendParameters { vm_size, workflow_execution_identity };
+        public enum SupportedBackendParameters { internal_path_prefix, vm_size, workflow_execution_identity };
 
         /// <summary>
         /// Requested number of CPUs
         /// </summary>
         /// <value>Requested number of CPUs</value>
         [DataMember(Name = "cpu_cores")]
-        public long? CpuCores { get; set; }
+        public int? CpuCores { get; set; }
 
         /// <summary>
         /// Is the task allowed to run on preemptible compute instances (e.g. AWS Spot)?

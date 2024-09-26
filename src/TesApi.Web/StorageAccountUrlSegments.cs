@@ -22,6 +22,8 @@ namespace TesApi.Web
         private static readonly Regex localPathRegex = GetLocalPathRegex();
         private static readonly Regex accountNameRegex = GetAccountNameRegex();
 
+        private string sasToken;
+
         /// <summary>
         /// Create from provided segments
         /// </summary>
@@ -29,10 +31,10 @@ namespace TesApi.Web
         /// <param name="containerName">Container name</param>
         /// <param name="blobName">Blob name</param>
         /// <param name="sasToken">SAS token</param>
-        public StorageAccountUrlSegments(string blobEndpoint, string containerName, string blobName = "", string sasToken = "")
+        public StorageAccountUrlSegments(Uri blobEndpoint, string containerName, string blobName = "", string sasToken = "")
         {
-            AccountName = accountNameRegex.Replace(blobEndpoint, "$1");
-            BlobEndpoint = blobEndpoint.TrimEnd('/');
+            AccountName = accountNameRegex.Replace(blobEndpoint.AbsoluteUri, "$1");
+            BlobEndpoint = blobEndpoint;
             ContainerName = containerName;
             BlobName = blobName;
             SasToken = sasToken;
@@ -47,9 +49,9 @@ namespace TesApi.Web
         /// </summary>
         public string AccountName { get; private set; }
         /// <summary>
-        /// The blob endpoint, for example http://myaccount.blob.core.windows.net. Is empty for local paths.
+        /// The blob endpoint, for example http://myaccount.blob.core.windows.net. Is <c>null</c> for local paths.
         /// </summary>
-        public string BlobEndpoint { get; private set; }
+        public Uri BlobEndpoint { get; private set; }
         /// <summary>
         /// The container name
         /// </summary>
@@ -61,7 +63,11 @@ namespace TesApi.Web
         /// <summary>
         /// The SAS token
         /// </summary>
-        public string SasToken { get; set; }
+        public string SasToken
+        {
+            get => sasToken;
+            set => sasToken = value?.TrimStart('?');
+        }
 
         /// <summary>
         /// Tries to parse the provided string. The following formats are supported:
@@ -78,7 +84,7 @@ namespace TesApi.Web
                 result = new StorageAccountUrlSegments
                 {
                     AccountName = uri.Host.Split('.', 2)[0],
-                    BlobEndpoint = $"{uri.Scheme}://{uri.Host}",
+                    BlobEndpoint = new($"{uri.Scheme}://{uri.Host}"),
                     ContainerName = uri.Segments.Skip(1).FirstOrDefault()?.Trim('/') ?? string.Empty,
                     BlobName = string.Join(string.Empty, uri.Segments.Skip(2)).Trim('/'),
                     SasToken = uri.Query
@@ -94,7 +100,7 @@ namespace TesApi.Web
                 result = new StorageAccountUrlSegments
                 {
                     AccountName = match.Groups[1].Value,
-                    BlobEndpoint = string.Empty,
+                    BlobEndpoint = null,
                     ContainerName = match.Groups[2].Value,
                     BlobName = match.Groups[3].Value,
                     SasToken = string.Empty
@@ -123,7 +129,7 @@ namespace TesApi.Web
         /// </summary>
         /// <returns>Blob URL</returns>
         public string ToUriString()
-            => $"{BlobEndpoint}/{ContainerName}/{BlobName}{SasToken}".TrimEnd('/');
+            => $"{BlobEndpoint.AbsoluteUri.TrimEnd('/')}/{ContainerName}/{BlobName}{QueryToken()}{SasToken}".TrimEnd('/');
 
         /// <summary>
         /// Returns the Blob URI
@@ -136,5 +142,7 @@ namespace TesApi.Web
         /// Returns true if the segments represent a container
         /// </summary>
         public bool IsContainer => !string.IsNullOrEmpty(ContainerName) && string.IsNullOrEmpty(BlobName);
+
+        private string QueryToken() => !String.IsNullOrEmpty(SasToken) ? "?" : String.Empty;
     }
 }

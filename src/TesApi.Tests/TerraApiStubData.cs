@@ -2,7 +2,9 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
+using Tes.ApiClients.Models.Terra;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
 
@@ -12,22 +14,37 @@ public class TerraApiStubData
 {
     public const string LandingZoneApiHost = "https://landingzone.host";
     public const string WsmApiHost = "https://wsm.host";
+    public const string SamApiHost = "https://sam.host";
     public const string ResourceGroup = "mrg-terra-dev-previ-20191228";
-    public const string WorkspaceAccountName = "fooaccount";
-    public const string WorkspaceContainerName = "foocontainer";
+    public const string WorkspaceAccountName = "lzaccount1";
     public const string SasToken = "SASTOKENSTUB=";
-    public const string WsmGetSasResponseStorageUrl = "https://bloburl.foo/container";
+    private const string WorkspaceIdValue = "41aa9346-670f-4206-8b6f-6b921a564bdd";
 
+    public const string WorkspaceStorageContainerName = $"sc-{WorkspaceIdValue}";
+    public const string WsmGetSasResponseStorageUrl = $"https://{WorkspaceAccountName}.blob.core.windows.net/{WorkspaceStorageContainerName}";
+    public const string TerraPetName = "pet-2674060218359759651b0";
+
+    public Guid TenantId { get; } = Guid.NewGuid();
     public Guid LandingZoneId { get; } = Guid.NewGuid();
     public Guid SubscriptionId { get; } = Guid.NewGuid();
-    public Guid WorkspaceId { get; } = Guid.NewGuid();
     public Guid ContainerResourceId { get; } = Guid.NewGuid();
+    public Guid WorkspaceId { get; } = Guid.Parse(WorkspaceIdValue);
+    public Guid AcrPullIdentitySamResourceId { get; } = Guid.NewGuid();
+
     public string BatchAccountName => "lzee170c71b6cf678cfca744";
     public string Region => "westus3";
     public string BatchAccountId =>
         $"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Batch/batchAccounts/{BatchAccountName}";
 
+    public string ManagedIdentityObjectId =>
+        $"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{TerraPetName}";
+
     public string PoolId => "poolId";
+
+    public Guid GetWorkspaceIdFromContainerName(string containerName)
+    {
+        return Guid.Parse(containerName.Replace("sc-", ""));
+    }
     public LandingZoneResourcesApiResponse GetResourceApiResponse()
     {
         return JsonSerializer.Deserialize<LandingZoneResourcesApiResponse>(GetResourceApiResponseInJson());
@@ -37,9 +54,13 @@ public class TerraApiStubData
         return JsonSerializer.Deserialize<QuotaApiResponse>(GetResourceQuotaApiResponseInJson());
     }
 
-    public WsmSasTokenApiResponse GetWsmSasTokenApiResponse()
+    public WsmSasTokenApiResponse GetWsmSasTokenApiResponse(string blobName = null)
     {
-        return JsonSerializer.Deserialize<WsmSasTokenApiResponse>(GetWsmSasTokenApiResponseInJson());
+        return JsonSerializer.Deserialize<WsmSasTokenApiResponse>(GetWsmSasTokenApiResponseInJson(blobName));
+    }
+    public SamActionManagedIdentityApiResponse GetSamActionManagedIdentityApiResponse()
+    {
+        return JsonSerializer.Deserialize<SamActionManagedIdentityApiResponse>(GetSamActionManagedIdentityApiResponseInJson());
     }
 
     public TerraOptions GetTerraOptions()
@@ -49,9 +70,11 @@ public class TerraApiStubData
             WorkspaceId = WorkspaceId.ToString(),
             LandingZoneApiHost = LandingZoneApiHost,
             WsmApiHost = WsmApiHost,
+            SamApiHost = SamApiHost,
             WorkspaceStorageAccountName = WorkspaceAccountName,
-            WorkspaceStorageContainerName = WorkspaceContainerName,
-            WorkspaceStorageContainerResourceId = ContainerResourceId.ToString()
+            WorkspaceStorageContainerName = WorkspaceStorageContainerName,
+            WorkspaceStorageContainerResourceId = ContainerResourceId.ToString(),
+            SamResourceIdForAcrPull = AcrPullIdentitySamResourceId.ToString()
         };
     }
 
@@ -68,12 +91,18 @@ public class TerraApiStubData
         };
     }
 
-    public string GetWsmSasTokenApiResponseInJson()
+    public string GetWsmSasTokenApiResponseInJson(string blobName = null)
     {
+        var blobToAppend = blobName;
+        if (!string.IsNullOrEmpty(blobName))
+        {
+            blobToAppend = $"/{blobName.TrimStart('/')}";
+        }
+
         return $$"""
         {
             "token": "{{SasToken}}",
-            "url": "{{WsmGetSasResponseStorageUrl}}?sv={{SasToken}}"
+            "url": "{{WsmGetSasResponseStorageUrl}}{{blobToAppend}}?sv={{SasToken}}"
         }
         """;
     }
@@ -176,6 +205,44 @@ public class TerraApiStubData
 }}";
     }
 
+    public string GetContainerResourcesApiResponseInJson()
+    {
+        return $@"{{
+  ""resources"": [
+    {{
+      ""metadata"": {{
+        ""workspaceId"": ""{WorkspaceId}"",
+        ""resourceId"": ""{ContainerResourceId}"",
+        ""name"": ""{WorkspaceStorageContainerName}"",
+        ""resourceType"": ""AZURE_STORAGE_CONTAINER"",
+        ""stewardshipType"": ""CONTROLLED"",
+        ""cloudPlatform"": ""AZURE"",
+        ""cloningInstructions"": ""COPY_NOTHING"",
+        ""controlledResourceMetadata"": {{
+          ""accessScope"": ""SHARED_ACCESS"",
+          ""managedBy"": ""USER"",
+          ""privateResourceUser"": {{}},
+          ""privateResourceState"": ""NOT_APPLICABLE"",
+          ""region"": ""southcentralus""
+        }},
+        ""resourceLineage"": [],
+        ""properties"": [],
+        ""createdBy"": ""user@foo.com"",
+        ""createdDate"": ""2023-02-09T01:48:46.040052Z"",
+        ""lastUpdatedBy"": ""user@foo.com"",
+        ""lastUpdatedDate"": ""2023-02-09T01:48:48.345442Z"",
+        ""state"": ""READY""
+      }},
+      ""resourceAttributes"": {{
+        ""azureStorageContainer"": {{
+          ""storageContainerName"": ""{WorkspaceStorageContainerName}""
+        }}
+      }}
+    }}
+  ]
+}}";
+    }
+
     public string GetResourceQuotaApiResponseInJson()
     {
         return $@"{{
@@ -253,6 +320,27 @@ public class TerraApiStubData
 }}";
     }
 
+    public string GetSamActionManagedIdentityApiResponseInJson()
+    {
+        return $@"{{
+  ""id"": {{
+    ""resourceId"": {{
+      ""resourceTypeName"": ""private_azure_container_registry"",
+      ""resourceId"": ""{AcrPullIdentitySamResourceId}""
+    }},
+    ""action"": ""pull_image"",
+    ""billingProfileId"": ""{AcrPullIdentitySamResourceId}""
+  }},
+  ""objectId"": ""{ManagedIdentityObjectId}"",
+  ""displayName"": ""my nice action identity"",
+  ""managedResourceGroupCoordinates"": {{
+    ""tenantId"": ""{TenantId}"",
+    ""subscriptionId"": ""{SubscriptionId}"",
+    ""managedResourceGroupName"": ""{ResourceGroup}""
+  }}
+}}";
+    }
+
     public ApiCreateBatchPoolRequest GetApiCreateBatchPoolRequest()
     {
         return new ApiCreateBatchPoolRequest()
@@ -260,7 +348,7 @@ public class TerraApiStubData
             Common = new ApiCommon(),
             AzureBatchPool = new ApiAzureBatchPool()
             {
-                UserAssignedIdentities = new ApiUserAssignedIdentity[]
+                UserAssignedIdentities = new[]
                 {
                     new ApiUserAssignedIdentity()
                     {
@@ -284,6 +372,31 @@ public class TerraApiStubData
                 }
             },
             ResourceId = new Guid()
+        };
+    }
+
+    public WsmListContainerResourcesResponse GetWsmContainerResourcesApiResponse()
+    {
+        return new WsmListContainerResourcesResponse()
+        {
+            Resources = new List<Resource>()
+            {
+               new Resource()
+               {
+                   Metadata = new Metadata()
+                   {
+                       ResourceId = ContainerResourceId.ToString(),
+                       Name = WorkspaceStorageContainerName
+                   },
+                   ResourceAttributes = new ResourceAttributes()
+                   {
+                       AzureStorageContainer = new AzureStorageContainer()
+                       {
+                           StorageContainerName = WorkspaceStorageContainerName
+                       }
+                   }
+                }
+            }
         };
     }
 }

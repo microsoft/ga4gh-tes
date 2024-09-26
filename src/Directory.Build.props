@@ -1,0 +1,4 @@
+﻿<Project>
+    <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" Condition="Exists($([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../')))" />
+    <Import Project="$(MSBuildThisFileDirectory)CommonAssemblyInfo.props" Condition=" '$(AssemblyVersion)' == '' "/>
+</Project>

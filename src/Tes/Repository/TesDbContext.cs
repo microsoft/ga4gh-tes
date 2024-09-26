@@ -1,5 +1,10 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using Tes.Models;
 
 namespace Tes.Repository
@@ -8,13 +13,22 @@ namespace Tes.Repository
     {
         public const string TesTasksPostgresTableName = "testasks";
 
-        public TesDbContext(string connectionString)
+        public TesDbContext()
         {
-            ArgumentException.ThrowIfNullOrEmpty(connectionString, nameof(connectionString));
-            ConnectionString = connectionString;
+            // Default constructor, which is required to run the EF migrations tool,
+            // "dotnet ef migrations add InitialCreate"
         }
 
-        public string ConnectionString { get; set; }
+        public TesDbContext(NpgsqlDataSource dataSource, Action<NpgsqlDbContextOptionsBuilder> contextOptionsBuilder = default)
+        {
+            ArgumentNullException.ThrowIfNull(dataSource);
+            DataSource = dataSource;
+            ContextOptionsBuilder = contextOptionsBuilder;
+        }
+
+        public NpgsqlDataSource DataSource { get; set; }
+        public Action<NpgsqlDbContextOptionsBuilder> ContextOptionsBuilder { get; set; }
+
         public DbSet<TesTaskDatabaseItem> TesTasks { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -23,7 +37,7 @@ namespace Tes.Repository
             {
                 // use PostgreSQL
                 optionsBuilder
-                    .UseNpgsql(ConnectionString, options => options.MaxBatchSize(1000))
+                    .UseNpgsql(DataSource, ContextOptionsBuilder)
                     .UseLowerCaseNamingConvention();
             }
         }

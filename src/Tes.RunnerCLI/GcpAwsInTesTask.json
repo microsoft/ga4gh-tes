@@ -1,0 +1,54 @@
+{
+  "imageTag": "latest",
+  "imageName": "busybox",
+  "commandsToExecute": [
+    "echo",
+    "Hello Docker!"
+  ],
+  "inputs": [
+    {
+      "fullFileName": "/mnt/data/NA12878_24RG_small.hg38.bam",
+      "sourceUrl": "s3://gatk-test-data/wgs_bam/NA12878_24RG_hg38/NA12878_24RG_small.hg38.bam",
+      "sasStrategy": "SchemeConverter"
+    },
+    {
+      "fullFileName": "/mnt/data/ENCFF031ARQ.subsampled.400.fastq.gz",
+      "sourceUrl": "gs://encode-pipeline-test-samples/encode-atac-seq-pipeline/ENCSR356KRQ/fastq_subsampled/rep2/pair2/ENCFF031ARQ.subsampled.400.fastq.gz",
+      "sasStrategy": "SchemeConverter"
+    },
+    {
+      "fullFileName": "/mnt/data/ENCFF590SYZ.subsampled.400.fastq.gz",
+      "sourceUrl": "gs://encode-pipeline-test-samples/encode-atac-seq-pipeline/ENCSR356KRQ/fastq_subsampled/rep2/pair2/ENCFF590SYZ.subsampled.400.fastq.gz",
+      "sasStrategy": "SchemeConverter"
+    },
+    {
+      "fullFileName": "/mnt/data/ENCFF734PEQ.subsampled.400.fastq.gz",
+      "sourceUrl": "gs://encode-pipeline-test-samples/encode-atac-seq-pipeline/ENCSR356KRQ/fastq_subsampled/rep2/pair2/ENCFF734PEQ.subsampled.400.fastq.gz",
+      "sasStrategy": "SchemeConverter"
+    },
+    {
+      "fullFileName": "/mnt/data/ENCFF007USV.subsampled.400.fastq.gz",
+      "sourceUrl": "gs://encode-pipeline-test-samples/encode-atac-seq-pipeline/ENCSR356KRQ/fastq_subsampled/rep2/pair2/ENCFF007USV.subsampled.400.fastq.gz",
+      "sasStrategy": "SchemeConverter"
+    },
+    {
+      "fullFileName": "/mnt/data/ENCFF886FSC.subsampled.400.fastq.gz",
+      "sourceUrl": "gs://encode-pipeline-test-samples/encode-atac-seq-pipeline/ENCSR356KRQ/fastq_subsampled/rep2/pair2/ENCFF886FSC.subsampled.400.fastq.gz",
+      "sasStrategy": "SchemeConverter"
+    },
+    {
+      "fullFileName": "/mnt/data/ENCFF573UXK.subsampled.400.fastq.gz",
+      "sourceUrl": "gs://encode-pipeline-test-samples/encode-atac-seq-pipeline/ENCSR356KRQ/fastq_subsampled/rep2/pair2/ENCFF573UXK.subsampled.400.fastq.gz",
+      "sasStrategy": "SchemeConverter"
+    }
+  ],
+  "outputs": [
+    {
+      "fullFileName": "<LOCAL_PATH>",
+      "targetUrl": "<TARGET_URL>",
+      "sasStrategy": "None"
+    }
+  ]
+}  
+
+

@@ -8,7 +8,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Tes.Extensions;
 using Tes.Models;
 using Tes.Repository;
@@ -25,36 +24,19 @@ namespace TesApi.Web
         private readonly IRepository<TesTask> repository;
         private readonly IBatchScheduler batchScheduler;
         private readonly ILogger<Scheduler> logger;
-        private readonly bool isDisabled;
         private readonly TimeSpan runInterval = TimeSpan.FromSeconds(5);
 
         /// <summary>
         /// Default constructor
         /// </summary>
-        /// <param name="batchSchedulingOptions">Configuration of <see cref="Options.BatchSchedulingOptions"/></param>
         /// <param name="repository">The main TES task database repository implementation</param>
         /// <param name="batchScheduler">The batch scheduler implementation</param>
         /// <param name="logger">The logger instance</param>
-        public Scheduler(IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger)
+        public Scheduler(IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger)
         {
             this.repository = repository;
             this.batchScheduler = batchScheduler;
             this.logger = logger;
-            isDisabled = batchSchedulingOptions.Value.Disable;
-        }
-
-        /// <summary>
-        /// Start the service
-        /// </summary>
-        /// <param name="cancellationToken"></param>
-        public override Task StartAsync(CancellationToken cancellationToken)
-        {
-            if (isDisabled)
-            {
-                return Task.CompletedTask;
-            }
-
-            return base.StartAsync(cancellationToken);
         }
 
         /// <inheritdoc />
@@ -71,6 +53,17 @@ namespace TesApi.Web
         /// <returns>A System.Threading.Tasks.Task that represents the long running operations.</returns>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            try
+            {
+                // Delay "starting" Scheduler until this completes to finish initializing BatchScheduler.
+                await batchScheduler.UploadTaskRunnerIfNeeded(stoppingToken);
+            }
+            catch (Exception exc)
+            {
+                logger.LogError(exc, @"Checking/storing the node task runner binary failed with {Message}", exc.Message);
+                throw;
+            }
+
             logger.LogInformation("Scheduler started.");
 
             while (!stoppingToken.IsCancellationRequested)
@@ -85,14 +78,14 @@ namespace TesApi.Web
                 }
                 catch (Exception exc)
                 {
-                    logger.LogError(exc, exc.Message);
+                    logger.LogError(exc, "{ExceptionMessage}", exc.Message);
                 }
 
                 try
                 {
                     await Task.Delay(runInterval, stoppingToken);
                 }
-                catch (TaskCanceledException)
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
                     break;
                 }
@@ -110,10 +103,11 @@ namespace TesApi.Web
             var pools = new HashSet<string>();
 
             var tesTasks = (await repository.GetItemsAsync(
-                    predicate: t => t.State == TesState.QUEUEDEnum
-                        || t.State == TesState.INITIALIZINGEnum
-                        || t.State == TesState.RUNNINGEnum
-                        || (t.State == TesState.CANCELEDEnum && t.IsCancelRequested)))
+                    predicate: t => t.State == TesState.QUEUED
+                        || t.State == TesState.INITIALIZING
+                        || t.State == TesState.RUNNING
+                        || (t.State == TesState.CANCELED && t.IsCancelRequested),
+                    cancellationToken: stoppingToken))
                 .OrderBy(t => t.CreationTime)
                 .ToList();
 
@@ -132,13 +126,13 @@ namespace TesApi.Web
                     var isModified = false;
                     try
                     {
-                        isModified = await batchScheduler.ProcessTesTaskAsync(tesTask);
+                        isModified = await batchScheduler.ProcessTesTaskAsync(tesTask, stoppingToken);
                     }
                     catch (Exception exc)
                     {
                         if (++tesTask.ErrorCount > 3) // TODO: Should we increment this for exceptions here (current behaviour) or the attempted executions on the batch?
                         {
-                            tesTask.State = TesState.SYSTEMERROREnum;
+                            tesTask.State = TesState.SYSTEM_ERROR;
                             tesTask.EndTime = DateTimeOffset.UtcNow;
                             tesTask.SetFailureReason("UnknownError", exc.Message, exc.StackTrace);
                         }
@@ -169,7 +163,7 @@ namespace TesApi.Web
                         }
 
                         logger.LogError(exc, "TES task: {TesTask} threw an exception in OrchestrateTesTasksOnBatch().", tesTask.Id);
-                        await repository.UpdateItemAsync(tesTask);
+                        await repository.UpdateItemAsync(tesTask, stoppingToken);
                     }
 
                     if (isModified)
@@ -179,13 +173,13 @@ namespace TesApi.Web
 
                         switch (tesTask.State)
                         {
-                            case TesState.CANCELEDEnum:
-                            case TesState.COMPLETEEnum:
+                            case TesState.CANCELED:
+                            case TesState.COMPLETE:
                                 hasEnded = true;
                                 break;
 
-                            case TesState.EXECUTORERROREnum:
-                            case TesState.SYSTEMERROREnum:
+                            case TesState.EXECUTOR_ERROR:
+                            case TesState.SYSTEM_ERROR:
                                 hasErrored = true;
                                 hasEnded = true;
                                 break;
@@ -204,8 +198,12 @@ namespace TesApi.Web
                             logger.LogDebug("{TesTask} failed, state: {TesTaskState}, reason: {TesTaskFailureReason}", tesTask.Id, tesTask.State, tesTask.FailureReason);
                         }
 
-                        await repository.UpdateItemAsync(tesTask);
+                        await repository.UpdateItemAsync(tesTask, stoppingToken);
                     }
+                }
+                catch (RepositoryCollisionException exc)
+                {
+                    logger.LogError(exc, $"RepositoryCollisionException in OrchestrateTesTasksOnBatch");
                 }
                 // TODO catch EF / postgres exception?
                 //catch (Microsoft.Azure.Cosmos.CosmosException exc)
@@ -234,7 +232,7 @@ namespace TesApi.Web
                     logger.LogError(exc, "Updating TES Task '{TesTask}' threw {ExceptionType}: '{ExceptionMessage}'. Stack trace: {ExceptionStackTrace}", tesTask.Id, exc.GetType().FullName, exc.Message, exc.StackTrace);
                 }
 
-                if (!string.IsNullOrWhiteSpace(tesTask.PoolId) && (TesState.QUEUEDEnum == tesTask.State || TesState.RUNNINGEnum == tesTask.State))
+                if (!string.IsNullOrWhiteSpace(tesTask.PoolId) && (TesState.QUEUED == tesTask.State || TesState.RUNNING == tesTask.State))
                 {
                     pools.Add(tesTask.PoolId);
                 }
