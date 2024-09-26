@@ -1,4 +1,4 @@
-﻿#!/usr/bin/bash
+#!/usr/bin/bash
 trap "echo Error trapped; exit 0" ERR
 # set -e will cause any error to exit the script
 set -e

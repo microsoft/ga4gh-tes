@@ -33,7 +33,6 @@ namespace TesApi.Tests.Runner
         private readonly TesTask tesTask = GetTestTesTask();
         private TerraOptions terraOptions;
         private StorageOptions storageOptions;
-        private BatchAccountOptions batchAccountOptions;
 
         private const string SasToken = "sv=2019-12-12&ss=bfqt&srt=sco&spr=https&st=2023-09-27T17%3A32%3A57Z&se=2023-09-28T17%3A32%3A57Z&sp=rwdlacupx&sig=SIGNATURE";
 
@@ -41,6 +40,7 @@ namespace TesApi.Tests.Runner
         static readonly Uri InternalBlobUrl = new("http://foo.bar/tes-internal");
         static readonly Uri InternalBlobUrlWithSas = new($"{InternalBlobUrl}?{SasToken}");
         const string GlobalManagedIdentity = $@"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/globalId";
+        private const string DrsHubApiHost = "https://drshub.foo.bar";
 
 
         const string ExternalStorageAccountName = "external";
@@ -54,10 +54,14 @@ namespace TesApi.Tests.Runner
         [TestInitialize]
         public void SetUp()
         {
-            terraOptions = new TerraOptions();
-            storageOptions = new StorageOptions() { ExternalStorageContainers = ExternalStorageContainerWithSas };
-            batchAccountOptions = new BatchAccountOptions() { SubscriptionId = SubscriptionId, ResourceGroup = ResourceGroup };
-            storageAccessProviderMock = new Mock<IStorageAccessProvider>();
+            terraOptions = new();
+            storageOptions = new() { ExternalStorageContainers = ExternalStorageContainerWithSas };
+
+            Mock<Web.IAzureProxy> azureProxyMock = new();
+            azureProxyMock.Setup(x => x.GetManagedIdentityInBatchAccountResourceGroup(It.IsAny<string>()))
+                .Returns<string>(name => $"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{name}");
+
+            storageAccessProviderMock = new();
             storageAccessProviderMock.Setup(x =>
                     x.GetInternalTesTaskBlobUrlAsync(It.IsAny<TesTask>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(InternalBlobUrlWithSas);
@@ -67,10 +71,16 @@ namespace TesApi.Tests.Runner
             storageAccessProviderMock.Setup(x =>
                     x.GetInternalTesTaskBlobUrlWithoutSasToken(It.IsAny<TesTask>(), It.IsAny<string>()))
                 .Returns(InternalBlobUrl);
+            storageAccessProviderMock.Setup(x =>
+                    x.MapLocalPathToSasUrlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<TimeSpan?>(), It.IsAny<bool>()))
+                .Returns(Task.FromResult(new Uri("http://host")));
+            storageAccessProviderMock.Setup(x =>
+                    x.GetBlobUrlsAsync(It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.FromResult<IList<Uri>>([]));
 
-            var azureCloudIdentityConfig = AzureCloudConfig.CreateAsync().Result.AzureEnvironmentConfig;
-            taskToNodeTaskConverter = new TaskToNodeTaskConverter(Options.Create(terraOptions), storageAccessProviderMock.Object,
-                Options.Create(storageOptions), Options.Create(batchAccountOptions), azureCloudIdentityConfig, new NullLogger<TaskToNodeTaskConverter>());
+            var azureCloudIdentityConfig = AzureCloudConfig.FromKnownCloudNameAsync().Result.AzureEnvironmentConfig;
+            taskToNodeTaskConverter = new TaskToNodeTaskConverter(Options.Create(terraOptions), Options.Create(storageOptions),
+                storageAccessProviderMock.Object, azureProxyMock.Object, azureCloudIdentityConfig, new NullLogger<TaskToNodeTaskConverter>());
         }
 
 
@@ -110,6 +120,48 @@ namespace TesApi.Tests.Runner
             Assert.AreEqual(expectedResourceId, resourceId);
         }
 
+        [DataTestMethod]
+        [DataRow("myIdentity", $@"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/myIdentity", false)]
+        [DataRow($@"/subscriptions/{SubscriptionId}/resourcegroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/myIdentity", $@"/subscriptions/{SubscriptionId}/resourcegroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/myIdentity", false)]
+        [DataRow($@"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/myIdentity", $@"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/myIdentity", false)]
+        [DataRow("", null, true)]
+        [DataRow(null, null, true)]
+        public void GetNodeManagedIdentityResourceId_NoGlobalManagedIdentity_ReturnsExpectedResult(string workflowIdentity, string expectedResourceId, bool exceptionExpected)
+        {
+            tesTask.Resources = new TesResources()
+            {
+                BackendParameters = new Dictionary<string, string>()
+                {
+                    {TesResources.SupportedBackendParameters.workflow_execution_identity.ToString(), workflowIdentity}
+                }
+            };
+
+            try
+            {
+                var resourceId = taskToNodeTaskConverter.GetNodeManagedIdentityResourceId(string.Empty, tesTask);
+                Assert.AreEqual(exceptionExpected, false);
+                Assert.AreEqual(expectedResourceId, resourceId);
+            }
+            catch (TesException)
+            {
+                Assert.AreEqual(exceptionExpected, true);
+            }
+        }
+
+        [TestMethod]
+        public async Task
+            ToNodeTaskAsync_TesTask_OutputsContainLogsAndMetrics()
+        {
+            tesTask.Inputs = null;
+            tesTask.Outputs = null;
+            var options = OptionsWithoutAdditionalInputs();
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
+            Assert.IsNotNull(nodeTask);
+            Assert.IsNull(nodeTask.Inputs);
+            Assert.AreEqual(3, nodeTask.Outputs.Count);
+            Assert.AreEqual(3, nodeTask.Outputs.Count(output => output.MountParentDirectory is null));
+        }
+
         [TestMethod]
         public async Task
             ToNodeTaskAsync_TesTaskWithInputsAndOutputs_AllInputsAndOutputsArePrefixedWithBatchTaskWorkingDir()
@@ -123,7 +175,7 @@ namespace TesApi.Tests.Runner
                 Assert.IsTrue(input.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar));
             }
 
-            foreach (var output in nodeTask.Outputs!)
+            foreach (var output in nodeTask.Outputs!.Where(output => output.MountParentDirectory is not null))
             {
                 Assert.IsTrue(output.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar));
             }
@@ -142,7 +194,7 @@ namespace TesApi.Tests.Runner
 
             Assert.IsNotNull(nodeTask);
 
-            Assert.IsTrue(nodeTask.Inputs.Count == tesTask.Inputs.Count - 1);
+            Assert.IsTrue(nodeTask.Inputs!.Count == tesTask.Inputs.Count - 1);
         }
 
 
@@ -198,7 +250,7 @@ namespace TesApi.Tests.Runner
             var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
             Assert.IsNotNull(nodeTask);
             Assert.IsNull(nodeTask.Inputs);
-            Assert.IsNull(nodeTask.Outputs);
+            Assert.IsFalse(nodeTask.Outputs!.Any(output => output.MountParentDirectory is not null));
         }
 
         [TestMethod]
@@ -212,7 +264,7 @@ namespace TesApi.Tests.Runner
 
             Assert.IsNotNull(nodeTask);
             Assert.AreEqual(2, nodeTask.Inputs!.Count);
-            Assert.IsNull(nodeTask.Outputs);
+            Assert.IsFalse(nodeTask.Outputs!.Any(output => output.MountParentDirectory is not null));
         }
 
         [TestMethod]
@@ -225,7 +277,7 @@ namespace TesApi.Tests.Runner
             var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
             Assert.IsNotNull(nodeTask);
             Assert.IsNull(nodeTask.Inputs);
-            Assert.IsNull(nodeTask.Outputs);
+            Assert.IsFalse(nodeTask.Outputs!.Any(output => output.MountParentDirectory is not null));
         }
 
         [TestMethod]
@@ -240,7 +292,7 @@ namespace TesApi.Tests.Runner
                     Streamable = true,
                     Path = "/cromwell-executions/file",
                     Url = "/cromwell-executions/file",
-                    Type = TesFileType.FILEEnum
+                    Type = TesFileType.FILE
                 }
             };
 
@@ -249,7 +301,7 @@ namespace TesApi.Tests.Runner
             var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
             Assert.IsNotNull(nodeTask);
             Assert.IsNull(nodeTask.Inputs);
-            Assert.IsNull(nodeTask.Outputs);
+            Assert.IsFalse(nodeTask.Outputs!.Any(output => output.MountParentDirectory is not null));
         }
 
         [TestMethod]
@@ -289,7 +341,7 @@ namespace TesApi.Tests.Runner
                     Name = "local input",
                     Path = "/cromwell-executions/file",
                     Url = "/cromwell-executions/file",
-                    Type = TesFileType.FILEEnum
+                    Type = TesFileType.FILE
                 }
             };
 
@@ -314,7 +366,7 @@ namespace TesApi.Tests.Runner
                     Name = "local input",
                     Path = $"/{ExternalStorageAccountName}/cont/file",
                     Url = $"/{ExternalStorageAccountName}/cont/file",
-                    Type = TesFileType.FILEEnum
+                    Type = TesFileType.FILE
                 }
             };
 
@@ -332,6 +384,17 @@ namespace TesApi.Tests.Runner
             Assert.AreEqual("file", url.BlobName);
         }
 
+        [TestMethod]
+        public async Task ToNodeTaskAsync_DrsHubApiHostIsProvided_DrsHubApiHostIsSetInNodeTask()
+        {
+            var options = OptionsWithoutAdditionalInputs();
+
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
+
+            Assert.IsNotNull(nodeTask);
+            Assert.AreEqual(DrsHubApiHost, nodeTask.RuntimeOptions.Terra!.DrsHubApiHost);
+        }
+
         private static NodeTaskConversionOptions OptionsWithAdditionalInputs()
         {
             var inputs = new[]
@@ -340,14 +403,14 @@ namespace TesApi.Tests.Runner
                 {
                     Name = "additionalInput1",
                     Path = "/additionalInput1",
-                    Type = TesFileType.FILEEnum,
+                    Type = TesFileType.FILE,
                     Url = "http://foo.bar/additionalInput1"
                 },
                 new TesInput
                 {
                     Name = "additionalInput2",
                     Path = "/additionalInput2",
-                    Type = TesFileType.FILEEnum,
+                    Type = TesFileType.FILE,
                     Url = "http://foo.bar/additionalInput2"
                 }
             };
@@ -360,7 +423,8 @@ namespace TesApi.Tests.Runner
         {
             return new NodeTaskConversionOptions(AdditionalInputs: null,
                 DefaultStorageAccountName: DefaultStorageAccountName,
-                GlobalManagedIdentity: GlobalManagedIdentity);
+                GlobalManagedIdentity: GlobalManagedIdentity,
+                DrsHubApiHost: DrsHubApiHost);
         }
 
         private static TesTask GetTestTesTask()

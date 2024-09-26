@@ -1,4 +1,4 @@
-﻿#!/usr/bin/bash
+#!/usr/bin/bash
 # Add nvme device mounting (software RAID and mount all nvme devices to the task working directory ${AZ_BATCH_NODE_ROOT_DIR}/tasks/workitems)
 # Note: this nvme mounting will only work for freshly booted machines with no existing RAID arrays
 #       for testing purposes it will not work if re-run on the same machine

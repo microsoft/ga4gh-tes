@@ -12,6 +12,7 @@ namespace Tes.Runner.Models
         public string? WorkflowId { get; set; }
         public string? ImageTag { get; set; }
         public string? ImageName { get; set; }
+        public List<ContainerDeviceRequest>? ContainerDeviceRequests { get; set; }
         public string? ContainerWorkDir { get; set; }
         public List<string>? CommandsToExecute { get; set; }
         public List<FileInput>? Inputs { get; set; }
@@ -19,8 +20,24 @@ namespace Tes.Runner.Models
         public string? MetricsFilename { get; set; }
         public string? InputsMetricsFormat { get; set; }
         public string? OutputsMetricsFormat { get; set; }
+        public List<string>? TimestampMetricsFormats { get; set; }
+        public List<string>? BashScriptMetricsFormats { get; set; }
         public RuntimeOptions RuntimeOptions { get; set; } = null!;
     }
+
+    public class ContainerDeviceRequest
+    {
+        public string? Driver { get; set; }
+
+        public long? Count { get; set; }
+
+        public List<string>? DeviceIDs { get; set; }
+
+        public List<IList<string>>? Capabilities { get; set; }
+
+        public Dictionary<string, string>? Options { get; set; }
+    }
+
 
     public class FileOutput
     {
@@ -44,12 +61,15 @@ namespace Tes.Runner.Models
         public TerraRuntimeOptions? Terra { get; set; }
 
         public string? NodeManagedIdentityResourceId { get; set; }
+        public string? AcrPullManagedIdentityResourceId { get; set; }
 
         public StorageTargetLocation? StorageEventSink { get; set; }
 
         public StorageTargetLocation? StreamingLogPublisher { get; set; }
 
         public AzureEnvironmentConfig? AzureEnvironmentConfig { get; set; }
+
+        public bool? SetContentMd5OnUpload { get; set; }
     }
 
     public class StorageTargetLocation
@@ -63,9 +83,16 @@ namespace Tes.Runner.Models
         public string? WsmApiHost { get; set; }
         public string? LandingZoneApiHost { get; set; }
         public string? SasAllowedIpRange { get; set; }
+        public string? DrsHubApiHost { get; set; }
     }
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public class NodeTaskResolverOptions
+    {
+        public RuntimeOptions? RuntimeOptions { get; set; }
+        public TransformationStrategy TransformationStrategy { get; set; }
+    }
+
+    [JsonConverter(typeof(JsonStringEnumConverter<TransformationStrategy>))]
     public enum TransformationStrategy
     {
         None,
@@ -76,7 +103,7 @@ namespace Tes.Runner.Models
         CombinedAzureResourceManager,
     }
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<FileType>))]
     public enum FileType
     {
         File,

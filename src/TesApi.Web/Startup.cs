@@ -3,11 +3,12 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Threading;
 using Azure.Core;
-using Azure.Identity;
+using Azure.ResourceManager;
 using CommonUtilities;
 using CommonUtilities.AzureCloud;
 using CommonUtilities.Options;
@@ -41,7 +42,7 @@ namespace TesApi.Web
     public class Startup
     {
         // TODO centralize in single location
-        internal const string TesVersion = "5.3.1";
+        internal const string TesVersion = "5.4.3";
         private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
@@ -68,6 +69,14 @@ namespace TesApi.Web
                 services
                     .AddSingleton(AzureCloudConfig)
                     .AddSingleton(AzureCloudConfig.AzureEnvironmentConfig)
+                    .AddSingleton(s =>
+                    {
+                        var options = TerraOptionsAreConfigured(s)
+                            ? new AzureServicesConnectionStringCredentialOptions("RunAs=App", s.GetRequiredService<AzureCloudConfig>())
+                            : ActivatorUtilities.CreateInstance<AzureServicesConnectionStringCredentialOptions>(s);
+                        options.AuthorityHost = AzureCloudConfig.AuthorityHost;
+                        return options;
+                    })
                     .AddLogging()
                     .AddApplicationInsightsTelemetry(configuration)
                     .Configure<GeneralOptions>(configuration.GetSection(GeneralOptions.SectionName))
@@ -80,7 +89,8 @@ namespace TesApi.Web
                     .Configure<BatchNodesOptions>(configuration.GetSection(BatchNodesOptions.SectionName))
                     .Configure<BatchSchedulingOptions>(configuration.GetSection(BatchSchedulingOptions.SectionName))
                     .Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName))
-                    .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
+                    .Configure<DrsHubOptions>(configuration.GetSection(DrsHubOptions.SectionName))
+                    .Configure<DeploymentOptions>(configuration.GetSection(DeploymentOptions.SectionName))
 
                     .AddMemoryCache(o => o.ExpirationScanFrequency = TimeSpan.FromHours(12))
                     .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryCache<TesTaskDatabaseItem>>()
@@ -89,13 +99,14 @@ namespace TesApi.Web
                     .AddTransient<BatchPool>()
                     .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                     .AddSingleton(CreateTerraApiClient)
-                    .AddSingleton(CreateBatchPoolManagerFromConfiguration)
+                    .AddSingleton<IBatchPoolManager>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesBatchPoolManager>(sp, CreateBatchPoolManagerFromConfiguration(sp)))
 
                     .AddControllers(options => options.Filters.Add<Controllers.OperationCancelledExceptionFilter>())
                         .AddNewtonsoftJson(opts =>
                         {
                             opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
                             opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
+                            opts.SerializerSettings.DefaultValueHandling = Newtonsoft.Json.DefaultValueHandling.Ignore;
                         })
                     .Services
                     .AddSingleton(CreateStorageAccessProviderFromConfiguration)
@@ -105,6 +116,7 @@ namespace TesApi.Web
                     .AddAutoMapper(typeof(MappingProfilePoolToWsmRequest))
                     .AddSingleton<CachingRetryPolicyBuilder>()
                     .AddSingleton<RetryPolicyBuilder>(s => s.GetRequiredService<CachingRetryPolicyBuilder>()) // Return the already declared retry policy builder
+                    .AddSingleton(CreateActionIdentityProvider)
                     .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                     .AddSingleton<IBatchScheduler, BatchScheduler>()
                     .AddSingleton<PriceApiClient>()
@@ -114,14 +126,150 @@ namespace TesApi.Web
                     .AddSingleton<AzureManagementClientsFactory>()
                     .AddSingleton<ConfigurationUtils>()
                     .AddSingleton<IAllowedVmSizesService, AllowedVmSizesService>()
-                    .AddSingleton<TokenCredential>(s =>
-                    {
-                        return new DefaultAzureCredential(
-                            new DefaultAzureCredentialOptions { AuthorityHost = new Uri(AzureCloudConfig.Authentication.LoginEndpointUrl) });
-                    })
+                    .AddSingleton<TokenCredential, AzureServicesConnectionStringCredential>()
                     .AddSingleton<TaskToNodeTaskConverter>()
                     .AddSingleton<TaskExecutionScriptingManager>()
-                    .AddTransient<BatchNodeScriptBuilder>()
+                    .AddSingleton<PoolMetadataReader>()
+
+                    .AddSingleton(c =>
+                    {
+                        var deployment = c.GetRequiredService<IOptions<DeploymentOptions>>().Value;
+
+                        TesServiceInfo serviceInfo = new()
+                        {
+                            Id = GetServiceId(),
+                            Organization = GetOrganization(),
+                            Storage = c.GetRequiredService<IOptions<StorageOptions>>()
+                                .Value
+                                .ExternalStorageContainers?
+                                .Split(';')
+                                .Select(ParseStorageUri)
+                                .Where(s => !string.IsNullOrWhiteSpace(s))
+                                .ToList() ?? []
+                        };
+
+                        if (!string.IsNullOrWhiteSpace(deployment.Environment))
+                        {
+                            serviceInfo.Environment = deployment.Environment;
+                        }
+                        else
+                        {
+                            var configuration = Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyConfigurationAttribute>().Configuration;
+
+                            if (!string.IsNullOrWhiteSpace(deployment.TesImage))
+                            {
+                                var tag = string.Empty;
+                                var tagStart = deployment.TesImage.LastIndexOf(':');
+                                if (tagStart >= 0)
+                                {
+                                    tag = deployment.TesImage[tagStart..];
+                                }
+
+                                serviceInfo.Environment = configuration switch
+                                {
+                                    "Release" => tag switch
+                                    {
+                                        var x when x.StartsWith(":int-") => "test",
+                                        var x when x.Equals(":main") => "test",
+                                        _ => "prod",
+                                    },
+                                    "Debug" => "dev",
+                                    _ => default
+                                };
+                            }
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(deployment.ContactUri))
+                        {
+                            serviceInfo.ContactUrl = deployment.ContactUri;
+                        }
+                        else if (!string.IsNullOrWhiteSpace(deployment.LetsEncryptEmail))
+                        {
+                            serviceInfo.ContactUrl = $"mailto:{deployment.LetsEncryptEmail.Trim()}";
+                        }
+
+                        if (deployment.Created != default)
+                        {
+                            serviceInfo.CreatedAt = deployment.Created;
+                        }
+
+                        if (deployment.Updated != default)
+                        {
+                            serviceInfo.UpdatedAt = deployment.Updated;
+                        }
+
+                        return serviceInfo;
+
+                        string GetServiceId()
+                        {
+                            if (!string.IsNullOrWhiteSpace(deployment.TesHostname))
+                            {
+                                return string.Join('.', deployment.TesHostname.Trim().Split('.').Reverse());
+                            }
+
+                            var terra = c.GetRequiredService<IOptions<TerraOptions>>().Value;
+
+                            if (!string.IsNullOrWhiteSpace(terra?.WorkspaceId))
+                            {
+                                return $"Terra Workspace: {terra.WorkspaceId}";
+                            }
+
+                            var scheduling = c.GetRequiredService<IOptions<BatchSchedulingOptions>>().Value;
+
+                            if (!string.IsNullOrWhiteSpace(scheduling?.Prefix))
+                            {
+                                return $"BatchPrefix: {scheduling.Prefix}";
+                            }
+
+                            return "Unknown";
+                        }
+
+                        TesOrganization GetOrganization()
+                        {
+                            if (!string.IsNullOrWhiteSpace(deployment.OrganizationName) && !string.IsNullOrWhiteSpace(deployment.OrganizationUrl))
+                            {
+                                return new()
+                                {
+                                    Name = deployment.OrganizationName,
+                                    Url = deployment.OrganizationUrl
+                                };
+                            }
+
+                            if (string.IsNullOrWhiteSpace(deployment.OrganizationName) != string.IsNullOrWhiteSpace(deployment.OrganizationUrl))
+                            {
+                                logger.LogWarning(@"Partial organizational information is missing. Ignored values are OrganizationName: '{OrganizationName}' and OrganizationUrl: '{OrganizationUrl}'", deployment.OrganizationName, deployment.OrganizationUrl);
+                            }
+                            else
+                            {
+                                logger.LogWarning(@"Organizational information is missing.");
+                            }
+
+                            return new()
+                            {
+                                Name = @"Example Organization",
+                                Url = @"https://www.example.com"
+                            };
+                        }
+
+                        static string ParseStorageUri(string uri)
+                        {
+                            try
+                            {
+                                var builder = new UriBuilder(uri.Trim())
+                                {
+                                    Query = null // remove SAS
+                                };
+
+                                // TODO: change schema and reduce host to account name, if name is azure storage blob. Similar for other cloud storage techs
+
+                                return builder.Uri.AbsoluteUri;
+                            }
+                            catch
+                            {
+                                return null;
+                            }
+                        }
+                    })
 
                     .AddSwaggerGen(c =>
                     {
@@ -227,7 +375,7 @@ namespace TesApi.Web
                 return false;
             }
 
-            TerraWsmApiClient CreateTerraApiClient(IServiceProvider services)
+            Lazy<TerraWsmApiClient> CreateTerraApiClient(IServiceProvider services)
             {
                 logger.LogInformation("Attempting to create a Terra WSM API client");
 
@@ -237,10 +385,29 @@ namespace TesApi.Web
 
                     ValidateRequiredOptionsForTerraStorageProvider(options.Value);
 
-                    return ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services, options.Value.WsmApiHost);
+                    return new(() => ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services, options.Value.WsmApiHost));
                 }
 
                 throw new InvalidOperationException("Terra WSM API Host is not configured.");
+            }
+
+            IActionIdentityProvider CreateActionIdentityProvider(IServiceProvider services)
+            {
+                logger.LogInformation("Attempting to create an ActionIdentityProvider");
+
+                if (TerraOptionsAreConfigured(services))
+                {
+                    var options = services.GetRequiredService<IOptions<TerraOptions>>();
+
+                    ValidateRequiredOptionsForTerraActionIdentities(options.Value);
+
+                    var samClient = new Lazy<TerraSamApiClient>(() => ActivatorUtilities.CreateInstance<TerraSamApiClient>(services, options.Value.SamApiHost));
+
+                    logger.LogInformation("Creating TerraActionIdentityProvider");
+                    return ActivatorUtilities.CreateInstance<TerraActionIdentityProvider>(services, samClient);
+                }
+
+                return ActivatorUtilities.CreateInstance<DefaultActionIdentityProvider>(services);
             }
 
             static void ValidateRequiredOptionsForTerraStorageProvider(TerraOptions terraOptions)
@@ -250,6 +417,12 @@ namespace TesApi.Web
                 ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageContainerName, nameof(terraOptions.WorkspaceStorageContainerName));
                 ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageContainerResourceId, nameof(terraOptions.WorkspaceStorageContainerResourceId));
                 ArgumentException.ThrowIfNullOrEmpty(terraOptions.WsmApiHost, nameof(terraOptions.WsmApiHost));
+            }
+
+            static void ValidateRequiredOptionsForTerraActionIdentities(TerraOptions terraOptions)
+            {
+                ArgumentException.ThrowIfNullOrEmpty(terraOptions.SamApiHost, nameof(terraOptions.SamApiHost));
+                ArgumentException.ThrowIfNullOrEmpty(terraOptions.SamApiHost, nameof(terraOptions.SamResourceIdForAcrPull));
             }
 
             BatchAccountResourceInformation CreateBatchAccountResourceInformation(IServiceProvider services)
@@ -265,7 +438,7 @@ namespace TesApi.Web
                 if (string.IsNullOrWhiteSpace(options.Value.AppKey))
                 {
                     //we are assuming Arm with MI/RBAC if no key is provided. Try to get info from the batch account.
-                    var task = ArmResourceInformationFinder.TryGetResourceInformationFromAccountNameAsync(options.Value.AccountName, AzureCloudConfig, System.Threading.CancellationToken.None);
+                    var task = ArmResourceInformationFinder.TryGetBatchAccountInformationFromAccountNameAsync(options.Value.AccountName, services.GetRequiredService<TokenCredential>(), AzureCloudConfig.ArmEnvironment.Value, CancellationToken.None);
                     task.Wait();
 
                     if (task.Result is null)

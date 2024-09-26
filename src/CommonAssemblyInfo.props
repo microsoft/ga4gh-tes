@@ -1,9 +1,9 @@
 ﻿<Project>
   <PropertyGroup>
-    <FileVersion>0.0.0.0</FileVersion>
+    <AssemblyVersion>0.0.0.0</AssemblyVersion>
     <Company>Microsoft Corporation</Company>
     <Product>TES on Azure</Product>
     <Copyright>Copyright © Microsoft Corporation</Copyright>
-    <VersionPrefix>$([System.Version]::Parse($(FileVersion)).Major).$([System.Version]::Parse($(FileVersion)).Minor).$([System.Version]::Parse($(FileVersion)).Build)</VersionPrefix>
+    <VersionPrefix>$([System.Version]::Parse($(AssemblyVersion)).Major).$([System.Version]::Parse($(AssemblyVersion)).Minor).$([System.Version]::Parse($(AssemblyVersion)).Build)</VersionPrefix>
   </PropertyGroup>
 </Project>

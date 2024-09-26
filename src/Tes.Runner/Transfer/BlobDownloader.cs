@@ -67,6 +67,12 @@ public class BlobDownloader : BlobOperationPipeline
     /// <returns>Part's length in bytes</returns>
     public override async ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
     {
+
+        if (buffer.Length == 0)
+        {
+            return 0;
+        }
+
         return await BlobApiHttpUtils.ExecuteHttpRequestAndReadBodyResponseAsync(buffer, () => BlobApiHttpUtils.CreateReadByRangeHttpRequest(buffer), cancellationToken);
     }
 
@@ -98,8 +104,9 @@ public class BlobDownloader : BlobOperationPipeline
     /// <param name="blobUrl"></param>
     /// <param name="fileName"></param>
     /// <param name="rootHash"></param>
+    /// <param name="contentMd5"></param>
     /// <returns></returns>
-    public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash)
+    public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash, string? contentMd5)
     {
         Logger.LogInformation($"Completed download. Total bytes: {length:n0} Filename: {fileName}");
 

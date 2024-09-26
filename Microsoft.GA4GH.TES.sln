@@ -5,6 +5,7 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{EF518D6D-FA52-4B12-AF47-0C46C0BC434D}"
 	ProjectSection(SolutionItems) = preProject
 		.editorconfig = .editorconfig
+		after.Microsoft.GA4GH.TES.sln.targets = after.Microsoft.GA4GH.TES.sln.targets
 		CodeCoverage.runsettings = CodeCoverage.runsettings
 		src\CommonAssemblyInfo.props = src\CommonAssemblyInfo.props
 		src\deploy-tes-docker-image.sh = src\deploy-tes-docker-image.sh
@@ -94,6 +95,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "vm_monitor_scripts", "vm_mo
 		src\vm_monitor\vm_monitor_scripts\tes_vm_monitor.once.conf = src\vm_monitor\vm_monitor_scripts\tes_vm_monitor.once.conf
 	EndProjectSection
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.SDK", "src\Tes.SDK\Tes.SDK.csproj", "{9625CB30-4159-4257-9032-B693EDCB5E9B}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.SDK.Tests", "src\Tes.SDK.Tests\Tes.SDK.Tests.csproj", "{AE7ADB92-BEC6-4030-B62F-BDBB6AC53CB4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -152,6 +157,14 @@ Global
 		{FDD8FB67-8C8D-4D84-8D4C-FEEA644F4745}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FDD8FB67-8C8D-4D84-8D4C-FEEA644F4745}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FDD8FB67-8C8D-4D84-8D4C-FEEA644F4745}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9625CB30-4159-4257-9032-B693EDCB5E9B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9625CB30-4159-4257-9032-B693EDCB5E9B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9625CB30-4159-4257-9032-B693EDCB5E9B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9625CB30-4159-4257-9032-B693EDCB5E9B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AE7ADB92-BEC6-4030-B62F-BDBB6AC53CB4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AE7ADB92-BEC6-4030-B62F-BDBB6AC53CB4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AE7ADB92-BEC6-4030-B62F-BDBB6AC53CB4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AE7ADB92-BEC6-4030-B62F-BDBB6AC53CB4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

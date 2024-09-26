@@ -104,10 +104,10 @@ namespace TesApi.Web
             var pools = new HashSet<string>();
 
             var tesTasks = (await repository.GetItemsAsync(
-                    predicate: t => t.State == TesState.QUEUEDEnum
-                        || t.State == TesState.INITIALIZINGEnum
-                        || t.State == TesState.RUNNINGEnum
-                        || (t.State == TesState.CANCELEDEnum && t.IsCancelRequested),
+                    predicate: t => t.State == TesState.QUEUED
+                        || t.State == TesState.INITIALIZING
+                        || t.State == TesState.RUNNING
+                        || (t.State == TesState.CANCELED && t.IsCancelRequested),
                     cancellationToken: stoppingToken))
                 .OrderBy(t => t.CreationTime)
                 .ToList();
@@ -133,7 +133,7 @@ namespace TesApi.Web
                     {
                         if (++tesTask.ErrorCount > 3) // TODO: Should we increment this for exceptions here (current behaviour) or the attempted executions on the batch?
                         {
-                            tesTask.State = TesState.SYSTEMERROREnum;
+                            tesTask.State = TesState.SYSTEM_ERROR;
                             tesTask.EndTime = DateTimeOffset.UtcNow;
                             tesTask.SetFailureReason("UnknownError", exc.Message, exc.StackTrace);
                         }
@@ -174,13 +174,13 @@ namespace TesApi.Web
 
                         switch (tesTask.State)
                         {
-                            case TesState.CANCELEDEnum:
-                            case TesState.COMPLETEEnum:
+                            case TesState.CANCELED:
+                            case TesState.COMPLETE:
                                 hasEnded = true;
                                 break;
 
-                            case TesState.EXECUTORERROREnum:
-                            case TesState.SYSTEMERROREnum:
+                            case TesState.EXECUTOR_ERROR:
+                            case TesState.SYSTEM_ERROR:
                                 hasErrored = true;
                                 hasEnded = true;
                                 break;
@@ -233,7 +233,7 @@ namespace TesApi.Web
                     logger.LogError(exc, "Updating TES Task '{TesTask}' threw {ExceptionType}: '{ExceptionMessage}'. Stack trace: {ExceptionStackTrace}", tesTask.Id, exc.GetType().FullName, exc.Message, exc.StackTrace);
                 }
 
-                if (!string.IsNullOrWhiteSpace(tesTask.PoolId) && (TesState.QUEUEDEnum == tesTask.State || TesState.RUNNINGEnum == tesTask.State))
+                if (!string.IsNullOrWhiteSpace(tesTask.PoolId) && (TesState.QUEUED == tesTask.State || TesState.RUNNING == tesTask.State))
                 {
                     pools.Add(tesTask.PoolId);
                 }

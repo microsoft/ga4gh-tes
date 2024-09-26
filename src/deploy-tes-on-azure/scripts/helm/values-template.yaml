@@ -1,4 +1,4 @@
-﻿service:
+service:
   tesPort: 80
   tesHostname: RUNTIME_PARAMETER
   enableIngress: false
@@ -16,10 +16,19 @@ config:
     advancedVmPerformanceMonitoringEnabled: RUNTIME_PARAMETER
     disablePublicIpAddress: RUNTIME_PARAMETER
     globalStartTask: /configuration/start-task.sh
+    contentMD5: "False"
   batchScheduling:
     usePreemptibleVmsOnly: RUNTIME_PARAMETER
     poolRotationForcedDays: "7"
+    taskMaxWallClockTimeDays: "7"
     prefix: RUNTIME_PARAMETER
+  deployment:
+    organizationName: RUNTIME_PARAMETER
+    organizationUrl: RUNTIME_PARAMETER
+    contactUri: RUNTIME_PARAMETER
+    environment: RUNTIME_PARAMETER
+    created: RUNTIME_PARAMETER
+    updated: RUNTIME_PARAMETER
   batchImageGen2:
     offer: RUNTIME_PARAMETER
     publisher: RUNTIME_PARAMETER
@@ -32,10 +41,8 @@ config:
     sku: RUNTIME_PARAMETER
     version: RUNTIME_PARAMETER
     nodeAgentSkuId: RUNTIME_PARAMETER
-  martha:
+  drsHub:
     url: RUNTIME_PARAMETER
-    keyVaultName: RUNTIME_PARAMETER
-    secretName: RUNTIME_PARAMETER
   letsEncryptEmail: RUNTIME_PARAMETER
 
 tesDatabase:

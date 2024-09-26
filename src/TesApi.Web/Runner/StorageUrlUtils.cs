@@ -17,11 +17,11 @@ namespace TesApi.Web.Runner
         /// <summary>
         /// Default Azure Blob storage endpoint hostname suffix. 
         /// </summary>
-        public const string DefaultBlobEndpointHostNameSuffix = ".blob.core.windows.net";
+        internal const string DefaultBlobEndpointHostNameSuffix = ".blob.core.windows.net";
         /// <summary>
-        /// Blob endpoint Host name suffix.  This is set at starup in Program.cs
+        /// Blob endpoint Host name suffix.  This is set at startup in Program.cs
         /// </summary>
-        public static string BlobEndpointHostNameSuffix = DefaultBlobEndpointHostNameSuffix;
+        public static string BlobEndpointHostNameSuffix { get; internal set; } = DefaultBlobEndpointHostNameSuffix;
 
         /// <summary>
         /// Converts a local path with the format /storageAccount/container/blobName to an Azure storage URL.
@@ -35,7 +35,6 @@ namespace TesApi.Web.Runner
         /// <exception cref="InvalidOperationException"></exception>
         public static string ConvertLocalPathOrCromwellLocalPathToUrl(string uriValue, string cromwellStorageAccountName)
         {
-
             //check if the path is a known cromwell path, and append the default storage account name as it would be missing
             var pathToConvert = uriValue;
             if (uriValue.StartsWith(StorageAccessProvider.CromwellPathPrefix))

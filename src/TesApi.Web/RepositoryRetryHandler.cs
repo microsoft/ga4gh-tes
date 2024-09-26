@@ -57,8 +57,8 @@ namespace TesApi.Web
             => _asyncRetryPolicy.ExecuteAsync(ct => _repository.GetItemsAsync(predicate, ct), cancellationToken);
 
         /// <inheritdoc/>
-        public Task<(string, IEnumerable<T>)> GetItemsAsync(Expression<Func<T, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken)
-            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.GetItemsAsync(predicate, pageSize, continuationToken, ct), cancellationToken);
+        public Task<IRepository<T>.GetItemsResult> GetItemsAsync(string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString rawPredicate, IEnumerable<Expression<Func<T, bool>>> predicates)
+            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.GetItemsAsync(continuationToken, pageSize, ct, rawPredicate, predicates), cancellationToken);
 
         /// <inheritdoc/>
         public Task<bool> TryGetItemAsync(string id, CancellationToken cancellationToken, Action<T> onSuccess)
@@ -71,5 +71,9 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public ValueTask<bool> TryRemoveItemFromCacheAsync(T item, CancellationToken cancellationToken)
             => _repository.TryRemoveItemFromCacheAsync(item, cancellationToken);
+
+        /// <inheritdoc/>
+        public FormattableString JsonFormattableRawString(string property, FormattableString sql)
+            => _repository.JsonFormattableRawString(property, sql);
     }
 }

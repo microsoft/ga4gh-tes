@@ -6,12 +6,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
-using Microsoft.Azure.Management.Batch.Models;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.Models;
 using TesApi.Web;
 using TesApi.Web.Management;
+using TesApi.Web.Management.Batch;
 using TesApi.Web.Management.Models.Quotas;
 
 namespace TesApi.Tests
@@ -141,13 +141,21 @@ namespace TesApi.Tests
                 wrapAzureProxy: true,
                 configuration: GetMockConfig(),
                 azureProxy: PrepareMockAzureProxy(azureProxyReturn),
+                batchPoolManager: PrepareMockBatchPoolManager(azureProxyReturn),
                 batchQuotaProvider: GetMockQuotaProvider(azureProxyReturn),
                 batchSkuInformationProvider: GetMockSkuInfoProvider(azureProxyReturn),
                 accountResourceInformation: new("defaultbatchaccount", "defaultresourcegroup", "defaultsubscription", "defaultregion", "defaultendpoint"));
         }
 
         private static async Task<BatchPool> AddPool(BatchScheduler batchPools, bool isPreemtable)
-            => (BatchPool)await batchPools.GetOrAddPoolAsync("key1", isPreemtable, (id, _1) => ValueTask.FromResult(new Pool(name: id, displayName: "display1", vmSize: "vmSize1")), System.Threading.CancellationToken.None);
+            => (BatchPool)await batchPools.GetOrAddPoolAsync("key1", isPreemtable, (id, _1) => ValueTask.FromResult(CreatePoolData(name: id, displayName: "display1", vmSize: "vmSize1")), System.Threading.CancellationToken.None);
+
+        internal static Azure.ResourceManager.Batch.BatchAccountPoolData CreatePoolData(string name, string displayName = default, string vmSize = default)
+        {
+            Azure.ResourceManager.Batch.BatchAccountPoolData result = new() { DisplayName = displayName, VmSize = vmSize };
+            result.Metadata.Add(new(string.Empty, name));
+            return result;
+        }
 
         private static void TimeShift(TimeSpan shift, BatchPool pool)
             => pool.TimeShift(shift);
@@ -157,7 +165,7 @@ namespace TesApi.Tests
             internal static AzureProxyReturnValues Get()
                 => new();
 
-            internal AzureBatchAccountQuotas BatchQuotas { get; set; } = new() { PoolQuota = 1, ActiveJobAndJobScheduleQuota = 1, DedicatedCoreQuotaPerVMFamily = new List<VirtualMachineFamilyCoreQuota>() };
+            internal AzureBatchAccountQuotas BatchQuotas { get; set; } = new() { PoolQuota = 1, ActiveJobAndJobScheduleQuota = 1, DedicatedCoreQuotaPerVMFamily = [] };
             internal int ActivePoolCount { get; set; } = 0;
 
             internal Func<string, ODATADetailLevel, IAsyncEnumerable<ComputeNode>> AzureProxyListComputeNodesAsync { get; set; } = (poolId, detailLevel) => AsyncEnumerable.Empty<ComputeNode>();
@@ -172,7 +180,7 @@ namespace TesApi.Tests
             internal bool PoolStateExists(string poolId)
                 => poolState.ContainsKey(poolId);
 
-            private readonly Dictionary<string, (int? CurrentDedicatedNodes, int? CurrentLowPriorityNodes, int? TargetDedicatedNodes, int? TargetLowPriorityNodes, Microsoft.Azure.Batch.Common.AllocationState? AllocationState, DateTime? AllocationStateTransitionTime, Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun AutoScaleRun, bool? EnableAutoScale, DateTime? CreationTime, IList<Microsoft.Azure.Batch.MetadataItem> PoolMetadata)> poolState = [];
+            private readonly Dictionary<string, (int? CurrentDedicatedNodes, int? CurrentLowPriorityNodes, int? TargetDedicatedNodes, int? TargetLowPriorityNodes, Microsoft.Azure.Batch.Common.AllocationState? AllocationState, DateTime? AllocationStateTransitionTime, Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun AutoScaleRun, bool? EnableAutoScale, DateTime? CreationTime, IList<MetadataItem> PoolMetadata)> poolState = [];
 
             internal void SetPoolState(
                 string id,
@@ -185,7 +193,7 @@ namespace TesApi.Tests
                 Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun autoScaleRun = default,
                 bool? enableAutoScale = default,
                 DateTime? creationTime = default,
-                IList<Microsoft.Azure.Batch.MetadataItem> poolMetadata = default)
+                IList<MetadataItem> poolMetadata = default)
             {
                 if (poolState.TryGetValue(id, out var state))
                 {
@@ -214,7 +222,7 @@ namespace TesApi.Tests
                         creationTime ?? state.CreationTime,
                         metadata.Count == 0 ? null : metadata.Select(ConvertMetadata).ToList());
 
-                    static Microsoft.Azure.Batch.MetadataItem ConvertMetadata(KeyValuePair<string, string> pair)
+                    static MetadataItem ConvertMetadata(KeyValuePair<string, string> pair)
                         => new(pair.Key, pair.Value);
                 }
                 else
@@ -229,14 +237,15 @@ namespace TesApi.Tests
                 _ = poolState.Remove(poolId);
             }
 
-            internal string CreateBatchPoolImpl(Pool pool)
+            internal string CreateBatchPoolImpl(Azure.ResourceManager.Batch.BatchAccountPoolData pool)
             {
-                var poolId = pool.Name;
+                var poolIdItem = pool.Metadata.Single(i => string.IsNullOrEmpty(i.Name));
+                pool.Metadata.Remove(poolIdItem);
 
-                poolState.Add(poolId, (default, default, default, default, Microsoft.Azure.Batch.Common.AllocationState.Steady, default, default, true, default, pool.Metadata?.Select(ConvertMetadata).ToList()));
-                return poolId;
+                poolState.Add(poolIdItem.Value, (default, default, default, default, Microsoft.Azure.Batch.Common.AllocationState.Steady, default, default, true, default, pool.Metadata?.Select(ConvertMetadata).ToList()));
+                return poolIdItem.Value;
 
-                static Microsoft.Azure.Batch.MetadataItem ConvertMetadata(Microsoft.Azure.Management.Batch.Models.MetadataItem item)
+                static MetadataItem ConvertMetadata(Azure.ResourceManager.Batch.Models.BatchAccountPoolMetadataItem item)
                     => new(item.Name, item.Value);
             }
 
@@ -292,30 +301,35 @@ namespace TesApi.Tests
                     .ReturnsAsync(new BatchVmCoreQuota(batchQuotas.LowPriorityCoreQuota,
                         true,
                         batchQuotas.DedicatedCoreQuotaPerVMFamilyEnforced,
-                        batchQuotas.DedicatedCoreQuotaPerVMFamily?.Select(v => new BatchVmCoresPerFamily(v.Name, v.CoreQuota)).ToList(),
+                        batchQuotas.DedicatedCoreQuotaPerVMFamily?.Select(v => new BatchVmCoresPerFamily(v.Name, v.CoreQuota ?? 0)).ToList(),
                         new(batchQuotas.ActiveJobAndJobScheduleQuota, batchQuotas.PoolQuota, batchQuotas.DedicatedCoreQuota, batchQuotas.LowPriorityCoreQuota)));
                 quotaProvider.Setup(p =>
                         p.GetVmCoreQuotaAsync(It.Is<bool>(l => l == false), It.IsAny<System.Threading.CancellationToken>()))
                     .ReturnsAsync(new BatchVmCoreQuota(batchQuotas.DedicatedCoreQuota,
                         false,
                         batchQuotas.DedicatedCoreQuotaPerVMFamilyEnforced,
-                        batchQuotas.DedicatedCoreQuotaPerVMFamily?.Select(v => new BatchVmCoresPerFamily(v.Name, v.CoreQuota)).ToList(),
+                        batchQuotas.DedicatedCoreQuotaPerVMFamily?.Select(v => new BatchVmCoresPerFamily(v.Name, v.CoreQuota ?? 0)).ToList(),
                         new(batchQuotas.ActiveJobAndJobScheduleQuota, batchQuotas.PoolQuota, batchQuotas.DedicatedCoreQuota, batchQuotas.LowPriorityCoreQuota)));
             });
+
+        private static Action<Mock<IBatchPoolManager>> PrepareMockBatchPoolManager(AzureProxyReturnValues azureProxyReturnValues)
+            => azureProxy =>
+            {
+                azureProxy.Setup(a => a.CreateBatchPoolAsync(It.IsAny<Azure.ResourceManager.Batch.BatchAccountPoolData>(), It.IsAny<bool>(), It.IsAny<System.Threading.CancellationToken>())).Returns((Azure.ResourceManager.Batch.BatchAccountPoolData p, bool _1, System.Threading.CancellationToken _2) => Task.FromResult(azureProxyReturnValues.CreateBatchPoolImpl(p)));
+                azureProxy.Setup(a => a.DeleteBatchPoolAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).Callback<string, System.Threading.CancellationToken>((poolId, cancellationToken) => azureProxyReturnValues.AzureProxyDeleteBatchPoolImpl(poolId, cancellationToken)).Returns(Task.CompletedTask);
+            };
 
         private static Action<Mock<IAzureProxy>> PrepareMockAzureProxy(AzureProxyReturnValues azureProxyReturnValues)
             => azureProxy =>
             {
                 azureProxy.Setup(a => a.GetActivePoolsAsync(It.IsAny<string>())).Returns(AsyncEnumerable.Empty<CloudPool>());
                 azureProxy.Setup(a => a.GetBatchActivePoolCount()).Returns(azureProxyReturnValues.ActivePoolCount);
-                azureProxy.Setup(a => a.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<System.Threading.CancellationToken>())).Returns((Pool p, bool _1, System.Threading.CancellationToken _2) => Task.FromResult(azureProxyReturnValues.CreateBatchPoolImpl(p)));
                 azureProxy.Setup(a => a.ListComputeNodesAsync(It.IsAny<string>(), It.IsAny<DetailLevel>())).Returns<string, ODATADetailLevel>((poolId, detailLevel) => azureProxyReturnValues.AzureProxyListComputeNodesAsync(poolId, detailLevel));
                 azureProxy.Setup(a => a.ListTasksAsync(It.IsAny<string>(), It.IsAny<DetailLevel>())).Returns<string, ODATADetailLevel>((jobId, detailLevel) => azureProxyReturnValues.AzureProxyListTasks(jobId, detailLevel));
                 azureProxy.Setup(a => a.DeleteBatchComputeNodesAsync(It.IsAny<string>(), It.IsAny<IEnumerable<ComputeNode>>(), It.IsAny<System.Threading.CancellationToken>())).Callback<string, IEnumerable<ComputeNode>, System.Threading.CancellationToken>((poolId, computeNodes, cancellationToken) => azureProxyReturnValues.AzureProxyDeleteBatchComputeNodes(poolId, computeNodes, cancellationToken)).Returns(Task.CompletedTask);
                 azureProxy.Setup(a => a.GetBatchPoolAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>(), It.IsAny<DetailLevel>())).Returns((string id, System.Threading.CancellationToken cancellationToken, DetailLevel detailLevel) => Task.FromResult(azureProxyReturnValues.GetBatchPoolImpl(id)));
                 azureProxy.Setup(a => a.GetFullAllocationStateAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).Returns((string poolId, System.Threading.CancellationToken _1) =>
                     Task.FromResult(GetPoolStateFromSettingStateOrDefault(poolId)));
-                azureProxy.Setup(a => a.DeleteBatchPoolAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).Callback<string, System.Threading.CancellationToken>((poolId, cancellationToken) => azureProxyReturnValues.AzureProxyDeleteBatchPoolImpl(poolId, cancellationToken)).Returns(Task.CompletedTask);
 
                 FullBatchPoolAllocationState GetPoolStateFromSettingStateOrDefault(string poolId)
                 {
@@ -341,17 +355,12 @@ namespace TesApi.Tests
         private static IEnumerable<(string Key, string Value)> GetMockConfig()
             => Enumerable
                 .Empty<(string Key, string Value)>()
-                .Append(("BatchScheduling:PoolRotationForcedDays", "0.000694444"));
+                .Append(("BatchScheduling:PoolRotationForcedDays", "0.000694444"))
+                .Append(("BatchScheduling:Prefix", "0123456789"));
 
-        private sealed class MockServiceClient : Microsoft.Azure.Batch.Protocol.BatchServiceClient
+        private sealed class MockServiceClient(Microsoft.Azure.Batch.Protocol.IComputeNodeOperations computeNode) : Microsoft.Azure.Batch.Protocol.BatchServiceClient
         {
-            private readonly Microsoft.Azure.Batch.Protocol.IComputeNodeOperations computeNode;
-
-            public MockServiceClient(Microsoft.Azure.Batch.Protocol.IComputeNodeOperations computeNode)
-            {
-                this.computeNode = computeNode ?? throw new ArgumentNullException(nameof(computeNode));
-            }
-
+            private readonly Microsoft.Azure.Batch.Protocol.IComputeNodeOperations computeNode = computeNode ?? throw new ArgumentNullException(nameof(computeNode));
             public override Microsoft.Azure.Batch.Protocol.IComputeNodeOperations ComputeNode => computeNode;
         }
 
@@ -366,7 +375,7 @@ namespace TesApi.Tests
             Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun autoScaleRun = default,
             bool? enableAutoScale = default,
             DateTime? creationTime = default,
-            IList<Microsoft.Azure.Batch.MetadataItem> metadata = default)
+            IList<MetadataItem> metadata = default)
         {
             if (default == creationTime)
             {
@@ -375,13 +384,13 @@ namespace TesApi.Tests
 
             metadata ??= [];
 
-            var computeNodeOperations = new Mock<Microsoft.Azure.Batch.Protocol.IComputeNodeOperations>();
-            var batchServiceClient = new MockServiceClient(computeNodeOperations.Object);
-            var protocolLayer = typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.ProtocolLayer").GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, new Type[] { typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient) }, null)
-                .Invoke(new object[] { batchServiceClient });
-            var parentClient = (BatchClient)typeof(BatchClient).GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, new Type[] { typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.IProtocolLayer") }, null)
-                .Invoke(new object[] { protocolLayer });
-            var modelPool = new Microsoft.Azure.Batch.Protocol.Models.CloudPool(
+            Mock<Microsoft.Azure.Batch.Protocol.IComputeNodeOperations> computeNodeOperations = new();
+            MockServiceClient batchServiceClient = new(computeNodeOperations.Object);
+            var protocolLayer = typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.ProtocolLayer").GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient)], null)
+                .Invoke([batchServiceClient]);
+            var parentClient = (BatchClient)typeof(BatchClient).GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.IProtocolLayer")], null)
+                .Invoke([protocolLayer]);
+            Microsoft.Azure.Batch.Protocol.Models.CloudPool modelPool = new(
                 id: id,
                 currentDedicatedNodes: currentDedicatedNodes,
                 currentLowPriorityNodes: currentLowPriorityNodes,
@@ -392,11 +401,11 @@ namespace TesApi.Tests
                 enableAutoScale: enableAutoScale,
                 creationTime: creationTime,
                 metadata: metadata.Select(ConvertMetadata).ToList());
-            var pool = (CloudPool)typeof(CloudPool).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, new Type[] { typeof(BatchClient), typeof(Microsoft.Azure.Batch.Protocol.Models.CloudPool), typeof(IEnumerable<BatchClientBehavior>) }, default)
+            var pool = (CloudPool)typeof(CloudPool).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, [typeof(BatchClient), typeof(Microsoft.Azure.Batch.Protocol.Models.CloudPool), typeof(IEnumerable<BatchClientBehavior>)], default)
                 .Invoke([parentClient, modelPool, null]);
             return pool;
 
-            static Microsoft.Azure.Batch.Protocol.Models.MetadataItem ConvertMetadata(Microsoft.Azure.Batch.MetadataItem item)
+            static Microsoft.Azure.Batch.Protocol.Models.MetadataItem ConvertMetadata(MetadataItem item)
                 => item is null ? default : new(item.Name, item.Value);
         }
 
@@ -407,15 +416,15 @@ namespace TesApi.Tests
                 stateTransitionTime = DateTime.UtcNow;
             }
 
-            var computeNodeOperations = new Mock<Microsoft.Azure.Batch.Protocol.IComputeNodeOperations>();
-            var batchServiceClient = new MockServiceClient(computeNodeOperations.Object);
-            var protocolLayer = typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.ProtocolLayer").GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, new Type[] { typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient) }, null)
-                .Invoke(new object[] { batchServiceClient });
-            var parentClient = (BatchClient)typeof(BatchClient).GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, new Type[] { typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.IProtocolLayer") }, null)
-                .Invoke(new object[] { protocolLayer });
-            var modelTask = new Microsoft.Azure.Batch.Protocol.Models.CloudTask(id: id, stateTransitionTime: stateTransitionTime, state: Microsoft.Azure.Batch.Protocol.Models.TaskState.Active);
-            var task = (CloudTask)typeof(CloudTask).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, new Type[] { typeof(BatchClient), typeof(string), typeof(Microsoft.Azure.Batch.Protocol.Models.CloudTask), typeof(IEnumerable<BatchClientBehavior>) }, default)
-                .Invoke(new object[] { parentClient, jobId, modelTask, Enumerable.Empty<BatchClientBehavior>() });
+            Mock<Microsoft.Azure.Batch.Protocol.IComputeNodeOperations> computeNodeOperations = new();
+            MockServiceClient batchServiceClient = new(computeNodeOperations.Object);
+            var protocolLayer = typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.ProtocolLayer").GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient)], null)
+                .Invoke([batchServiceClient]);
+            var parentClient = (BatchClient)typeof(BatchClient).GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.IProtocolLayer")], null)
+                .Invoke([protocolLayer]);
+            Microsoft.Azure.Batch.Protocol.Models.CloudTask modelTask = new(id: id, stateTransitionTime: stateTransitionTime, state: Microsoft.Azure.Batch.Protocol.Models.TaskState.Active);
+            var task = (CloudTask)typeof(CloudTask).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, [typeof(BatchClient), typeof(string), typeof(Microsoft.Azure.Batch.Protocol.Models.CloudTask), typeof(IEnumerable<BatchClientBehavior>)], default)
+                .Invoke([parentClient, jobId, modelTask, Enumerable.Empty<BatchClientBehavior>()]);
             return task;
         }
 
@@ -426,15 +435,15 @@ namespace TesApi.Tests
                 stateTransitionTime = DateTime.UtcNow;
             }
 
-            var computeNodeOperations = new Mock<Microsoft.Azure.Batch.Protocol.IComputeNodeOperations>();
-            var batchServiceClient = new MockServiceClient(computeNodeOperations.Object);
-            var protocolLayer = typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.ProtocolLayer").GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, new Type[] { typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient) }, null)
-                .Invoke(new object[] { batchServiceClient });
-            var parentClient = (BatchClient)typeof(BatchClient).GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, new Type[] { typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.IProtocolLayer") }, null)
-                .Invoke(new object[] { protocolLayer });
-            var modelNode = new Microsoft.Azure.Batch.Protocol.Models.ComputeNode(stateTransitionTime: stateTransitionTime, id: id, affinityId: AffinityPrefix + id, isDedicated: isDedicated, state: isIdle ? Microsoft.Azure.Batch.Protocol.Models.ComputeNodeState.Idle : Microsoft.Azure.Batch.Protocol.Models.ComputeNodeState.Running);
-            var node = (ComputeNode)typeof(ComputeNode).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, new Type[] { typeof(BatchClient), typeof(string), typeof(Microsoft.Azure.Batch.Protocol.Models.ComputeNode), typeof(IEnumerable<BatchClientBehavior>) }, default)
-                .Invoke(new object[] { parentClient, poolId, modelNode, null });
+            Mock<Microsoft.Azure.Batch.Protocol.IComputeNodeOperations> computeNodeOperations = new();
+            MockServiceClient batchServiceClient = new(computeNodeOperations.Object);
+            var protocolLayer = typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.ProtocolLayer").GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient)], null)
+                .Invoke([batchServiceClient]);
+            var parentClient = (BatchClient)typeof(BatchClient).GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.IProtocolLayer")], null)
+                .Invoke([protocolLayer]);
+            Microsoft.Azure.Batch.Protocol.Models.ComputeNode modelNode = new(stateTransitionTime: stateTransitionTime, id: id, affinityId: AffinityPrefix + id, isDedicated: isDedicated, state: isIdle ? Microsoft.Azure.Batch.Protocol.Models.ComputeNodeState.Idle : Microsoft.Azure.Batch.Protocol.Models.ComputeNodeState.Running);
+            var node = (ComputeNode)typeof(ComputeNode).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, [typeof(BatchClient), typeof(string), typeof(Microsoft.Azure.Batch.Protocol.Models.ComputeNode), typeof(IEnumerable<BatchClientBehavior>)], default)
+                .Invoke([parentClient, poolId, modelNode, null]);
             return node;
         }
     }
