@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Tes.Models;
 using Tes.Runner.Models;
@@ -20,6 +21,7 @@ namespace TesApi.Web.Runner
     public class TaskExecutionScriptingManager
     {
         private const string NodeTaskFilename = "runner-task.json";
+        private const string BatchScriptFileName = "batch_script";
 
         private static readonly JsonSerializerSettings IndentedSerializerSettings = new()
         {
@@ -37,14 +39,16 @@ namespace TesApi.Web.Runner
         private readonly IStorageAccessProvider storageAccessProvider;
         private readonly TaskToNodeTaskConverter taskToNodeConverter;
         private readonly ILogger<TaskExecutionScriptingManager> logger;
+        private readonly bool advancedVmPerformanceMonitoring;
 
         /// <summary>
         /// Constructor of TaskExecutionScriptingManager
         /// </summary>
         /// <param name="storageAccessProvider"></param>
         /// <param name="taskToNodeConverter"></param>
+        /// <param name="batchNodesOptions"></param>
         /// <param name="logger"></param>
-        public TaskExecutionScriptingManager(IStorageAccessProvider storageAccessProvider, TaskToNodeTaskConverter taskToNodeConverter, ILogger<TaskExecutionScriptingManager> logger)
+        public TaskExecutionScriptingManager(IStorageAccessProvider storageAccessProvider, TaskToNodeTaskConverter taskToNodeConverter, IOptions<Options.BatchNodesOptions> batchNodesOptions, ILogger<TaskExecutionScriptingManager> logger)
         {
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
             ArgumentNullException.ThrowIfNull(taskToNodeConverter);
@@ -52,6 +56,7 @@ namespace TesApi.Web.Runner
 
             this.storageAccessProvider = storageAccessProvider;
             this.taskToNodeConverter = taskToNodeConverter;
+            this.advancedVmPerformanceMonitoring = batchNodesOptions.Value.AdvancedVmPerformanceMonitoringEnabled;
             this.logger = logger;
         }
 

@@ -5,6 +5,7 @@
 trap "echo Error trapped; exit 0" ERR
 # set -e will cause any error to exit the script
 set -e
+
 # Get nvme device paths without jq being installed
 nvme_devices=$(nvme list -o json | grep -oP "\"DevicePath\" : \"\K[^\"]+" || true)
 nvme_device_count=$(echo $nvme_devices | wc -w)

@@ -260,6 +260,14 @@ namespace TesDeployer
                         throw new ValidationException($"Could not retrieve account names from stored configuration in {storageAccountData.Name}.", displayExample: false);
                     }
 
+                    // validate update-once settings
+                    {
+                        if (configuration.BatchNodesSubnetId is not null && !string.IsNullOrEmpty(aksValues.TryGetValue("BatchNodesSubnetId", out var subnetId) ? subnetId : null))
+                        {
+                            throw new ValidationException("'BatchNodesSubnetId' is already set.", displayExample: false);
+                        }
+                    }
+
                     if (aksValues.TryGetValue("EnableIngress", out var enableIngress) && aksValues.TryGetValue("TesHostname", out var tesHostname))
                     {
                         kubernetesManager.TesHostname = tesHostname;
@@ -1231,6 +1239,7 @@ namespace TesDeployer
 
             // Additional non-personalized settings
             UpdateSetting(settings, defaults, "BatchNodesSubnetId", configuration.BatchNodesSubnetId);
+            UpdateSetting(settings, defaults, "AdvancedVmPerformanceMonitoringEnabled", configuration.AdvancedVmPerformanceMonitoringEnabled);
             UpdateSetting(settings, defaults, "DisableBatchNodesPublicIpAddress", configuration.DisableBatchNodesPublicIpAddress, b => b.GetValueOrDefault().ToString(), configuration.DisableBatchNodesPublicIpAddress.GetValueOrDefault().ToString());
             UpdateSetting(settings, defaults, "DeploymentOrganizationName", configuration.DeploymentOrganizationName);
             UpdateSetting(settings, defaults, "DeploymentOrganizationUrl", configuration.DeploymentOrganizationUrl);
@@ -2420,6 +2429,7 @@ namespace TesDeployer
             ThrowIfProvidedForUpdate(configuration.VnetName, nameof(configuration.VnetName));
             ThrowIfProvidedForUpdate(configuration.VnetResourceGroupName, nameof(configuration.VnetResourceGroupName));
             ThrowIfProvidedForUpdate(configuration.SubnetName, nameof(configuration.SubnetName));
+            ThrowIfProvidedForUpdate(configuration.BatchSubnetName, nameof(configuration.BatchSubnetName));
             ThrowIfProvidedForUpdate(configuration.Tags, nameof(configuration.Tags));
 
             ThrowIfTagsFormatIsUnacceptable(configuration.Tags, nameof(configuration.Tags));

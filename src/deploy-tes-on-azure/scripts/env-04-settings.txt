@@ -14,3 +14,4 @@ BatchPrefix={DefaultName}
 DrsHubUrl=
 GlobalStartTaskPath=/configuration/start-task.sh
 GlobalManagedIdentity=
+AdvancedVmPerformanceMonitoringEnabled=false

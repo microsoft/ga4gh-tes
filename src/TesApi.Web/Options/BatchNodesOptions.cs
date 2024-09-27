@@ -30,6 +30,10 @@ namespace TesApi.Web.Options
         /// </summary>
         public string GlobalStartTask { get; set; } = string.Empty;
         /// <summary>
+        /// True to enable advanced VM performance monitoring, False otherwise
+        /// </summary>
+        public bool AdvancedVmPerformanceMonitoringEnabled { get; set; } = false;
+        /// <summary>
         /// True to have the runner calculate and provide the blob content MD5 to the storage account, False otherwise.
         /// </summary>
         public bool ContentMD5 { get; set; } = false;

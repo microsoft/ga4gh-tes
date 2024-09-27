@@ -57,6 +57,7 @@ namespace TesApi.Web
             {
                 // Delay "starting" Scheduler until this completes to finish initializing BatchScheduler.
                 await batchScheduler.UploadTaskRunnerIfNeeded(stoppingToken);
+                await batchScheduler.UploadMonitoringScriptIfNeeded(stoppingToken);
             }
             catch (Exception exc)
             {

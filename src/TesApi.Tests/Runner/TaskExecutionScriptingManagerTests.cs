@@ -7,6 +7,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Newtonsoft.Json;
@@ -55,7 +56,7 @@ namespace TesApi.Tests.Runner
                 .ReturnsAsync(nodeTask);
 
 
-            taskExecutionScriptingManager = new TaskExecutionScriptingManager(storageAccessProviderMock.Object, taskToNodeTaskConverterMock.Object, new NullLogger<TaskExecutionScriptingManager>());
+            taskExecutionScriptingManager = new TaskExecutionScriptingManager(storageAccessProviderMock.Object, taskToNodeTaskConverterMock.Object, Options.Create<Web.Options.BatchNodesOptions>(new()), new NullLogger<TaskExecutionScriptingManager>());
         }
 
         [TestMethod]

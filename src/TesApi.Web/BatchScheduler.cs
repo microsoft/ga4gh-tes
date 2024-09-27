@@ -56,6 +56,7 @@ namespace TesApi.Web
         public const string BatchNodeTaskWorkingDirEnvVar = "$AZ_BATCH_TASK_WORKING_DIR";
 
         internal const string NodeTaskRunnerFilename = "tes-runner";
+        internal const string VMPerformanceArchiverFilename = "tes_vm_monitor.tar.gz";
 
         private const string AzureSupportUrl = "https://portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/newsupportrequest";
         private const int PoolKeyLength = 55; // 64 max pool name length - 9 chars generating unique pool names
@@ -76,6 +77,7 @@ namespace TesApi.Web
         private readonly string batchNodesSubnetId;
         private readonly bool batchNodesSetContentMd5OnUpload;
         private readonly bool disableBatchNodesPublicIpAddress;
+        private readonly bool advancedVmPerformanceMonitoring;
         private readonly TimeSpan poolLifetime;
         private readonly TimeSpan taskMaxWallClockTime;
         private readonly BatchNodeInfo gen2BatchNodeInfo;
@@ -150,6 +152,7 @@ namespace TesApi.Web
             this.batchNodesSubnetId = batchNodesOptions.Value.SubnetId;
             this.batchNodesSetContentMd5OnUpload = batchNodesOptions.Value.ContentMD5;
             this.disableBatchNodesPublicIpAddress = batchNodesOptions.Value.DisablePublicIpAddress;
+            this.advancedVmPerformanceMonitoring = batchNodesOptions.Value.AdvancedVmPerformanceMonitoringEnabled;
             this.poolLifetime = TimeSpan.FromDays(batchSchedulingOptions.Value.PoolRotationForcedDays == 0 ? Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays : batchSchedulingOptions.Value.PoolRotationForcedDays);
             this.taskMaxWallClockTime = TimeSpan.FromDays(batchSchedulingOptions.Value.TaskMaxWallClockTimeDays == 0 ? Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays : batchSchedulingOptions.Value.TaskMaxWallClockTimeDays);
             this.defaultStorageAccountName = storageOptions.Value.DefaultAccountName;
@@ -415,9 +418,19 @@ namespace TesApi.Web
         {
             var blobUri = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken);
             var blobProperties = await azureProxy.GetBlobPropertiesAsync(blobUri, cancellationToken);
-            if (!(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, $"scripts/{NodeTaskRunnerMD5HashFilename}"), cancellationToken)).Trim().Equals(Convert.ToBase64String(blobProperties?.ContentHash ?? []), StringComparison.OrdinalIgnoreCase))
+            if (!runnerMD5.Equals(Convert.ToBase64String(blobProperties?.ContentHash ?? []), StringComparison.Ordinal))
             {
                 await azureProxy.UploadBlobFromFileAsync(blobUri, $"scripts/{NodeTaskRunnerFilename}", cancellationToken);
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task UploadMonitoringScriptIfNeeded(CancellationToken cancellationToken)
+        {
+            if (advancedVmPerformanceMonitoring)
+            {
+                var blobUri = await storageAccessProvider.GetInternalTesBlobUrlAsync(VMPerformanceArchiverFilename, cancellationToken);
+                await azureProxy.UploadBlobFromFileAsync(blobUri, $"scripts/{VMPerformanceArchiverFilename}", cancellationToken);
             }
         }
 
@@ -1132,6 +1145,13 @@ namespace TesApi.Web
 
             StringBuilder cmd = new("#!/bin/sh\n");
             cmd.Append($"mkdir -p {BatchNodeSharedEnvVar} && {CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), $"{BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)}");
+
+            if (advancedVmPerformanceMonitoring)
+            {
+                cmd.Append($" && mkdir -p {BatchNodeSharedEnvVar}/vm_monitor && {CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(VMPerformanceArchiverFilename, cancellationToken), $"{BatchNodeSharedEnvVar}/vm_monitor/{VMPerformanceArchiverFilename}")}");
+                var script = "vm-monitor.sh";
+                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new((await ReadScript(script)).Replace("{VMPerformanceArchiverFilename}", VMPerformanceArchiverFilename))), script, setExecutable: true)} && ./{script}");
+            }
 
             if (!dockerConfigured)
             {

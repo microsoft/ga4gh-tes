@@ -19,4 +19,5 @@ WORKDIR /app
 COPY --from=publish /app/publish .
 COPY --from=publish /app/publish-output/tes-runner /app/scripts/tes-runner
 COPY --from=publish /app/publish-output/tes-runner.md5 /app/scripts/tes-runner.md5
+COPY ./vm_monitor/tes_vm_monitor.tar.gz /app/scripts/tes_vm_monitor.tar.gz
 ENTRYPOINT ["dotnet", "tesapi.dll"]
