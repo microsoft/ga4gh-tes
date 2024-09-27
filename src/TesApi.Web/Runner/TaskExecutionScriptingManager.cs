@@ -21,7 +21,6 @@ namespace TesApi.Web.Runner
     public class TaskExecutionScriptingManager
     {
         private const string NodeTaskFilename = "runner-task.json";
-        private const string VMPerformanceArchiverFilename = "tes_vm_monitor.tar.gz";
         private const string BatchScriptFileName = "batch_script";
 
         private static readonly JsonSerializerSettings IndentedSerializerSettings = new()
