@@ -25,7 +25,8 @@ namespace TES.SDK.Examples
             task.Resources.Preemptible = true;
             task.Resources.CpuCores = 1;
             task.Resources.RamGb = 1;
-            //testTesTask.Resources.DiskGb = 100;
+            task.Resources.DiskGb = 1;
+
             const long maxPrimes = 1_000_000;
             string outputFileName = $"primes-2-{maxPrimes}.txt";
             string command = $"apt-get update && apt-get install -y primesieve && primesieve {maxPrimes} -p > /tmp/{outputFileName}";
