@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using Tes.Models;
-using static Tes.SDK.TesClient;
 
 namespace Tes.SDK
 {
