@@ -37,8 +37,8 @@ namespace TES.SDK.Examples
 
             task.Outputs.Add(new()
             {
-                Path = "/tmp/curl-output.txt",
-                Url = $"https://{_storageAccountName}.blob.core.windows.net/outputs/curl-output.txt"
+                Path = "/tmp/output.txt",
+                Url = $"https://{_storageAccountName}.blob.core.windows.net/outputs/output.txt"
             });
             
             using ITesClient tesClient = new TesClient(_tesCredentials);
