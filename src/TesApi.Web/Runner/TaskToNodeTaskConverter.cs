@@ -129,16 +129,14 @@ namespace TesApi.Web.Runner
             {
                 var builder = new NodeTaskBuilder();
 
-                //TODO: Revise this assumption (carried over from the current implementation) and consider Single() if in practice only one executor per task is supported.
-                var executor = task.Executors.First();
-
                 builder.WithId(task.Id)
                     .WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
+                    .WithMountParentDirectory(containerMountParentDirectory)
                     .WithResourceIdManagedIdentity(GetNodeManagedIdentityResourceId(task, nodeTaskConversionOptions.GlobalManagedIdentity))
                     .WithAcrPullResourceIdManagedIdentity(nodeTaskConversionOptions.AcrPullIdentity)
                     .WithWorkflowId(task.WorkflowId)
-                    .WithContainerCommands(executor.Command)
-                    .WithContainerImage(executor.Image)
+                    .WithContainerVolumes(task.Volumes)
+                    .WithExecutors(task.Executors)
                     .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath: string.Empty))
                     .WithLogPublisher(storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath: string.Empty))
                     .WithDrsHubUrl(nodeTaskConversionOptions.DrsHubApiHost)
@@ -184,8 +182,7 @@ namespace TesApi.Web.Runner
                 builder.WithOutputUsingCombinedTransformationStrategy(
                     AppendParentDirectoryIfSet(path, $"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%"),
                     url.AbsoluteUri,
-                    fileType: FileType.File,
-                    mountParentDirectory: null);
+                    fileType: FileType.File);
             }
         }
 
@@ -262,7 +259,7 @@ namespace TesApi.Web.Runner
                     inputs.AddRange(distinctAdditionalInputs);
                 }
 
-                await MapInputsAsync(inputs, pathParentDirectory, containerMountParentDirectory, builder);
+                await MapInputsAsync(inputs, pathParentDirectory, builder);
             }
         }
 
@@ -535,12 +532,11 @@ namespace TesApi.Web.Runner
             outputs?.ForEach(output =>
             {
                 builder.WithOutputUsingCombinedTransformationStrategy(
-                    AppendParentDirectoryIfSet(output.Path, pathParentDirectory), output.Url, ToNodeTaskFileType(output.Type),
-                    containerMountParentDirectory);
+                    AppendParentDirectoryIfSet(output.Path, pathParentDirectory), output.Url, ToNodeTaskFileType(output.Type));
             });
         }
 
-        private async Task MapInputsAsync(List<TesInput> inputs, string pathParentDirectory, string containerMountParentDirectory,
+        private async Task MapInputsAsync(List<TesInput> inputs, string pathParentDirectory,
             NodeTaskBuilder builder)
         {
             if (inputs is null || inputs.Count == 0)
@@ -585,8 +581,7 @@ namespace TesApi.Web.Runner
             void AddInputToBuilder(string path, string url)
             {
                 builder.WithInputUsingCombinedTransformationStrategy(
-                    AppendParentDirectoryIfSet(path, pathParentDirectory), url,
-                    containerMountParentDirectory);
+                    AppendParentDirectoryIfSet(path, pathParentDirectory), url);
             }
         }
 

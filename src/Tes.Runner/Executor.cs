@@ -18,7 +18,6 @@ namespace Tes.Runner
         private readonly ILogger logger = PipelineLoggerFactory.Create<Executor>();
         private readonly NodeTask tesNodeTask;
         private readonly FileOperationResolver operationResolver;
-        private readonly VolumeBindingsGenerator volumeBindingsGenerator = new();
         private readonly EventsPublisher eventsPublisher;
         private readonly ITransferOperationFactory transferOperationFactory;
 
@@ -46,22 +45,21 @@ namespace Tes.Runner
             this.operationResolver = operationResolver;
             this.eventsPublisher = eventsPublisher;
             this.transferOperationFactory = transferOperationFactory;
-
         }
 
-        public async Task<NodeTaskResult> ExecuteNodeContainerTaskAsync(DockerExecutor dockerExecutor)
+        public async Task<NodeTaskResult> ExecuteNodeContainerTaskAsync(DockerExecutor dockerExecutor, int selector)
         {
             try
             {
-                await eventsPublisher.PublishExecutorStartEventAsync(tesNodeTask);
+                await eventsPublisher.PublishExecutorStartEventAsync(tesNodeTask, selector);
 
-                var bindings = volumeBindingsGenerator.GenerateVolumeBindings(tesNodeTask.Inputs, tesNodeTask.Outputs);
+                var bindings = new VolumeBindingsGenerator(tesNodeTask.MountParentDirectory!).GenerateVolumeBindings(tesNodeTask.Inputs, tesNodeTask.Outputs, tesNodeTask.ContainerVolumes);
 
-                var executionOptions = CreateExecutionOptions(bindings);
+                var executionOptions = CreateExecutionOptions(tesNodeTask.Executors![selector], bindings);
 
                 var result = await dockerExecutor.RunOnContainerAsync(executionOptions);
 
-                await eventsPublisher.PublishExecutorEndEventAsync(tesNodeTask, result.ExitCode, ToStatusMessage(result), result.Error);
+                await eventsPublisher.PublishExecutorEndEventAsync(tesNodeTask, selector, result.ExitCode, ToStatusMessage(result), result.Error);
 
                 return new NodeTaskResult(result);
             }
@@ -69,16 +67,17 @@ namespace Tes.Runner
             {
                 logger.LogError(e, "Failed to execute container");
 
-                await eventsPublisher.PublishExecutorEndEventAsync(tesNodeTask, DefaultErrorExitCode, EventsPublisher.FailedStatus, e.Message);
+                await eventsPublisher.PublishExecutorEndEventAsync(tesNodeTask, selector, DefaultErrorExitCode, EventsPublisher.FailedStatus, e.Message);
 
                 throw;
             }
         }
 
-        private ExecutionOptions CreateExecutionOptions(List<string> bindings)
+        private ExecutionOptions CreateExecutionOptions(Models.Executor executor, List<string> bindings)
         {
-            return new(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute, bindings,
-                tesNodeTask.ContainerWorkDir, tesNodeTask.RuntimeOptions, tesNodeTask.ContainerDeviceRequests);
+            return new(executor.ImageName, executor.ImageTag, executor.CommandsToExecute, bindings,
+                executor.ContainerWorkDir, tesNodeTask.RuntimeOptions, tesNodeTask.ContainerDeviceRequests,
+                executor.ContainerEnv, executor.ContainerStdIn, executor.ContainerStdOut, executor.ContainerStdErr);
         }
 
         private static string ToStatusMessage(ContainerExecutionResult result)

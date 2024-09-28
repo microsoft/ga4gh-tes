@@ -75,11 +75,13 @@ namespace Tes.RunnerCLI.Commands
         /// <param name="nodeTask">Node task definition</param>
         /// <param name="file">Node task definition file</param>
         /// <param name="apiVersion"></param>
-        ///<exception cref = "CommandExecutionException" > Thrown when the process launcher or launcher sub-process fail</exception>
         /// <param name="dockerUri">Docker API URI</param>
-        public static async Task LaunchesExecutorCommandAsSubProcessAsync(Runner.Models.NodeTask nodeTask, FileInfo file, string apiVersion, Uri dockerUri)
+        /// <param name="selector">Which task executor to run</param>
+        ///<exception cref = "CommandExecutionException" > Thrown when the process launcher or launcher sub-process fail</exception>
+        public static async Task LaunchesExecutorCommandAsSubProcessAsync(Runner.Models.NodeTask nodeTask, FileInfo file, string apiVersion, Uri dockerUri, int selector)
         {
             ProcessExecutionResult results = null!;
+
             try
             {
                 var processLauncher = await ProcessLauncher.CreateLauncherAsync(nodeTask, logNamePrefix: CommandFactory.ExecutorCommandName, apiVersion: apiVersion);
@@ -87,7 +89,8 @@ namespace Tes.RunnerCLI.Commands
                 var args = new List<string>() {
                     CommandFactory.ExecutorCommandName,
                     $"--{BlobPipelineOptionsConverter.ApiVersionOption} {apiVersion}",
-                    $"--{CommandFactory.DockerUriOption} {dockerUri}" };
+                    $"--{CommandFactory.DockerUriOption} {dockerUri}",
+                    $"--{CommandFactory.ExecutorSelectorOption} {selector}"};
 
                 if (!string.IsNullOrEmpty(file?.FullName))
                 {

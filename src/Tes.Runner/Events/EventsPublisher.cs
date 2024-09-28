@@ -104,38 +104,44 @@ public class EventsPublisher : IAsyncDisposable
         {
             { "numberOfFiles", numberOfFiles.ToString()},
             { "totalSizeInBytes", totalSizeInBytes.ToString()},
-            { "errorMessage", errorMessage??string.Empty}
+            { "errorMessage", errorMessage ?? string.Empty}
         };
 
         await PublishAsync(eventMessage);
     }
 
-    public virtual async Task PublishExecutorStartEventAsync(NodeTask nodeTask)
+    public virtual async Task PublishExecutorStartEventAsync(NodeTask nodeTask, int selector)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, ExecutorStartEvent, StartedStatus,
                        nodeTask.WorkflowId);
 
-        var commands = nodeTask.CommandsToExecute ?? [];
+        var executor = nodeTask.Executors?[selector];
+        var commands = executor?.CommandsToExecute ?? [];
 
         eventMessage.EventData = new()
         {
-            { "image", nodeTask.ImageName??string.Empty},
-            { "imageTag", nodeTask.ImageTag??string.Empty},
+            { "executor", $"{selector} of {nodeTask.Executors?.Count ?? 0}" },
+            { "image", executor?.ImageName ?? string.Empty},
+            { "imageTag", executor?.ImageTag ?? string.Empty},
             { "commands", string.Join(' ', commands) }
         };
         await PublishAsync(eventMessage);
     }
 
-    public virtual async Task PublishExecutorEndEventAsync(NodeTask nodeTask, long exitCode, string statusMessage, string? errorMessage = default)
+    public virtual async Task PublishExecutorEndEventAsync(NodeTask nodeTask, int selector, long exitCode, string statusMessage, string? errorMessage = default)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, ExecutorEndEvent, statusMessage,
                                   nodeTask.WorkflowId);
+
+        var executor = nodeTask.Executors?[selector];
+
         eventMessage.EventData = new()
         {
-            { "image", nodeTask.ImageName??string.Empty},
-            { "imageTag", nodeTask.ImageTag??string.Empty},
+            { "executor", $"{selector} of {nodeTask.Executors?.Count ?? 0}" },
+            { "image", executor?.ImageName ?? string.Empty},
+            { "imageTag", executor?.ImageTag ?? string.Empty},
             { "exitCode", exitCode.ToString()},
-            { "errorMessage", errorMessage??string.Empty}
+            { "errorMessage", errorMessage ?? string.Empty}
         };
         await PublishAsync(eventMessage);
     }
@@ -156,7 +162,7 @@ public class EventsPublisher : IAsyncDisposable
         {
             { "numberOfFiles", numberOfFiles.ToString()},
             { "totalSizeInBytes", totalSizeInBytes.ToString()},
-            { "errorMessage", errorMessage??string.Empty}
+            { "errorMessage", errorMessage ?? string.Empty}
         };
         await PublishAsync(eventMessage);
     }
@@ -176,7 +182,7 @@ public class EventsPublisher : IAsyncDisposable
         eventMessage.EventData = new()
         {
             { "duration", duration.ToString()},
-            { "errorMessage", errorMessage??string.Empty}
+            { "errorMessage", errorMessage ?? string.Empty}
         };
 
         await PublishAsync(eventMessage);

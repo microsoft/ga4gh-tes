@@ -20,9 +20,15 @@ namespace Tes.Runner.Test.Events
             {
                 Id = "testId",
                 WorkflowId = "workflowID",
-                ImageName = "image",
-                ImageTag = "tag",
-                CommandsToExecute = ["echo hello"],
+                Executors =
+                [
+                    new()
+                    {
+                        ImageName = "image",
+                        ImageTag = "tag",
+                        CommandsToExecute = ["echo hello"],
+                    }
+                ],
                 Inputs =
                 [
                     new()
@@ -100,28 +106,30 @@ namespace Tes.Runner.Test.Events
         [TestMethod]
         public async Task PublishExecutorStartEventAsync_EventIsPublished_EventContainsAllExpectedData()
         {
-            await eventsPublisher.PublishExecutorStartEventAsync(nodeTask);
+            await eventsPublisher.PublishExecutorStartEventAsync(nodeTask, 0);
             await eventsPublisher.FlushPublishersAsync();
 
             var eventMessage = ((TestEventSink)sinks[0]).EventsHandled[0];
 
             AssertMessageBaseMapping(eventMessage, EventsPublisher.ExecutorStartEvent, EventsPublisher.StartedStatus);
-            Assert.AreEqual(nodeTask.ImageName, eventMessage.EventData!["image"]);
-            Assert.AreEqual(nodeTask.ImageTag, eventMessage.EventData!["imageTag"]);
-            Assert.AreEqual(nodeTask.CommandsToExecute!.First(), eventMessage.EventData!["commands"]);
+            Assert.AreEqual("0 of 1", eventMessage.EventData!["executor"]);
+            Assert.AreEqual(nodeTask.Executors?[0].ImageName, eventMessage.EventData!["image"]);
+            Assert.AreEqual(nodeTask.Executors?[0].ImageTag, eventMessage.EventData!["imageTag"]);
+            Assert.AreEqual(nodeTask.Executors?[0].CommandsToExecute?.First(), eventMessage.EventData!["commands"]);
         }
 
         [TestMethod]
         public async Task PublishExecutorEndEventAsync_EventIsPublished_EventContainsAllExpectedData()
         {
-            await eventsPublisher.PublishExecutorEndEventAsync(nodeTask, exitCode: 0, EventsPublisher.SuccessStatus, errorMessage: string.Empty);
+            await eventsPublisher.PublishExecutorEndEventAsync(nodeTask, 0, exitCode: 0, statusMessage: EventsPublisher.SuccessStatus, errorMessage: string.Empty);
             await eventsPublisher.FlushPublishersAsync();
 
             var eventMessage = ((TestEventSink)sinks[0]).EventsHandled[0];
 
             AssertMessageBaseMapping(eventMessage, EventsPublisher.ExecutorEndEvent, EventsPublisher.SuccessStatus);
-            Assert.AreEqual(nodeTask.ImageName, eventMessage.EventData!["image"]);
-            Assert.AreEqual(nodeTask.ImageTag, eventMessage.EventData!["imageTag"]);
+            Assert.AreEqual("0 of 1", eventMessage.EventData!["executor"]);
+            Assert.AreEqual(nodeTask.Executors?[0].ImageName, eventMessage.EventData!["image"]);
+            Assert.AreEqual(nodeTask.Executors?[0].ImageTag, eventMessage.EventData!["imageTag"]);
             Assert.AreEqual(0, int.Parse(eventMessage.EventData!["exitCode"]));
             Assert.AreEqual("", eventMessage.EventData!["errorMessage"]);
         }

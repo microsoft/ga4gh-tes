@@ -159,7 +159,6 @@ namespace TesApi.Tests.Runner
             Assert.IsNotNull(nodeTask);
             Assert.IsNull(nodeTask.Inputs);
             Assert.AreEqual(3, nodeTask.Outputs.Count);
-            Assert.AreEqual(3, nodeTask.Outputs.Count(output => output.MountParentDirectory is null));
         }
 
         [TestMethod]
@@ -175,10 +174,8 @@ namespace TesApi.Tests.Runner
                 Assert.IsTrue(input.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar));
             }
 
-            foreach (var output in nodeTask.Outputs!.Where(output => output.MountParentDirectory is not null))
-            {
-                Assert.IsTrue(output.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar));
-            }
+            Assert.AreEqual(5, nodeTask.Outputs?.Count(output => output.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar)));
+            Assert.AreEqual(3, nodeTask.Outputs?.Count(output => output.Path!.StartsWith($"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%")));
         }
 
         [TestMethod]
@@ -250,7 +247,7 @@ namespace TesApi.Tests.Runner
             var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
             Assert.IsNotNull(nodeTask);
             Assert.IsNull(nodeTask.Inputs);
-            Assert.IsFalse(nodeTask.Outputs!.Any(output => output.MountParentDirectory is not null));
+            Assert.AreEqual(0, nodeTask.Outputs?.Count(output => output.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar)));
         }
 
         [TestMethod]
@@ -264,7 +261,7 @@ namespace TesApi.Tests.Runner
 
             Assert.IsNotNull(nodeTask);
             Assert.AreEqual(2, nodeTask.Inputs!.Count);
-            Assert.IsFalse(nodeTask.Outputs!.Any(output => output.MountParentDirectory is not null));
+            Assert.AreEqual(0, nodeTask.Outputs?.Count(output => output.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar)));
         }
 
         [TestMethod]
@@ -277,7 +274,7 @@ namespace TesApi.Tests.Runner
             var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
             Assert.IsNotNull(nodeTask);
             Assert.IsNull(nodeTask.Inputs);
-            Assert.IsFalse(nodeTask.Outputs!.Any(output => output.MountParentDirectory is not null));
+            Assert.AreEqual(0, nodeTask.Outputs?.Count(output => output.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar)));
         }
 
         [TestMethod]
@@ -301,7 +298,7 @@ namespace TesApi.Tests.Runner
             var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
             Assert.IsNotNull(nodeTask);
             Assert.IsNull(nodeTask.Inputs);
-            Assert.IsFalse(nodeTask.Outputs!.Any(output => output.MountParentDirectory is not null));
+            Assert.AreEqual(0, nodeTask.Outputs?.Count(output => output.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar)));
         }
 
         [TestMethod]

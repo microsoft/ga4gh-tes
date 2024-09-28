@@ -96,7 +96,7 @@ namespace Tes.RunnerCLI.Commands
             {
                 cleanupTasks =
                 [
-                    new DockerExecutor(dockerUri).NodeCleanupAsync(new(nodeTask.ImageName, nodeTask.ImageTag, default, default, default, new(), default), Logger),
+                    new DockerExecutor(dockerUri).NodeCleanupAsync(new(nodeTask.Executors![0].ImageName, nodeTask.Executors![0].ImageTag, default, default, default, new(), default), Logger),
                     Executor.RunnerHost.NodeCleanupPreviousTasksAsync()
                 ];
                 await Task.WhenAll(cleanupTasks);
@@ -124,9 +124,10 @@ namespace Tes.RunnerCLI.Commands
         /// <param name="file">Node task definition file</param>
         /// <param name="apiVersion">Azure Storage API version</param>
         /// <param name="dockerUri">Local docker engine endpoint</param>
+        /// <param name="selector">Which task executor to run</param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
-        internal static async Task<int> ExecuteExecCommandAsync(Uri? fileUri, FileInfo? file, string apiVersion, Uri dockerUri)
+        internal static async Task<int> ExecuteExecCommandAsync(Uri? fileUri, FileInfo? file, string apiVersion, Uri dockerUri, int selector)
         {
             try
             {
@@ -136,7 +137,7 @@ namespace Tes.RunnerCLI.Commands
 
                 await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
 
-                var result = await executor.ExecuteNodeContainerTaskAsync(new DockerExecutor(dockerUri)) ?? throw new InvalidOperationException("The container task failed to return results");
+                var result = await executor.ExecuteNodeContainerTaskAsync(new DockerExecutor(dockerUri), selector) ?? throw new InvalidOperationException("The container task failed to return results");
 
                 Logger.LogInformation("Docker container execution status code: {ContainerResultExitCode}", result.ContainerResult.ExitCode);
 
@@ -237,7 +238,28 @@ namespace Tes.RunnerCLI.Commands
 
             await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.DownloadCommandName, nodeTask, file, options);
 
-            await CommandLauncher.LaunchesExecutorCommandAsSubProcessAsync(nodeTask, file, apiVersion, dockerUri);
+            foreach (var index in Enumerable.Range(0, (nodeTask.Executors ?? []).Count))
+            {
+                var executor = nodeTask.Executors![index];
+
+                if (index != 0)
+                {
+                    await new DockerExecutor(dockerUri).NodeCleanupAsync(new(executor.ImageName, executor.ImageTag, default, default, default, new(), default), Logger);
+                }
+
+                try
+                {
+                    await CommandLauncher.LaunchesExecutorCommandAsSubProcessAsync(nodeTask, file, apiVersion, dockerUri, index);
+                }
+                catch (CommandExecutionException)
+                {
+                    if (!executor.IgnoreError)
+                    {
+                        throw;
+                    }
+                }
+
+            }
 
             await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.UploadCommandName, nodeTask, file, options);
         }

@@ -70,7 +70,17 @@ namespace Tes.Models
         /// <summary>
         /// Indicates that the file should not be downloaded
         /// https://github.com/ga4gh/task-execution-schemas/blob/1df37d34242f74d3f03475c6b9de3324b8094054/openapi/task_execution_service.openapi.yaml#L481
-        /// </summary>
+        /// </summary
+        /// <value>
+        /// Indicate that a file resource could be accessed using a streaming
+        /// interface, ie a FUSE mounted s3 object. This flag indicates that
+        /// using a streaming mount, as opposed to downloading the whole file to
+        /// the local scratch space, may be faster despite the latency and
+        /// overhead. This does not mean that the backend will use a streaming
+        /// interface, as it may not be provided by the vendor, but if the
+        /// capacity is available it can be used without degrading the
+        /// performance of the underlying program.
+        /// </value>
         [DataMember(Name = "streamable")]
         public bool Streamable { get; set; }
 

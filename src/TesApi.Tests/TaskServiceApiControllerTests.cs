@@ -36,7 +36,7 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "image", Command = ["cmd"] }],
                 Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
@@ -66,7 +66,7 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "image", Command = ["cmd"] }],
                 Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
@@ -96,7 +96,7 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "image", Command = ["cmd"] }],
                 Resources = new() { BackendParameters = backendParameters }
             };
 
@@ -128,7 +128,7 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "image", Command = ["cmd"] }],
                 Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
@@ -160,7 +160,7 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "image", Command = ["cmd"] }],
                 Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
@@ -177,7 +177,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateTaskAsync_ReturnsBadRequest_ForInvalidId()
         {
-            var tesTask = new TesTask { Id = "ClientProvidedId", Executors = [new() { Image = "ubuntu" }] };
+            var tesTask = new TesTask { Id = "ClientProvidedId", Executors = [new() { Image = "image", Command = ["cmd"] }] };
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
@@ -190,7 +190,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateTaskAsync_ReturnsBadRequest_ForMissingDockerImage()
         {
-            TesTask tesTask = new() { Executors = [new()] };
+            TesTask tesTask = new() { Executors = [new() { Command = ["cmd"] }] };
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
@@ -203,7 +203,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateTaskAsync_ReturnsBadRequest_ForRelativeInputPath()
         {
-            TesTask tesTask = new() { Inputs = [new() { Path = "xyz/path" }] };
+            TesTask tesTask = new() { Inputs = [new() { Path = "xyz/path" }], Executors = [new() { Image = "image", Command = ["cmd"] }] };
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
@@ -216,7 +216,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateTaskAsync_ReturnsBadRequest_ForInputMissingContentAndPath()
         {
-            TesTask tesTask = new() { Inputs = [new() { Url = "http://host/path" }] };
+            TesTask tesTask = new() { Inputs = [new() { Url = "http://host/path" }], Executors = [new() { Image = "image", Command = ["cmd"] }] };
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
@@ -229,7 +229,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateTaskAsync_ReturnsBadRequest_ForInputContentAndPath()
         {
-            TesTask tesTask = new() { Inputs = [new() { Url = "http://host/path", Path = "/path/file", Content = "content" }] };
+            TesTask tesTask = new() { Inputs = [new() { Url = "http://host/path", Path = "/path/file", Content = "content" }], Executors = [new() { Image = "image", Command = ["cmd"] }] };
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
@@ -242,7 +242,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateTaskAsync_ReturnsTesCreateTaskResponse()
         {
-            var tesTask = new TesTask() { Executors = [new() { Image = "ubuntu" }] };
+            var tesTask = new TesTask() { Executors = [new() { Image = "image", Command = ["cmd"] }] };
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
@@ -743,7 +743,7 @@ namespace TesApi.Tests
             var tesTask = new TesTask()
             {
                 Description = taskDescription,
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "image", Command = ["cmd"] }],
                 Inputs = [new() { Type = TesFileType.FILE, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script", Content = "command" }],
                 Outputs =
                 [
@@ -772,7 +772,7 @@ namespace TesApi.Tests
             var tesTask = new TesTask()
             {
                 Description = taskDescription,
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "image", Command = ["cmd"] }],
                 Inputs = [new() { Type = TesFileType.FILE, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script", Content = "command" }],
                 Outputs =
                 [
@@ -801,7 +801,7 @@ namespace TesApi.Tests
             var tesTask = new TesTask()
             {
                 Description = taskDescription,
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "image", Command = ["cmd"] }],
                 Inputs = [new() { Type = TesFileType.FILE, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"{path}/script", Url = $"{path}/script" }],
                 Outputs =
                 [

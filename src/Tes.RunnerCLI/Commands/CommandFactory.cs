@@ -18,6 +18,7 @@ namespace Tes.RunnerCLI.Commands
         internal const string DownloadCommandName = "download";
         internal const string ExecutorCommandName = "exec";
         internal const string DockerUriOption = "docker-url";
+        internal const string ExecutorSelectorOption = "executor";
 
         private static readonly IReadOnlyCollection<Option> GlobalOptions = new List<Option>()
         {
@@ -37,6 +38,7 @@ namespace Tes.RunnerCLI.Commands
         private static readonly IReadOnlyCollection<Option> ExecOptions = new List<Option>()
         {
             CreateOption<Uri>(DockerUriOption, "Local docker engine endpoint", "-u", defaultValue: DefaultDockerUri),
+            CreateOption<int>(ExecutorSelectorOption, "Executor selector", "-e", defaultValue: 0),
         }.AsReadOnly();
 
         private static void ValidateGlobalOptions(CommandResult commandResult, Command command)
@@ -107,7 +109,8 @@ namespace Tes.RunnerCLI.Commands
                 GetOptionByName<Uri>(cmd, BlobPipelineOptionsConverter.UrlOption),
                 GetOptionByName<FileInfo>(cmd, BlobPipelineOptionsConverter.FileOption),
                 GetOptionByName<string>(cmd, BlobPipelineOptionsConverter.ApiVersionOption),
-                GetOptionByName<Uri>(cmd, DockerUriOption));
+                GetOptionByName<Uri>(cmd, DockerUriOption),
+                GetOptionByName<int>(cmd, ExecutorSelectorOption));
 
             return cmd;
         }

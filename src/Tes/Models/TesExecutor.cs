@@ -80,6 +80,18 @@ namespace Tes.Models
         public Dictionary<string, string> Env { get; set; }
 
         /// <summary>
+        /// Continue on error
+        /// </summary>
+        /// <value>
+        /// Default behavior of running an array of executors is that execution
+        /// stops on the first error. If `ignore_error` is `True`, then the
+        /// runner will record error exit codes, but will continue on to the next
+        /// tesExecutor.
+        /// </value>
+        [DataMember(Name = "ignore_error")]
+        public bool? IgnoreError { get; set; }
+
+        /// <summary>
         /// Returns the string presentation of the object
         /// </summary>
         /// <returns>String presentation of the object</returns>
@@ -93,6 +105,7 @@ namespace Tes.Models
                 .Append("  Stdout: ").Append(Stdout).Append('\n')
                 .Append("  Stderr: ").Append(Stderr).Append('\n')
                 .Append("  Env: ").Append(Env).Append('\n')
+                .Append("  IgnoreError: ").Append(IgnoreError).Append('\n')
                 .Append("}\n")
                 .ToString();
 
@@ -161,6 +174,11 @@ namespace Tes.Models
                     Env == other.Env ||
                     Env is not null &&
                     Env.SequenceEqual(other.Env)
+                ) &&
+                (
+                    IgnoreError == other.IgnoreError ||
+                    IgnoreError is not null &&
+                    IgnoreError.Equals(other.IgnoreError)
                 ),
             };
 
@@ -207,6 +225,11 @@ namespace Tes.Models
                 if (Env is not null)
                 {
                     hashCode = hashCode * 59 + Env.GetHashCode();
+                }
+
+                if (IgnoreError is not null)
+                {
+                    hashCode = hashCode * 59 + IgnoreError.GetHashCode();
                 }
 
                 return hashCode;

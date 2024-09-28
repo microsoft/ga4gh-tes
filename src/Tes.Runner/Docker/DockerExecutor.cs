@@ -180,7 +180,7 @@ namespace Tes.Runner.Docker
             await ConfigureNetworkAsync();
 
             var createResponse = await CreateContainerAsync(imageWithTag, executionOptions.CommandsToExecute, executionOptions.VolumeBindings, executionOptions.WorkingDir,
-                executionOptions.ContainerDeviceRequests);
+                executionOptions.ContainerEnv, executionOptions.ContainerDeviceRequests);
             _ = await dockerClient.Containers.InspectContainerAsync(createResponse.ID);
 
             var logs = await StartContainerWithStreamingOutput(createResponse);
@@ -217,7 +217,8 @@ namespace Tes.Runner.Docker
         }
 
         private async Task<CreateContainerResponse> CreateContainerAsync(string imageWithTag,
-            List<string> commandsToExecute, List<string>? volumeBindings, string? workingDir, List<ContainerDeviceRequest>? deviceRequests = default)
+            List<string> commandsToExecute, List<string>? volumeBindings, string? workingDir,
+            IDictionary<string, string>? env = default, List<ContainerDeviceRequest>? deviceRequests = default)
         {
             logger.LogInformation(@"Creating container with image name: {ImageWithTag}", imageWithTag);
 
@@ -226,6 +227,7 @@ namespace Tes.Runner.Docker
                 {
                     Image = imageWithTag,
                     Cmd = commandsToExecute,
+                    Env = env?.Select(pair => $"{pair.Key}={pair.Value}").ToList(),
                     AttachStdout = true,
                     AttachStderr = true,
                     WorkingDir = workingDir,
@@ -314,5 +316,7 @@ namespace Tes.Runner.Docker
     }
 
     public record ExecutionOptions(string? ImageName, string? Tag, List<string>? CommandsToExecute,
-        List<string>? VolumeBindings, string? WorkingDir, RuntimeOptions RuntimeOptions, List<ContainerDeviceRequest>? ContainerDeviceRequests);
+        List<string>? VolumeBindings, string? WorkingDir, RuntimeOptions RuntimeOptions,
+        List<ContainerDeviceRequest>? ContainerDeviceRequests, Dictionary<string, string>? ContainerEnv = default,
+        string? ContainerStdIn = default, string? ContainerStdOut = default, string? ContainerStdErr = default);
 }

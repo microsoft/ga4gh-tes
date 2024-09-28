@@ -129,12 +129,40 @@ namespace TesApi.Controllers
                 return BadRequest("Id should not be included by the client in the request; the server is responsible for generating a unique Id.");
             }
 
-            if ((tesTask.Executors ?? []).Select(executor => executor.Image).Any(string.IsNullOrWhiteSpace))
+            if (!(tesTask.Executors ?? []).Any())
             {
-                return BadRequest("Docker container image name is required.");
+                return BadRequest("At least one executor is required.");
             }
 
-            foreach (var input in tesTask.Inputs ?? [])
+            foreach (var executor in (tesTask.Executors ?? []))
+            {
+                if (string.IsNullOrWhiteSpace(executor.Image))
+                {
+                    return BadRequest("Docker container image name is required.");
+                }
+
+                if (!(executor.Command ?? []).Any())
+                {
+                    return BadRequest("Executor command is required.");
+                }
+
+                if (executor.Stdin is not null && !executor.Stdin.StartsWith('/'))
+                {
+                    return BadRequest("Standard in must be an absolute path in the container.");
+                }
+
+                if (executor.Stdout is not null && !executor.Stdout.StartsWith('/'))
+                {
+                    return BadRequest("Standard out must be an absolute path in the container.");
+                }
+
+                if (executor.Stderr is not null && !executor.Stderr.StartsWith('/'))
+                {
+                    return BadRequest("Standard error must be an absolute path in the container.");
+                }
+            }
+
+            foreach (var input in (tesTask.Inputs ?? []))
             {
                 if (string.IsNullOrWhiteSpace(input.Path) || !input.Path.StartsWith('/'))
                 {
@@ -162,7 +190,7 @@ namespace TesApi.Controllers
                 }
             }
 
-            foreach (var output in tesTask.Outputs ?? Enumerable.Empty<TesOutput>())
+            foreach (var output in (tesTask.Outputs ?? []))
             {
                 if (string.IsNullOrWhiteSpace(output.Path) || !output.Path.StartsWith('/'))
                 {
