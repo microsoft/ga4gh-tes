@@ -27,8 +27,6 @@ namespace Tes.SDK
         private readonly string? _password;
         private bool disposedValue;
 
-        public enum TesLogType { NotSet = 0, ExecStdOut, ExecStdErr, DownloadStdOut, DownloadStdErr };
-
         private static StringContent Serialize<T>(T obj)
         {
             using StringWriter writer = new();
@@ -201,35 +199,6 @@ namespace Tes.SDK
 
                 await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
             }
-        }
-
-        public async Task<Dictionary<TesLogType, string>> DownloadLogsAsync(TesTask tesTask, string storageAccountName, CancellationToken cancellationToken)
-        {
-            Dictionary<TesLogType, string> logs = new Dictionary<TesLogType, string>();
-            var containerUri = new Uri($"https://{storageAccountName}.blob.core.windows.net/tes-internal");
-            var client = new BlobContainerClient(containerUri, new DefaultAzureCredential());
-            var blobs = client.GetBlobs(prefix: $"tasks/{tesTask.Id}").ToList();
-
-            foreach (var blob in blobs)
-            {
-                TesLogType logType = blob.Name switch
-                {
-                    var name when name.StartsWith("exec_stdout") => TesLogType.ExecStdOut,
-                    var name when name.StartsWith("exec_stderr") => TesLogType.ExecStdErr,
-                    var name when name.StartsWith("download_stdout") => TesLogType.DownloadStdOut,
-                    var name when name.StartsWith("download_stderr") => TesLogType.DownloadStdErr,
-                    _ => TesLogType.NotSet
-                };
-
-                if (logType != TesLogType.NotSet)
-                {
-                    var blobClient = client.GetBlobClient(blob.Name);
-                    var text = (await blobClient.DownloadContentAsync()).Value.Content.ToString();
-                    logs.Add(logType, text);
-                }
-            }
-
-            return logs;
         }
 
         private static string GetQuery(TaskQueryOptions options, string? pageToken)

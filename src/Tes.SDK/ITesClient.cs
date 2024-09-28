@@ -30,15 +30,6 @@ namespace Tes.SDK
         Task<TesTask> CreateAndWaitTilDoneAsync(TesTask tesTask, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Downloads the logs for a TES task
-        /// </summary>
-        /// <param name="tesTask">The TES task to get logs for</param>
-        /// <param name="storageAccountName">The default TES storage account name</param>
-        /// <param name="cancellationToken">The cancellationToken</param>
-        /// <returns></returns>
-        Task<Dictionary<TesLogType, string>> DownloadLogsAsync(TesTask tesTask, string storageAccountName, CancellationToken cancellationToken);
-
-        /// <summary>
         /// Creates a new TES task
         /// </summary>
         /// <param name="tesTask">The TES task to create</param>
