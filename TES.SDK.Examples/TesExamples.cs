@@ -28,13 +28,15 @@ namespace TES.SDK.Examples
             //testTesTask.Resources.DiskGb = 100;
             const long maxPrimes = 1_000_000;
             string outputFileName = $"primes-2-{maxPrimes}.txt";
+            string command = $"apt-get update && apt-get install -y primesieve && primesieve {maxPrimes} -p > /tmp/{outputFileName}";
+
             task.Executors.Add(new()
             {
                 Image = "ubuntu:22.04",
                 Command = [ 
                     "/bin/sh",
                     "-c",
-                    $"chmod 1777 /tmp && apt-get update && apt-get install -y primesieve && primesieve {maxPrimes} -p > /tmp/{outputFileName}"
+                    $"chmod 1777 /tmp && {command}"
                 ]
             });
 
