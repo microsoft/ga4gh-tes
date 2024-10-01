@@ -1,4 +1,4 @@
-# py-tes Demostration
+# py-tes Demonstration
 
 
 ## Client requirements
@@ -40,3 +40,7 @@ run the following commands to run BWA example TES Task:
 ```bash
 ./run-bwa.py
 ```
+
+## Viewing Results
+
+After the pipeline completes, all results will be saved in the Azure Blob Storage container `outputs/py-tes`. You can access these files through the Azure portal or your command-line tool of choice.
