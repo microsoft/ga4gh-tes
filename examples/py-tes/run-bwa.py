@@ -40,6 +40,11 @@ def main() -> None:
     for idx, (key, url) in enumerate(TES_INSTANCES.items()):
         LOGGER.info(f"({idx + 1}) {key}: {url}")
 
+    # Get output URL from environment variables
+    storage_acct= os.getenv('TES_OUTPUT_STORAGE_ACCT')
+    output = '/' + storage_acct + '/outputs/py-tes/H06HDADXX130110.1.ATCACGAT.20k.bam'
+
+
     # set task payload
     LOGGER.info(f"Setting task payload...")
     task = tes.Task(
@@ -64,7 +69,7 @@ def main() -> None:
             tes.Output(
                 name='H06HDADXX130110.1.ATCACGAT.20k.bam',
                 path='/data/H06HDADXX130110.1.ATCACGAT.20k.bam',
-                url='/tesdemoa2976786f24e/outputs/py-tes/H06HDADXX130110.1.ATCACGAT.20k.bam'
+                url=output
             )
         ],
         executors=[
