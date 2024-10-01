@@ -33,7 +33,7 @@ TES_OUTPUT_STORAGE_ACCT=$TES_OUTPUT_STORAGE_ACCT
 EOF
 ```
 
-## Runn demo
+## Run demo
 
 run the following commands to run BWA example TES Task:
 
