@@ -39,7 +39,7 @@ fi
 echo "Using TES instance: $tes_instance"
 
 # Construct task payload
-output_url="/${TES_OUTPUT_STORAGE_ACCT}/outputs/py-tes/H06HDADXX130110.1.ATCACGAT.20k.bam"
+output_url="/${TES_OUTPUT_STORAGE_ACCT}/outputs/curl/H06HDADXX130110.1.ATCACGAT.20k.bam"
 
 task_payload='
 {
