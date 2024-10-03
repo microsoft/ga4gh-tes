@@ -41,7 +41,7 @@ namespace TesApi.Web
     public class Startup
     {
         // TODO centralize in single location
-        internal const string TesVersion = "5.4.2";
+        internal const string TesVersion = "5.4.3";
         private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
@@ -477,6 +477,7 @@ namespace TesApi.Web
                     {
                         c.RouteTemplate = "swagger/{documentName}/openapi.json";
                     })
+                    .UseMiddleware<Controllers.DatabaseOverloadedExceptionMiddleware>()
 
                     .IfThenElse(hostingEnvironment.IsDevelopment(),
                         s =>

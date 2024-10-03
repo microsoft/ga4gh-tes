@@ -94,9 +94,9 @@ namespace TesDeployer
             return new Kubernetes(k8sClientConfiguration);
         }
 
-        public static (string, V1Deployment) GetUbuntuDeploymentTemplate()
+        public static (string, V1Deployment) GetUbuntuDeploymentTemplate(string ubuntuImage)
             => ("ubuntu", KubernetesYaml.Deserialize<V1Deployment>(
-                """
+                $"""
                 apiVersion: apps/v1
                 kind: Deployment
                 metadata:
@@ -115,7 +115,7 @@ namespace TesDeployer
                     spec:
                       containers:
                       - name: ubuntu
-                        image: ubuntu
+                        image: {ubuntuImage}
                         command: ["/bin/bash", "-c", "--"]
                         args: ["while true; do sleep 30; done;"]
                 """));
