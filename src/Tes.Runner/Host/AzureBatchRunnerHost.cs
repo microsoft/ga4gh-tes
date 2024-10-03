@@ -8,6 +8,41 @@ namespace Tes.Runner.Host
         private const string NodeRootDir = "AZ_BATCH_NODE_ROOT_DIR";
         private const string NodeSharedDir = "AZ_BATCH_NODE_SHARED_DIR";
         private const string NodeTaskDir = "AZ_BATCH_TASK_DIR";
+        private const string NodeTaskWorkDir = "AZ_BATCH_TASK_WORKING_DIR";
+
+        public override string GetTaskWorkingContainerPath(FileInfo file)
+        {
+            var path = Path.GetRelativePath(Environment.GetEnvironmentVariable(NodeTaskWorkDir) ?? throw new InvalidOperationException("Task working directory not found"), file.FullName);
+
+            if (path == file.FullName)
+            {
+                throw new InvalidOperationException("File is not in container.");
+            }
+
+            return $"/{path.TrimStart('/')}";
+        }
+
+        public override string GetTaskWorkingContainerPath(DirectoryInfo directory)
+        {
+            var path = Path.GetRelativePath(Environment.GetEnvironmentVariable(NodeTaskWorkDir) ?? throw new InvalidOperationException("Task working directory not found"), directory.FullName);
+
+            if (path == directory.FullName)
+            {
+                throw new InvalidOperationException("File is not in container.");
+            }
+
+            return $"/{path.TrimStart('/')}";
+        }
+
+        public override DirectoryInfo GetTaskWorkingHostDirectory(string path)
+        {
+            return new(Path.Combine(Environment.GetEnvironmentVariable(NodeTaskWorkDir) ?? throw new InvalidOperationException("Task working directory not found"), path.TrimStart('/')));
+        }
+
+        public override FileInfo GetTaskWorkingHostFile(string path)
+        {
+            return new(Path.Combine(Environment.GetEnvironmentVariable(NodeTaskWorkDir) ?? throw new InvalidOperationException("Task working directory not found"), path.TrimStart('/')));
+        }
 
         /// <inheritdoc/>
         public override FileInfo GetSharedFile(string path)

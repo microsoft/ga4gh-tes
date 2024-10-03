@@ -157,6 +157,26 @@ namespace Tes.Runner.Test.Docker
                 return file;
             }
 
+            public override string GetTaskWorkingContainerPath(FileInfo file)
+            {
+                throw new NotImplementedException();
+            }
+
+            public override string GetTaskWorkingContainerPath(DirectoryInfo directory)
+            {
+                throw new NotImplementedException();
+            }
+
+            public override DirectoryInfo GetTaskWorkingHostDirectory(string path)
+            {
+                throw new NotImplementedException();
+            }
+
+            public override FileInfo GetTaskWorkingHostFile(string path)
+            {
+                throw new NotImplementedException();
+            }
+
             public override Task NodeCleanupPreviousTasksAsync()
             {
                 throw new NotSupportedException();

@@ -218,11 +218,13 @@ namespace Tes.Runner.Docker
                 return default;
             }
 
-            if (File.Exists(path) || forWrite)
+            var file = Executor.RunnerHost.GetTaskWorkingHostFile(path);
+
+            if (file.Exists || forWrite)
             {
                 return forWrite
-                    ? File.OpenWrite(path)
-                    : File.OpenRead(path);
+                    ? file.OpenWrite()
+                    : file.OpenRead();
             }
             else
             {
