@@ -112,7 +112,7 @@ namespace Tes.Runner.Test.Events
             var eventMessage = ((TestEventSink)sinks[0]).EventsHandled[0];
 
             AssertMessageBaseMapping(eventMessage, EventsPublisher.ExecutorStartEvent, EventsPublisher.StartedStatus);
-            Assert.AreEqual("0 of 1", eventMessage.EventData!["executor"]);
+            Assert.AreEqual("1/1", eventMessage.EventData!["executor"]);
             Assert.AreEqual(nodeTask.Executors?[0].ImageName, eventMessage.EventData!["image"]);
             Assert.AreEqual(nodeTask.Executors?[0].ImageTag, eventMessage.EventData!["imageTag"]);
             Assert.AreEqual(nodeTask.Executors?[0].CommandsToExecute?.First(), eventMessage.EventData!["commands"]);
@@ -127,7 +127,7 @@ namespace Tes.Runner.Test.Events
             var eventMessage = ((TestEventSink)sinks[0]).EventsHandled[0];
 
             AssertMessageBaseMapping(eventMessage, EventsPublisher.ExecutorEndEvent, EventsPublisher.SuccessStatus);
-            Assert.AreEqual("0 of 1", eventMessage.EventData!["executor"]);
+            Assert.AreEqual("1/1", eventMessage.EventData!["executor"]);
             Assert.AreEqual(nodeTask.Executors?[0].ImageName, eventMessage.EventData!["image"]);
             Assert.AreEqual(nodeTask.Executors?[0].ImageTag, eventMessage.EventData!["imageTag"]);
             Assert.AreEqual(0, int.Parse(eventMessage.EventData!["exitCode"]));

@@ -120,7 +120,7 @@ public class EventsPublisher : IAsyncDisposable
 
         eventMessage.EventData = new()
         {
-            { "executor", $"{selector} of {nodeTask.Executors?.Count ?? 0}" },
+            { "executor", $"{selector + 1}/{nodeTask.Executors?.Count ?? 0}" },
             { "image", executor?.ImageName ?? string.Empty},
             { "imageTag", executor?.ImageTag ?? string.Empty},
             { "commands", string.Join(' ', commands) }
@@ -137,7 +137,7 @@ public class EventsPublisher : IAsyncDisposable
 
         eventMessage.EventData = new()
         {
-            { "executor", $"{selector} of {nodeTask.Executors?.Count ?? 0}" },
+            { "executor", $"{selector + 1}/{nodeTask.Executors?.Count ?? 0}" },
             { "image", executor?.ImageName ?? string.Empty},
             { "imageTag", executor?.ImageTag ?? string.Empty},
             { "exitCode", exitCode.ToString()},

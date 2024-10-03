@@ -84,7 +84,7 @@ namespace Tes.RunnerCLI.Commands
 
             try
             {
-                var processLauncher = await ProcessLauncher.CreateLauncherAsync(nodeTask, logNamePrefix: CommandFactory.ExecutorCommandName, apiVersion: apiVersion);
+                var processLauncher = await ProcessLauncher.CreateLauncherAsync(nodeTask, logNamePrefix: $"{CommandFactory.ExecutorCommandName}-{selector:D3}", apiVersion: apiVersion);
 
                 var args = new List<string>() {
                     CommandFactory.ExecutorCommandName,
