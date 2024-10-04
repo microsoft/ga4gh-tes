@@ -1,13 +1,11 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Text.Json;
 using CommonUtilities.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
-using Tes.ApiClients.Models.Pricing;
 
 namespace Tes.ApiClients.Tests
 {
@@ -37,28 +35,16 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetPricingInformationPageAsync_ReturnsSinglePageWithItemsWithMaxPageSize()
         {
-            var page = await pricingApiClient.GetPricingInformationPageAsync(0, "westus2", CancellationToken.None);
+            var page = await pricingApiClient.GetPricingInformationPageAsync(DateTime.UtcNow, 0, "Virtual Machines", "westus2", CancellationToken.None);
 
             Assert.IsNotNull(page);
             Assert.IsTrue(page.Items.Length > 0);
-        }
-
-        [TestMethod]
-        public async Task GetPricingInformationPageAsync_ReturnsSinglePageAndCaches()
-        {
-            var page = await pricingApiClient.GetPricingInformationPageAsync(0, "westus2", CancellationToken.None, cacheResults: true);
-            var cacheKey = await pricingApiClient.ToCacheKeyAsync(new Uri(page.RequestLink), false, CancellationToken.None);
-            var cachedPage = appCache.Get<RetailPricingData>(cacheKey);
-            Assert.IsNotNull(page);
-            Assert.IsTrue(page.Items.Length > 0);
-            Assert.IsNotNull(cachedPage);
-            Assert.IsTrue(Enumerable.SequenceEqual(cachedPage.Items, page.Items));
         }
 
         [TestMethod]
         public async Task GetPricingInformationAsync_ReturnsMoreThan100Items()
         {
-            var pages = await pricingApiClient.GetAllPricingInformationAsync("westus2", CancellationToken.None).ToListAsync();
+            var pages = await pricingApiClient.GetAllPricingInformationAsync("Virtual Machines", "westus2", CancellationToken.None).ToListAsync();
 
             Assert.IsNotNull(pages);
             Assert.IsTrue(pages.Count > 100);
