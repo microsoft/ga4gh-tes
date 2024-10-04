@@ -296,23 +296,28 @@ namespace TesApi.Web
                 // https://github.com/microsoft/ga4gh-tes/blob/6e120d33f78c7a36cffe953c74b55cba7cfbf7fc/src/Tes.Runner/Logs/AppendBlobLogPublisher.cs#L39
 
                 // Get any logs the task runner left. Look for the latest set in this order: upload, exec, download
-                foreach (var prefix in new[] { "upload_std", "exec_std", "download_std" })
+                foreach (var prefix in new[] { "upload_std", "exec-", "download_std" })
                 {
                     var logs = FilterByPrefix(directoryUri, prefix, await azureProxy.ListBlobsAsync(directoryUri, cancellationToken));
 
                     if (logs.Any())
                     {
-                        if (prefix.StartsWith("exec_"))
+                        if (prefix.Equals("exec-"))
                         {
-                            var log = tesTask.GetOrAddTesTaskLog().GetOrAddExecutorLog();
+                            var taskLog = tesTask.GetOrAddTesTaskLog();
 
-                            foreach (var (type, action) in new (string, Action<string>)[] { ("stderr", list => log.Stderr = list), ("stdout", list => log.Stdout = list) })
+                            foreach (var selector in logs.Select(blob => blob.BlobNameParts[0]).Distinct())
                             {
-                                var list = logs.Where(blob => type.Equals(blob.BlobNameParts[1], StringComparison.OrdinalIgnoreCase)).ToList();
+                                var log = taskLog.GetOrAddExecutorLog();
 
-                                if (list.Any())
+                                foreach (var (type, action) in new (string, Action<string>)[] { ("stderr", list => log.Stderr = list), ("stdout", list => log.Stdout = list) })
                                 {
-                                    action(JsonArray(list.Select(blob => blob.BlobUri.AbsoluteUri)));
+                                    var list = logs.Where(blob => selector.Equals(blob.BlobNameParts[0]) && type.Equals(blob.BlobNameParts[1], StringComparison.OrdinalIgnoreCase)).ToList();
+
+                                    if (list.Any())
+                                    {
+                                        action(JsonArray(list.Select(blob => blob.BlobUri.AbsoluteUri)));
+                                    }
                                 }
                             }
                         }
