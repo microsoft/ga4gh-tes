@@ -10,7 +10,7 @@ conda env create -f environment.yml
 ```
 
 Next, you need to create a file of the TES instance in a
-comma-seprated file `.tes_instances`. Two fields/columns are required, a
+comma-separated file `.tes_instances`. Two fields/columns are required, a
 description of the TES instance, and the URL pointing to it. You can use the
 following command to create such a file, but make sure to replace the example
 contents and do not use commas in the name/description field:
