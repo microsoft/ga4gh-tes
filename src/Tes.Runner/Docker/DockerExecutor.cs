@@ -109,9 +109,9 @@ namespace Tes.Runner.Docker
             ArgumentException.ThrowIfNullOrWhiteSpace(imagePath);
             using var buffer = runnerHost.ReadSharedFile(LastImageFile);
 
-            if (buffer is not null)
+            if (!buffer.IsDefault)
             {
-                previousImage = Encoding.UTF8.GetString(buffer.Memory.Span);
+                previousImage = Encoding.UTF8.GetString(buffer.Buffer!.Value.Span);
                 return imagePath.Equals(previousImage, StringComparison.Ordinal);
             }
             else
@@ -125,9 +125,9 @@ namespace Tes.Runner.Docker
         {
             _ = await dockerClient.Volumes.PruneAsync();
 
-            if (!string.IsNullOrEmpty(executionOptions.ImageName))
+            if (!string.IsNullOrWhiteSpace(executionOptions.ImageName))
             {
-                if (!IsLastImageSame(ToImageNameWithTag(executionOptions.ImageName, executionOptions.Tag), out var previousImage) && previousImage is not null)
+                if (!IsLastImageSame(ToImageNameWithTag(executionOptions.ImageName, executionOptions.Tag), out var previousImage) && !string.IsNullOrWhiteSpace(previousImage))
                 {
                     try
                     {

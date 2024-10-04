@@ -26,7 +26,7 @@ namespace Tes.Runner.Host
         /// </summary>
         /// <param name="name">File name.</param>
         /// <returns>File content.</returns>
-        IMemoryOwner<byte>? ReadSharedFile(string name);
+        FileBuffer ReadSharedFile(string name);
 
         /// <summary>
         /// Ensure previous tasks working and metadata directories are removed.
@@ -37,6 +37,25 @@ namespace Tes.Runner.Host
         //void WriteMetric(string key);
 
         //void WriteMetric(string key, string value);
+    }
+
+    public readonly record struct FileBuffer(IMemoryOwner<byte>? Owner, int Length) : IDisposable
+    {
+        /// <summary>
+        /// True if empty/not allocated
+        /// </summary>
+        public bool IsDefault => Owner is null;
+
+        /// <summary>
+        /// Gets the buffer content
+        /// </summary>
+        public Memory<byte>? Buffer => Owner?.Memory[..Length];
+
+        /// <inheritdoc/>
+        public void Dispose()
+        {
+            Owner?.Dispose();
+        }
     }
 
     internal abstract class RunnerHost : IRunnerHost
@@ -55,14 +74,14 @@ namespace Tes.Runner.Host
         //    => WriteMetric(key, DateTimeOffset.UtcNow.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'sszzz", System.Globalization.CultureInfo.InvariantCulture));
 
         /// <inheritdoc/>
-        IMemoryOwner<byte>? IRunnerHost.ReadSharedFile(string name)
+        FileBuffer IRunnerHost.ReadSharedFile(string name)
         {
             var file = GetSharedFile(name);
             return file.Exists
                 ? ReadFile(file.OpenRead())
-                : null;
+                : default;
 
-            static IMemoryOwner<byte> ReadFile(FileStream stream)
+            static FileBuffer ReadFile(FileStream stream)
             {
                 if (stream.Length > int.MaxValue)
                 {
@@ -72,15 +91,13 @@ namespace Tes.Runner.Host
                 try
                 {
                     var buffer = MemoryPool<byte>.Shared.Rent((int)stream.Length);
-                    stream.Read(buffer.Memory.Span);
-                    return buffer;
+                    return new(buffer, stream.Read(buffer.Memory.Span));
                 }
                 finally
                 {
                     stream.Dispose();
                 }
             }
-            throw new NotImplementedException();
         }
 
         /// <inheritdoc/>
