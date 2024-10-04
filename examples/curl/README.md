@@ -8,8 +8,7 @@ Make sure you install `jq` if not already present. `jq` is a lightweight and fle
 
 
 Next, you need to create a file of the TES instance in a
-comma-separated ![image](https://github.com/user-attachments/assets/3e716a42-ae70-48d3-9a84-2a6450f76a1f)
- file `.tes_instances`. Two fields/columns are required, a
+comma-separated file `.tes_instances`. Two fields/columns are required, a
 name of the TES instance, and the URL pointing to it. You can use the
 following command to create such a file, but make sure to replace the example
 contents and do not use commas in the name/description field:
