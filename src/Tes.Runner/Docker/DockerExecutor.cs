@@ -223,7 +223,7 @@ namespace Tes.Runner.Docker
             if (file.Exists || forWrite)
             {
                 return forWrite
-                    ? file.OpenWrite()
+                    ? file.Open(FileMode.Append)
                     : file.OpenRead();
             }
             else
