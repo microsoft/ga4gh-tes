@@ -37,18 +37,18 @@ namespace TesApi.Tests.Runner
         }
 
         [TestMethod]
-        public void WithContainerWorkingDirectory_WorkingDirIsProvided_WorkingDirIsSet()
+        public void WithMountParentDirectory_MountParentDirIsProvided_MountParentDirIsSet()
         {
             var workingDir = "/home";
-            nodeTaskBuilder.WithContainerWorkingDirectory(workingDir);
-            Assert.AreEqual(workingDir, nodeTaskBuilder.Build().ContainerWorkDir);
+            nodeTaskBuilder.WithContainerMountParentDirectory(workingDir);
+            Assert.AreEqual(workingDir, nodeTaskBuilder.Build().MountParentDirectory);
         }
 
         [TestMethod]
         public void WithInputUsingCombinedTransformationStrategy_WithTerraRuntimeSet_InputUsesTerraCombinedTransformationStrategy()
         {
             nodeTaskBuilder.WithTerraAsRuntimeEnvironment("https://wsm.foo", "https://lz.foo", sasAllowedIpRange: String.Empty);
-            nodeTaskBuilder.WithInputUsingCombinedTransformationStrategy("/root/input", "http://foo.bar/input", "/root");
+            nodeTaskBuilder.WithInputUsingCombinedTransformationStrategy("/root/input", "http://foo.bar/input");
 
             var input = nodeTaskBuilder.Build().Inputs![0];
             Assert.AreEqual(TransformationStrategy.CombinedTerra, input.TransformationStrategy);
@@ -58,7 +58,7 @@ namespace TesApi.Tests.Runner
         public void
             WithInputUsingCombinedTransformationStrategy_WithTerraRuntimeNotSet_InputUseCombinedARMTransformationStrategy()
         {
-            nodeTaskBuilder.WithInputUsingCombinedTransformationStrategy("/root/input", "http://foo.bar/input", "/root");
+            nodeTaskBuilder.WithInputUsingCombinedTransformationStrategy("/root/input", "http://foo.bar/input");
             var input = nodeTaskBuilder.Build().Inputs![0];
             Assert.AreEqual(TransformationStrategy.CombinedAzureResourceManager, input.TransformationStrategy);
         }
@@ -66,39 +66,36 @@ namespace TesApi.Tests.Runner
         [TestMethod]
         public void WithInputUsingCombineTransformationStrategy_ValidInput_AllPropertiesSet()
         {
-            nodeTaskBuilder.WithInputUsingCombinedTransformationStrategy("/root/input", "http://foo.bar/input", "/root");
+            nodeTaskBuilder.WithInputUsingCombinedTransformationStrategy("/root/input", "http://foo.bar/input");
             var input = nodeTaskBuilder.Build().Inputs![0];
             Assert.AreEqual("/root/input", input.Path);
             Assert.AreEqual("http://foo.bar/input", input.SourceUrl);
-            Assert.AreEqual("/root", input.MountParentDirectory);
         }
 
         [TestMethod]
         public void WhenInputContainsUriQuery_ValidInput_AllPropertiesSet()
         {
-            nodeTaskBuilder.WithInputUsingCombinedTransformationStrategy("/root/input", "http://foo.bar/input?test", "/root");
+            nodeTaskBuilder.WithInputUsingCombinedTransformationStrategy("/root/input", "http://foo.bar/input?test");
             var input = nodeTaskBuilder.Build().Inputs![0];
             Assert.AreEqual("/root/input", input.Path);
             Assert.AreEqual("http://foo.bar/input?test", input.SourceUrl);
-            Assert.AreEqual("/root", input.MountParentDirectory);
             Assert.AreEqual(TransformationStrategy.None, input.TransformationStrategy);
         }
 
         [TestMethod]
         public void WhenInputPathContainsUriQuery_ValidInput_AllPropertiesSet()
         {
-            nodeTaskBuilder.WithInputUsingCombinedTransformationStrategy("/root/input?test", "http://foo.bar/input", "/root");
+            nodeTaskBuilder.WithInputUsingCombinedTransformationStrategy("/root/input?test", "http://foo.bar/input");
             var input = nodeTaskBuilder.Build().Inputs![0];
             Assert.AreEqual("/root/input", input.Path);
             Assert.AreEqual("http://foo.bar/input", input.SourceUrl);
-            Assert.AreEqual("/root", input.MountParentDirectory);
         }
 
         [TestMethod]
         public void WithOutputUsingCombinedTransformationStrategy_WithTerraRuntimeSet_OutputUsesCombinedTerraTransformationStrategy()
         {
             nodeTaskBuilder.WithTerraAsRuntimeEnvironment("https://wsm.foo", "https://lz.foo", sasAllowedIpRange: String.Empty);
-            nodeTaskBuilder.WithOutputUsingCombinedTransformationStrategy("/root/output", "http://foo.bar/output", FileType.File, "/root");
+            nodeTaskBuilder.WithOutputUsingCombinedTransformationStrategy("/root/output", "http://foo.bar/output", FileType.File);
             var output = nodeTaskBuilder.Build().Outputs![0];
             Assert.AreEqual(TransformationStrategy.CombinedTerra, output.TransformationStrategy);
         }
@@ -106,19 +103,18 @@ namespace TesApi.Tests.Runner
         [TestMethod]
         public void WithOutputUsingCombineTransformationStrategy_ValidOutput_AllPropertiesSet()
         {
-            nodeTaskBuilder.WithOutputUsingCombinedTransformationStrategy("/root/output", "http://foo.bar/output", FileType.File, "/root");
+            nodeTaskBuilder.WithOutputUsingCombinedTransformationStrategy("/root/output", "http://foo.bar/output", FileType.File);
             var output = nodeTaskBuilder.Build().Outputs![0];
             Assert.AreEqual("/root/output", output.Path);
             Assert.AreEqual("http://foo.bar/output", output.TargetUrl);
             Assert.AreEqual(FileType.File, output.FileType);
-            Assert.AreEqual("/root", output.MountParentDirectory);
         }
 
         [TestMethod]
         public void
             WithOutputUsingCombinedTransformationStrategy_WithTerraRuntimeNotSet_OutputUsesCombinedARMTransformationStrategy()
         {
-            nodeTaskBuilder.WithOutputUsingCombinedTransformationStrategy("/root/output", "http://foo.bar/output", FileType.File, "/root");
+            nodeTaskBuilder.WithOutputUsingCombinedTransformationStrategy("/root/output", "http://foo.bar/output", FileType.File);
             var output = nodeTaskBuilder.Build().Outputs![0];
             Assert.AreEqual(TransformationStrategy.CombinedAzureResourceManager, output.TransformationStrategy);
         }

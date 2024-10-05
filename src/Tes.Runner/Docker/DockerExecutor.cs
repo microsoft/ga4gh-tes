@@ -26,7 +26,6 @@ namespace Tes.Runner.Docker
         private readonly NetworkUtility networkUtility = new();
         private readonly AsyncRetryHandlerPolicy dockerPullRetryPolicy = null!;
         private readonly AsyncRetryHandlerPolicy gcrDockerPullRetryPolicy = null!;
-        private readonly IStreamLogReader streamLogReader = null!;
         private readonly ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager = null!;
 
         // Exception filter to exclude non-retriable errors from the docker daemon when attempting to pull images.
@@ -50,7 +49,7 @@ namespace Tes.Runner.Docker
         const int LogStreamingMaxWaitTimeInSeconds = 30;
 
         public DockerExecutor(Uri dockerHost) : this(new DockerClientConfiguration(dockerHost)
-            .CreateClient(), new ConsoleStreamLogPublisher(), new ContainerRegistryAuthorizationManager(new CredentialsManager()), Executor.RunnerHost)
+            .CreateClient(), new ContainerRegistryAuthorizationManager(new CredentialsManager()), Executor.RunnerHost)
         { }
 
         // Retry for ~91s for ACR 1-minute throttle window
@@ -60,15 +59,13 @@ namespace Tes.Runner.Docker
             ExponentialBackOffExponent = 2
         };
 
-        public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager, Host.IRunnerHost runnerHost)
+        public DockerExecutor(IDockerClient dockerClient, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager, Host.IRunnerHost runnerHost)
         {
             ArgumentNullException.ThrowIfNull(dockerClient);
-            ArgumentNullException.ThrowIfNull(streamLogReader);
             ArgumentNullException.ThrowIfNull(containerRegistryAuthorizationManager);
             ArgumentNullException.ThrowIfNull(runnerHost);
 
             this.dockerClient = dockerClient;
-            this.streamLogReader = streamLogReader;
             this.containerRegistryAuthorizationManager = containerRegistryAuthorizationManager;
             this.runnerHost = runnerHost;
 
@@ -142,68 +139,87 @@ namespace Tes.Runner.Docker
             }
         }
 
-        public virtual async Task<ContainerExecutionResult> RunOnContainerAsync(ExecutionOptions executionOptions)
+        public virtual async Task<ContainerExecutionResult> RunOnContainerAsync(ExecutionOptions executionOptions, Func<string, Task<IStreamLogReader>> logPublisherFactory)
         {
             ArgumentNullException.ThrowIfNull(executionOptions);
             ArgumentException.ThrowIfNullOrEmpty(executionOptions.ImageName);
             ArgumentNullException.ThrowIfNull(executionOptions.CommandsToExecute);
 
+            Stream? stdIn = default;
+            Stream? stdErr = default;
+            Stream? stdOut = default;
+
             try
             {
+                stdIn = GetFileStream(executionOptions.ContainerStdIn, forWrite: false);
+                stdErr = GetFileStream(executionOptions.ContainerStdErr, forWrite: true);
+                stdOut = GetFileStream(executionOptions.ContainerStdOut, forWrite: true);
+
                 try
                 {
-                    await PullImageWithRetriesAsync(executionOptions.ImageName, executionOptions.Tag);
+                    try
+                    {
+                        await PullImageWithRetriesAsync(executionOptions.ImageName, executionOptions.Tag);
+                    }
+                    catch (DockerApiException e) when (IsAuthFailure(e))
+                    {
+                        var authConfig = await containerRegistryAuthorizationManager.TryGetAuthConfigForAzureContainerRegistryAsync(executionOptions.ImageName, executionOptions.Tag, executionOptions.RuntimeOptions);
+
+                        if (authConfig is not null)
+                        {
+                            await PullImageWithRetriesAsync(executionOptions.ImageName, executionOptions.Tag, authConfig);
+                        }
+                        else
+                        {
+                            throw;
+                        }
+                    }
                 }
-                catch (DockerApiException e) when (IsAuthFailure(e))
+                catch
                 {
-                    var authConfig = await containerRegistryAuthorizationManager.TryGetAuthConfigForAzureContainerRegistryAsync(executionOptions.ImageName, executionOptions.Tag, executionOptions.RuntimeOptions);
-
-                    if (authConfig is not null)
-                    {
-                        await PullImageWithRetriesAsync(executionOptions.ImageName, executionOptions.Tag, authConfig);
-                    }
-                    else
-                    {
-                        throw;
-                    }
+                    _ = await dockerClient.Images.PruneImagesAsync();
+                    throw;
                 }
+
+                var imageWithTag = ToImageNameWithTag(executionOptions.ImageName, executionOptions.Tag);
+                SetLastImage(imageWithTag);
+
+                await ConfigureNetworkAsync();
+
+                var createResponse = await CreateContainerAsync(imageWithTag, executionOptions.CommandsToExecute, executionOptions.VolumeBindings, executionOptions.WorkingDir,
+                    stdIn is not null, executionOptions.ContainerEnv, executionOptions.ContainerDeviceRequests);
+                _ = await dockerClient.Containers.InspectContainerAsync(createResponse.ID);
+
+                var streamLogReader = await logPublisherFactory("task_executor_1");
+
+                var logs = await StartContainerWithStreamingOutput(createResponse, stdIn is not null);
+
+                streamLogReader.StartReadingFromLogStreams(logs, stdIn, stdOut, stdErr);
+
+                var runResponse = await dockerClient.Containers.WaitContainerAsync(createResponse.ID);
+
+                await streamLogReader.WaitUntilAsync(TimeSpan.FromSeconds(LogStreamingMaxWaitTimeInSeconds));
+
+                return new ContainerExecutionResult(createResponse.ID, runResponse.Error?.Message, runResponse.StatusCode);
             }
-            catch
+            finally
             {
-                _ = await dockerClient.Images.PruneImagesAsync();
-                throw;
+                stdOut?.Dispose();
+                stdErr?.Dispose();
+                stdIn?.Dispose();
             }
-
-            var imageWithTag = ToImageNameWithTag(executionOptions.ImageName, executionOptions.Tag);
-            SetLastImage(imageWithTag);
-
-            await ConfigureNetworkAsync();
-
-            var createResponse = await CreateContainerAsync(imageWithTag, executionOptions.CommandsToExecute, executionOptions.VolumeBindings, executionOptions.WorkingDir,
-                executionOptions.ContainerDeviceRequests);
-            _ = await dockerClient.Containers.InspectContainerAsync(createResponse.ID);
-
-            var logs = await StartContainerWithStreamingOutput(createResponse);
-
-            streamLogReader.StartReadingFromLogStreams(logs);
-
-            var runResponse = await dockerClient.Containers.WaitContainerAsync(createResponse.ID);
-
-            await streamLogReader.WaitUntilAsync(TimeSpan.FromSeconds(LogStreamingMaxWaitTimeInSeconds));
-
-            return new ContainerExecutionResult(createResponse.ID, runResponse.Error?.Message, runResponse.StatusCode);
         }
 
-        private async Task<MultiplexedStream> StartContainerWithStreamingOutput(CreateContainerResponse createResponse)
+        private async Task<MultiplexedStream> StartContainerWithStreamingOutput(CreateContainerResponse createResponse, bool streamStdIn)
         {
-            var logs = await StreamStdOutAndErrorAsync(createResponse.ID);
+            var logs = await StreamStdOutAndErrorAsync(createResponse.ID, streamStdIn);
 
             await dockerClient.Containers.StartContainerAsync(createResponse.ID,
                 new ContainerStartParameters());
             return logs;
         }
 
-        private async Task<MultiplexedStream> StreamStdOutAndErrorAsync(string containerId)
+        private async Task<MultiplexedStream> StreamStdOutAndErrorAsync(string containerId, bool streamStdIn)
         {
             return await dockerClient.Containers.AttachContainerAsync(
                 containerId,
@@ -211,13 +227,15 @@ namespace Tes.Runner.Docker
                 new ContainerAttachParameters
                 {
                     Stream = true,
+                    Stdin = streamStdIn,
                     Stdout = true,
                     Stderr = true
                 });
         }
 
         private async Task<CreateContainerResponse> CreateContainerAsync(string imageWithTag,
-            List<string> commandsToExecute, List<string>? volumeBindings, string? workingDir, List<ContainerDeviceRequest>? deviceRequests = default)
+            List<string> commandsToExecute, List<string>? volumeBindings, string? workingDir, bool streamStdIn,
+            IDictionary<string, string>? env = default, List<ContainerDeviceRequest>? deviceRequests = default)
         {
             logger.LogInformation(@"Creating container with image name: {ImageWithTag}", imageWithTag);
 
@@ -226,8 +244,12 @@ namespace Tes.Runner.Docker
                 {
                     Image = imageWithTag,
                     Cmd = commandsToExecute,
-                    AttachStdout = true,
-                    AttachStderr = true,
+                    Env = env?.Select(pair => $"{pair.Key}={pair.Value}").ToList(),
+                    AttachStdin = false,
+                    AttachStdout = false,
+                    AttachStderr = false,
+                    OpenStdin = streamStdIn,
+                    StdinOnce = streamStdIn,
                     WorkingDir = workingDir,
                     HostConfig = new()
                     {
@@ -311,8 +333,31 @@ namespace Tes.Runner.Docker
 
             await networkUtility.BlockIpAddressAsync(imdsIpAddress);
         }
+
+        private static FileStream? GetFileStream(string? path, bool forWrite)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return default;
+            }
+
+            var file = Executor.RunnerHost.GetTaskWorkingHostFile(path);
+
+            if (file.Exists || forWrite)
+            {
+                return forWrite
+                    ? file.Open(FileMode.Append)
+                    : file.OpenRead();
+            }
+            else
+            {
+                throw new FileNotFoundException(null, path);
+            }
+        }
     }
 
     public record ExecutionOptions(string? ImageName, string? Tag, List<string>? CommandsToExecute,
-        List<string>? VolumeBindings, string? WorkingDir, RuntimeOptions RuntimeOptions, List<ContainerDeviceRequest>? ContainerDeviceRequests);
+        List<string>? VolumeBindings, string? WorkingDir, RuntimeOptions RuntimeOptions,
+        List<ContainerDeviceRequest>? ContainerDeviceRequests, Dictionary<string, string>? ContainerEnv = default,
+        string? ContainerStdIn = default, string? ContainerStdOut = default, string? ContainerStdErr = default);
 }

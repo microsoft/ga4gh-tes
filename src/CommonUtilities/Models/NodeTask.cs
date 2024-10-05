@@ -15,6 +15,10 @@ namespace Tes.Runner.Models
         public List<ContainerDeviceRequest>? ContainerDeviceRequests { get; set; }
         public string? ContainerWorkDir { get; set; }
         public List<string>? CommandsToExecute { get; set; }
+        public string? ContainerStdIn { get; set; }
+        public string? ContainerStdOut { get; set; }
+        public string? ContainerStdErr { get; set; }
+        public Dictionary<string, string>? ContainerEnv { get; set; }
         public List<FileInput>? Inputs { get; set; }
         public List<FileOutput>? Outputs { get; set; }
         public string? MetricsFilename { get; set; }
@@ -22,6 +26,7 @@ namespace Tes.Runner.Models
         public string? OutputsMetricsFormat { get; set; }
         public List<string>? TimestampMetricsFormats { get; set; }
         public List<string>? BashScriptMetricsFormats { get; set; }
+        public string? MountParentDirectory { get; set; }
         public RuntimeOptions RuntimeOptions { get; set; } = null!;
     }
 
@@ -42,7 +47,6 @@ namespace Tes.Runner.Models
     public class FileOutput
     {
         public string? Path { get; set; }
-        public string? MountParentDirectory { get; set; }
         public string? TargetUrl { get; set; }
         public TransformationStrategy? TransformationStrategy { get; set; }
         public FileType? FileType { get; set; }
@@ -51,7 +55,6 @@ namespace Tes.Runner.Models
     public class FileInput
     {
         public string? Path { get; set; }
-        public string? MountParentDirectory { get; set; }
         public string? SourceUrl { get; set; }
         public TransformationStrategy? TransformationStrategy { get; set; }
     }
