@@ -202,7 +202,7 @@ namespace TesApi.Web
                 tesTaskExecutorLog.EndTime = batchInfo.BatchTaskEndTime;
                 tesTaskExecutorLog.ExitCode = batchInfo.BatchTaskExitCode;
 
-                if (tesTask.IsActiveState())
+                if (!tesTask.IsActiveState())
                 {
                     await AddExecutorLogs(tesTask, cancellationToken);
                 }
@@ -342,7 +342,7 @@ namespace TesApi.Web
                 // https://github.com/microsoft/ga4gh-tes/blob/6e120d33f78c7a36cffe953c74b55cba7cfbf7fc/src/Tes.Runner/Logs/AppendBlobLogPublisher.cs#L28
                 // https://github.com/microsoft/ga4gh-tes/blob/6e120d33f78c7a36cffe953c74b55cba7cfbf7fc/src/Tes.Runner/Logs/AppendBlobLogPublisher.cs#L39
 
-                var logs = await GetAvailableProcessLogs(tesTask, "task-executor-1", cancellationToken);
+                var logs = await GetAvailableProcessLogs(tesTask, "task-executor-1_", cancellationToken);
 
                 if ((logs ?? []).Any())
                 {
@@ -355,13 +355,13 @@ namespace TesApi.Web
 
                         if (list.Count != 0)
                         {
-                            action(JsonArray(list.Select(blob => blob.BlobUri.AbsoluteUri)));
+                            list.Select(blob => blob.BlobUri.AbsoluteUri).ForEach(action);
                         }
                     }
 
                     var log = tesTask.GetOrAddTesTaskLog().GetOrAddExecutorLog();
-                    log.Stderr = string.Join(", ", stdErr);
-                    log.Stdout = string.Join(", ", stdOut);
+                    log.Stderr = JsonArray(stdErr);
+                    log.Stdout = JsonArray(stdOut);
                 }
             }
             catch (Exception ex)
