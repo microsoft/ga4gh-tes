@@ -190,7 +190,7 @@ namespace Tes.Runner.Docker
                     stdIn is not null, executionOptions.ContainerEnv, executionOptions.ContainerDeviceRequests);
                 _ = await dockerClient.Containers.InspectContainerAsync(createResponse.ID);
 
-                var streamLogReader = await logPublisherFactory("task_executor_1");
+                var streamLogReader = await logPublisherFactory("task-executor-1");
 
                 var logs = await StartContainerWithStreamingOutput(createResponse, stdIn is not null);
 
