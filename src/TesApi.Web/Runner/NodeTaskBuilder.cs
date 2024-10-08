@@ -77,7 +77,7 @@ namespace TesApi.Web.Runner
         /// <returns></returns>
         public NodeTaskBuilder WithContainerMountParentDirectory(string mountDirectory)
         {
-            nodeTask.MountParentDirectory = mountDirectory;
+            nodeTask.MountParentDirectoryPath = mountDirectory;
             return this;
         }
 
@@ -93,9 +93,9 @@ namespace TesApi.Web.Runner
         public NodeTaskBuilder WithContainerExecutionParameters(string workingDirectory, string stdId, string stdOut, string stdErr, Dictionary<string, string> env)
         {
             nodeTask.ContainerWorkDir = workingDirectory;
-            nodeTask.ContainerStdIn = stdId;
-            nodeTask.ContainerStdOut = stdOut;
-            nodeTask.ContainerStdErr = stdErr;
+            nodeTask.ContainerStdInPath = stdId;
+            nodeTask.ContainerStdOutPath = stdOut;
+            nodeTask.ContainerStdErrPath = stdErr;
             nodeTask.ContainerEnv = env;
             return this;
         }

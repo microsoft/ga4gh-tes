@@ -15,9 +15,16 @@ namespace Tes.Runner.Models
         public List<ContainerDeviceRequest>? ContainerDeviceRequests { get; set; }
         public string? ContainerWorkDir { get; set; }
         public List<string>? CommandsToExecute { get; set; }
-        public string? ContainerStdIn { get; set; }
-        public string? ContainerStdOut { get; set; }
-        public string? ContainerStdErr { get; set; }
+
+        /// <value>Path inside the container to a file which will be piped to the executor&#39;s stdin. Must be an absolute path.</value>
+        public string? ContainerStdInPath { get; set; }
+
+        /// <value>Path inside the container to a file where the executor&#39;s stdout will be written to. Must be an absolute path.</value>
+        public string? ContainerStdOutPath { get; set; }
+
+        /// <value>Path inside the container to a file where the executor&#39;s stderr will be written to. Must be an absolute path.</value>
+        public string? ContainerStdErrPath { get; set; }
+
         public Dictionary<string, string>? ContainerEnv { get; set; }
         public List<FileInput>? Inputs { get; set; }
         public List<FileOutput>? Outputs { get; set; }
@@ -26,7 +33,7 @@ namespace Tes.Runner.Models
         public string? OutputsMetricsFormat { get; set; }
         public List<string>? TimestampMetricsFormats { get; set; }
         public List<string>? BashScriptMetricsFormats { get; set; }
-        public string? MountParentDirectory { get; set; }
+        public string? MountParentDirectoryPath { get; set; }
         public RuntimeOptions RuntimeOptions { get; set; } = null!;
     }
 

@@ -43,7 +43,7 @@ namespace Tes.Runner.Test
 
             nodeTask = new()
             {
-                MountParentDirectory = "/root/parent",
+                MountParentDirectoryPath = "/root/parent",
                 Outputs =
                 [
                     new()

@@ -56,7 +56,7 @@ namespace Tes.Runner
             {
                 await eventsPublisher.PublishExecutorStartEventAsync(tesNodeTask);
 
-                var bindings = new VolumeBindingsGenerator(tesNodeTask.MountParentDirectory!).GenerateVolumeBindings(tesNodeTask.Inputs, tesNodeTask.Outputs);
+                var bindings = new VolumeBindingsGenerator(tesNodeTask.MountParentDirectoryPath!).GenerateVolumeBindings(tesNodeTask.Inputs, tesNodeTask.Outputs);
 
                 var executionOptions = CreateExecutionOptions(bindings);
 
@@ -80,7 +80,7 @@ namespace Tes.Runner
         {
             return new(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute, bindings,
                 tesNodeTask.ContainerWorkDir, tesNodeTask.RuntimeOptions, tesNodeTask.ContainerDeviceRequests,
-                tesNodeTask.ContainerEnv, tesNodeTask.ContainerStdIn, tesNodeTask.ContainerStdOut, tesNodeTask.ContainerStdErr);
+                tesNodeTask.ContainerEnv, tesNodeTask.ContainerStdInPath, tesNodeTask.ContainerStdOutPath, tesNodeTask.ContainerStdErrPath);
         }
 
         private static string ToStatusMessage(ContainerExecutionResult result)
