@@ -50,11 +50,11 @@ namespace Tes.Runner.Test.Docker
             dockerImageMock.Setup(d => d.CreateImageAsync(It.IsAny<ImagesCreateParameters>(), It.IsAny<AuthConfig>(), It.IsAny<IProgress<JSONMessage>>(), It.IsAny<CancellationToken>()))
                 .Throws(exception);
 
-            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost);
+            DockerExecutor executor = new(dockerClient, containerRegistryAuthorizationManager, runnerHost);
             Models.RuntimeOptions runtimeOptions = new();
             try
             {
-                var result = await executor.RunOnContainerAsync(new("msftsc022830.azurecr.io/broadinstitute/gatk", "4.5.0.0-squash", [""], default, default, runtimeOptions, default));
+                var result = await executor.RunOnContainerAsync(new("msftsc022830.azurecr.io/broadinstitute/gatk", "4.5.0.0-squash", [""], default, default, runtimeOptions, default), _ => Task.FromResult(streamLogReader));
             }
             catch (IdentityUnavailableException) { } // Success
             catch (Exception ex)
@@ -75,11 +75,11 @@ namespace Tes.Runner.Test.Docker
             dockerImageMock.Setup(d => d.CreateImageAsync(It.IsAny<ImagesCreateParameters>(), It.IsAny<AuthConfig>(), It.IsAny<IProgress<JSONMessage>>(), It.IsAny<CancellationToken>()))
                 .Throws(exception);
 
-            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost);
+            DockerExecutor executor = new(dockerClient, containerRegistryAuthorizationManager, runnerHost);
             Models.RuntimeOptions runtimeOptions = new();
             try
             {
-                var result = await executor.RunOnContainerAsync(new("msftsc022830.azurecr.io/broadinstitute/gatk", "4.5.0.0-squash", [""], default, default, runtimeOptions, default));
+                var result = await executor.RunOnContainerAsync(new("msftsc022830.azurecr.io/broadinstitute/gatk", "4.5.0.0-squash", [""], default, default, runtimeOptions, default), _ => Task.FromResult(streamLogReader));
                 Assert.Fail();
             }
             catch (IdentityUnavailableException)
@@ -165,7 +165,7 @@ namespace Tes.Runner.Test.Docker
             dockerVolumeMock.Setup(d => d.PruneAsync(It.IsAny<VolumesPruneParameters>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult(new VolumesPruneResponse()));
 
-            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost);
+            DockerExecutor executor = new(dockerClient, containerRegistryAuthorizationManager, runnerHost);
             await executor.NodeCleanupAsync(new(image, default, default, default, default, new(), default));
 
             Assert.AreEqual(1, dockerVolumeMock.Invocations.Count);
@@ -185,6 +185,26 @@ namespace Tes.Runner.Test.Docker
             public override FileInfo GetSharedFile(string name)
             {
                 return file;
+            }
+
+            public override string GetTaskWorkingContainerPath(FileInfo file)
+            {
+                throw new NotImplementedException();
+            }
+
+            public override string GetTaskWorkingContainerPath(DirectoryInfo directory)
+            {
+                throw new NotImplementedException();
+            }
+
+            public override DirectoryInfo GetTaskWorkingHostDirectory(string path)
+            {
+                throw new NotImplementedException();
+            }
+
+            public override FileInfo GetTaskWorkingHostFile(string path)
+            {
+                throw new NotImplementedException();
             }
 
             public override Task NodeCleanupPreviousTasksAsync()

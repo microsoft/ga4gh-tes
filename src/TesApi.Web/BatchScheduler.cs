@@ -188,7 +188,7 @@ namespace TesApi.Web
             static bool tesTaskIsQueued(TesTask tesTask) => tesTask.State == TesState.QUEUED;
             static bool tesTaskCancellationRequested(TesTask tesTask) => tesTask.State == TesState.CANCELED && tesTask.IsCancelRequested;
 
-            static void SetTaskStateAndLog(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo)
+            async Task SetTaskStateAndLogAsync(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
                 tesTask.State = newTaskState;
 
@@ -201,6 +201,11 @@ namespace TesApi.Web
                 tesTaskExecutorLog.StartTime = batchInfo.BatchTaskStartTime;
                 tesTaskExecutorLog.EndTime = batchInfo.BatchTaskEndTime;
                 tesTaskExecutorLog.ExitCode = batchInfo.BatchTaskExitCode;
+
+                if (!tesTask.IsActiveState())
+                {
+                    await AddExecutorLogs(tesTask, cancellationToken);
+                }
 
                 // Only accurate when the task completes successfully, otherwise it's the Batch time as reported from Batch
                 // TODO this could get large; why?
@@ -220,20 +225,20 @@ namespace TesApi.Web
 
             async Task SetTaskCompleted(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                SetTaskStateAndLog(tesTask, TesState.COMPLETE, batchInfo);
+                await SetTaskStateAndLogAsync(tesTask, TesState.COMPLETE, batchInfo, cancellationToken);
                 await DeleteBatchTaskAsync(azureProxy, tesTask, batchInfo, cancellationToken);
             }
 
             async Task SetTaskExecutorError(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
                 await AddProcessLogsIfAvailable(tesTask, cancellationToken);
-                SetTaskStateAndLog(tesTask, TesState.EXECUTOR_ERROR, batchInfo);
+                await SetTaskStateAndLogAsync(tesTask, TesState.EXECUTOR_ERROR, batchInfo, cancellationToken);
                 await DeleteBatchTaskAsync(azureProxy, tesTask, batchInfo, cancellationToken);
             }
 
             async Task DeleteBatchTaskAndSetTaskStateAsync(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                SetTaskStateAndLog(tesTask, newTaskState, batchInfo);
+                await SetTaskStateAndLogAsync(tesTask, newTaskState, batchInfo, cancellationToken);
                 await DeleteBatchTaskAsync(tesTask, batchInfo.Pool, cancellationToken);
             }
 
@@ -260,8 +265,7 @@ namespace TesApi.Web
             Task HandlePreemptedNodeAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
                 logger.LogInformation("The TesTask {TesTask}'s node was preempted. It will be automatically rescheduled.", tesTask.Id);
-                SetTaskStateAndLog(tesTask, TesState.INITIALIZING, batchInfo);
-                return Task.CompletedTask;
+                return SetTaskStateAndLogAsync(tesTask, TesState.INITIALIZING, batchInfo, cancellationToken);
             }
 
             tesTaskStateTransitions =
@@ -288,8 +292,6 @@ namespace TesApi.Web
         {
             try
             {
-                var directoryUri = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, string.Empty, cancellationToken);
-
                 // Process log naming convention is (mostly) established in Tes.Runner.Logs.AppendBlobLogPublisher, specifically these methods:
                 // https://github.com/microsoft/ga4gh-tes/blob/6e120d33f78c7a36cffe953c74b55cba7cfbf7fc/src/Tes.Runner/Logs/AppendBlobLogPublisher.cs#L28
                 // https://github.com/microsoft/ga4gh-tes/blob/6e120d33f78c7a36cffe953c74b55cba7cfbf7fc/src/Tes.Runner/Logs/AppendBlobLogPublisher.cs#L39
@@ -297,50 +299,78 @@ namespace TesApi.Web
                 // Get any logs the task runner left. Look for the latest set in this order: upload, exec, download
                 foreach (var prefix in new[] { "upload_std", "exec_std", "download_std" })
                 {
-                    var logs = FilterByPrefix(directoryUri, prefix, await azureProxy.ListBlobsAsync(directoryUri, cancellationToken));
+                    var logs = await GetAvailableProcessLogs(tesTask, prefix, cancellationToken);
 
-                    if (logs.Any())
+                    if ((logs ?? []).Any())
                     {
-                        if (prefix.StartsWith("exec_"))
-                        {
-                            var log = tesTask.GetOrAddTesTaskLog().GetOrAddExecutorLog();
-
-                            foreach (var (type, action) in new (string, Action<string>)[] { ("stderr", list => log.Stderr = list), ("stdout", list => log.Stdout = list) })
-                            {
-                                var list = logs.Where(blob => type.Equals(blob.BlobNameParts[1], StringComparison.OrdinalIgnoreCase)).ToList();
-
-                                if (list.Any())
-                                {
-                                    action(JsonArray(list.Select(blob => blob.BlobUri.AbsoluteUri)));
-                                }
-                            }
-                        }
-
                         tesTask.AddToSystemLog(Enumerable.Empty<string>()
                             .Append("Possibly relevant logs:")
                             .Concat(logs.Select(log => log.BlobUri.AbsoluteUri)));
-
-                        return;
                     }
+
+                    return;
                 }
-
-#pragma warning disable IDE0305 // Simplify collection initialization
-                static IList<(Uri BlobUri, string[] BlobNameParts)> FilterByPrefix(Uri directoryUri, string blobNameStartsWith, IEnumerable<Azure.Storage.Blobs.Models.BlobItem> blobs)
-                    => blobs.Select(blob => (BlobUri: new BlobUriBuilder(directoryUri) { Sas = null, BlobName = blob.Name }.ToUri(), BlobName: blob.Name.Split('/').Last()))
-                        .Where(blob => blob.BlobName.EndsWith(".txt") && blob.BlobName.StartsWith(blobNameStartsWith))
-                        .Select(blob => (blob.BlobUri, BlobNameParts: blob.BlobName.Split('_', 4)))
-                        .OrderBy(blob => string.Join('_', blob.BlobNameParts.Take(3)))
-                        .ThenBy(blob => blob.BlobNameParts.Length < 4 ? -1 : int.Parse(blob.BlobNameParts[3][..blob.BlobNameParts[3].IndexOf('.')], System.Globalization.CultureInfo.InvariantCulture))
-                        .ToList();
-#pragma warning restore IDE0305 // Simplify collection initialization
-
-                static string JsonArray(IEnumerable<string> items)
-                    => System.Text.Json.JsonSerializer.Serialize(items.ToArray(), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerOptions.Default) { WriteIndented = true });
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to find and append process logs on task {TesTask}", tesTask.Id);
             }
+        }
+
+        private async Task<IList<(Uri BlobUri, string[] BlobNameParts)>> GetAvailableProcessLogs(TesTask tesTask, string prefix, CancellationToken cancellationToken)
+        {
+            var directoryUri = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, string.Empty, cancellationToken);
+
+            return FilterByPrefix(directoryUri, prefix, await azureProxy.ListBlobsAsync(directoryUri, cancellationToken));
+
+#pragma warning disable IDE0305 // Simplify collection initialization
+            static IList<(Uri BlobUri, string[] BlobNameParts)> FilterByPrefix(Uri directoryUri, string blobNameStartsWith, IEnumerable<Azure.Storage.Blobs.Models.BlobItem> blobs)
+                => blobs.Select(blob => (BlobUri: new BlobUriBuilder(directoryUri) { Sas = null, BlobName = blob.Name }.ToUri(), BlobName: blob.Name.Split('/').Last()))
+                    .Where(blob => blob.BlobName.EndsWith(".txt") && blob.BlobName.StartsWith(blobNameStartsWith))
+                    .Select(blob => (blob.BlobUri, BlobNameParts: blob.BlobName.Split('_', 4)))
+                    .OrderBy(blob => string.Join('_', blob.BlobNameParts.Take(3)))
+                    .ThenBy(blob => blob.BlobNameParts.Length < 4 ? -1 : int.Parse(blob.BlobNameParts[3][..blob.BlobNameParts[3].IndexOf('.')], System.Globalization.CultureInfo.InvariantCulture))
+                    .ToList();
+#pragma warning restore IDE0305 // Simplify collection initialization
+        }
+
+        private async Task AddExecutorLogs(TesTask tesTask, CancellationToken cancellationToken)
+        {
+            try
+            {
+                // Process log naming convention is (mostly) established in Tes.Runner.Logs.AppendBlobLogPublisher, specifically these methods:
+                // https://github.com/microsoft/ga4gh-tes/blob/6e120d33f78c7a36cffe953c74b55cba7cfbf7fc/src/Tes.Runner/Logs/AppendBlobLogPublisher.cs#L28
+                // https://github.com/microsoft/ga4gh-tes/blob/6e120d33f78c7a36cffe953c74b55cba7cfbf7fc/src/Tes.Runner/Logs/AppendBlobLogPublisher.cs#L39
+
+                var logs = await GetAvailableProcessLogs(tesTask, "task-executor-1_", cancellationToken);
+
+                if ((logs ?? []).Any())
+                {
+                    List<string> stdErr = [];
+                    List<string> stdOut = [];
+
+                    foreach (var (type, action) in new (string, Action<string>)[] { ("stderr", stdErr.Add), ("stdout", stdOut.Add) })
+                    {
+                        var list = logs.Where(blob => type.Equals(blob.BlobNameParts[1], StringComparison.OrdinalIgnoreCase)).ToList();
+
+                        if (list.Count != 0)
+                        {
+                            list.Select(blob => blob.BlobUri.AbsoluteUri).ForEach(action);
+                        }
+                    }
+
+                    var log = tesTask.GetOrAddTesTaskLog().GetOrAddExecutorLog();
+                    log.Stderr = JsonArray(stdErr);
+                    log.Stdout = JsonArray(stdOut);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to find and append process logs on task {TesTask}", tesTask.Id);
+            }
+
+            static string JsonArray(IEnumerable<string> items)
+                => System.Text.Json.JsonSerializer.Serialize(items.ToArray(), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerOptions.Default) { WriteIndented = true });
         }
 
         private Task DeleteBatchTaskAsync(TesTask tesTask, string poolId, CancellationToken cancellationToken)

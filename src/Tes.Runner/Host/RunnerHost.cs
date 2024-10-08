@@ -34,6 +34,34 @@ namespace Tes.Runner.Host
         /// <returns></returns>
         Task NodeCleanupPreviousTasksAsync();
 
+        /// <summary>
+        /// Gets container path for file in task working directory.
+        /// </summary>
+        /// <param name="file"></param>
+        /// <returns></returns>
+        string GetTaskWorkingContainerPath(FileInfo file);
+
+        /// <summary>
+        /// Gets container path for directory in task working directory.
+        /// </summary>
+        /// <param name="directory"></param>
+        /// <returns></returns>
+        string GetTaskWorkingContainerPath(DirectoryInfo directory);
+
+        /// <summary>
+        /// Gets file on host for path in task container.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        FileInfo GetTaskWorkingHostFile(string path);
+
+        /// <summary>
+        /// Gets directory on host for path in task container.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        DirectoryInfo GetTaskWorkingHostDirectory(string path);
+
         //void WriteMetric(string key);
 
         //void WriteMetric(string key, string value);
@@ -62,6 +90,18 @@ namespace Tes.Runner.Host
     {
         /// <inheritdoc/>
         public abstract FileInfo GetSharedFile(string name);
+
+        /// <inheritdoc/>
+        public abstract string GetTaskWorkingContainerPath(FileInfo file);
+
+        /// <inheritdoc/>
+        public abstract string GetTaskWorkingContainerPath(DirectoryInfo directory);
+
+        /// <inheritdoc/>
+        public abstract DirectoryInfo GetTaskWorkingHostDirectory(string path);
+
+        /// <inheritdoc/>
+        public abstract FileInfo GetTaskWorkingHostFile(string path);
 
         /// <inheritdoc/>
         public abstract Task NodeCleanupPreviousTasksAsync();
