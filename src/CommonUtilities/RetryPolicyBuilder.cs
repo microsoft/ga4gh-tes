@@ -11,7 +11,7 @@ using Polly.Retry;
 namespace CommonUtilities;
 
 /// <summary>
-/// Utility class that facilitates the retry policy implementations for HTTP clients. 
+/// Utility class that facilitates the retry policy implementations for HTTP clients.
 /// </summary>
 public class RetryPolicyBuilder
 {

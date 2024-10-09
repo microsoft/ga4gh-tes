@@ -230,6 +230,7 @@ namespace TesDeployer
                     {
                         storageAccount = await GetExistingStorageAccountAsync(configuration.StorageAccountName)
                             ?? throw new ValidationException($"Storage account {configuration.StorageAccountName} does not exist in region {configuration.RegionName} or is not accessible to the current user.", displayExample: false);
+
                     }
 
                     storageAccountData = (await FetchResourceDataAsync(ct => storageAccount.GetAsync(cancellationToken: ct), cts.Token, account => storageAccount = account)).Data;

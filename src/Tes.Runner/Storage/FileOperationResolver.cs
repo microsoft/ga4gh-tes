@@ -189,7 +189,7 @@ namespace Tes.Runner.Storage
             }
         }
 
-        private static FileOutput CreateExpandedFileOutputWithCombinedTargetUrl(FileOutput output, string absoluteFilePath, string relativePathToSearchPath)
+        private FileOutput CreateExpandedFileOutputWithCombinedTargetUrl(FileOutput output, string absoluteFilePath, string relativePathToSearchPath)
         {
             return new()
             {
@@ -200,7 +200,7 @@ namespace Tes.Runner.Storage
             };
         }
 
-        private static FileOutput CreateExpandedFileOutputUsingTargetUrl(FileOutput output, string absoluteFilePath)
+        private FileOutput CreateExpandedFileOutputUsingTargetUrl(FileOutput output, string absoluteFilePath)
         {
             return new()
             {

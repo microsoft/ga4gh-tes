@@ -88,9 +88,6 @@ namespace TesApi.Web.Runner
             try
             {
                 var builder = new NodeTaskBuilder();
-                builder.WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
-                    .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath: string.Empty))
-                    .WithResourceIdManagedIdentity(GetNodeManagedIdentityResourceId(nodeTaskConversionOptions.GlobalManagedIdentity, task));
 
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
                 {
@@ -98,6 +95,12 @@ namespace TesApi.Web.Runner
                     builder.WithTerraAsRuntimeEnvironment(terraOptions.WsmApiHost, terraOptions.LandingZoneApiHost,
                         terraOptions.SasAllowedIpRange);
                 }
+
+                builder.WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
+                    .WithContainerMountParentDirectory(containerMountParentDirectory)
+                    .WithStorageEventSink(storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath: string.Empty))
+                    .WithLogPublisher(storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath: string.Empty))
+                    .WithResourceIdManagedIdentity(GetNodeManagedIdentityResourceId(nodeTaskConversionOptions.GlobalManagedIdentity, task));
 
                 var runtimeOptions = builder.Build().RuntimeOptions;
                 runtimeOptions.StorageEventSink.TargetUrl = default;
@@ -129,6 +132,13 @@ namespace TesApi.Web.Runner
             {
                 var builder = new NodeTaskBuilder();
 
+                if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
+                {
+                    logger.LogInformation("Setting up Terra as the runtime environment for the runner");
+                    builder.WithTerraAsRuntimeEnvironment(terraOptions.WsmApiHost, terraOptions.LandingZoneApiHost,
+                        terraOptions.SasAllowedIpRange);
+                }
+
                 //TODO: Revise this assumption (carried over from the current implementation) and consider Single() if in practice only one executor per task is supported.
                 var executor = task.Executors.First();
 
@@ -154,13 +164,6 @@ namespace TesApi.Web.Runner
                     case BatchScheduler.VmFamilySeries.standardNVFamilies:
                         builder.WithGpuSupport();
                         break;
-                }
-
-                if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
-                {
-                    logger.LogInformation("Setting up Terra as the runtime environment for the runner");
-                    builder.WithTerraAsRuntimeEnvironment(terraOptions.WsmApiHost, terraOptions.LandingZoneApiHost,
-                        terraOptions.SasAllowedIpRange);
                 }
 
                 await BuildInputsAsync(task, builder, nodeTaskConversionOptions.AdditionalInputs, nodeTaskConversionOptions.DefaultStorageAccountName, cancellationToken);
@@ -198,7 +201,7 @@ namespace TesApi.Web.Runner
 
                 var outputs = PrepareLocalOutputsForMapping(task, defaultStorageAccount);
 
-                MapOutputs(outputs, pathParentDirectory, containerMountParentDirectory, builder);
+                MapOutputs(outputs, pathParentDirectory, builder);
             }
         }
 
@@ -263,7 +266,7 @@ namespace TesApi.Web.Runner
                     inputs.AddRange(distinctAdditionalInputs);
                 }
 
-                await MapInputsAsync(inputs, pathParentDirectory, builder);
+                await MapInputsAsync(inputs, pathParentDirectory, builder, cancellationToken);
             }
         }
 
@@ -335,7 +338,7 @@ namespace TesApi.Web.Runner
 
         private async Task ResolveInputType(TesInput input, CancellationToken cancellationToken)
         {
-            var uri = await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, default, default, getContainerSas: true);
+            var uri = await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, Azure.Storage.Sas.BlobSasPermissions.List, cancellationToken);
 
             if (uri is null)
             {
@@ -493,7 +496,7 @@ namespace TesApi.Web.Runner
         {
             var inputFileUrl =
                 await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, Guid.NewGuid().ToString(),
-                    cancellationToken);
+                    storageAccessProvider.BlobPermissionsWithWrite, cancellationToken);
 
             //return the URL without the SAS token, the runner will add it using the transformation strategy
             await storageAccessProvider.UploadBlobAsync(inputFileUrl, content, cancellationToken);
@@ -530,7 +533,7 @@ namespace TesApi.Web.Runner
             return await UploadContentAndCreateTesInputAsync(tesTask, input.Path, input.Content, cancellationToken);
         }
 
-        private static void MapOutputs(List<TesOutput> outputs, string pathParentDirectory, string containerMountParentDirectory,
+        private static void MapOutputs(List<TesOutput> outputs, string pathParentDirectory,
             NodeTaskBuilder builder)
         {
             outputs?.ForEach(output =>
@@ -540,7 +543,8 @@ namespace TesApi.Web.Runner
             });
         }
 
-        private async Task MapInputsAsync(List<TesInput> inputs, string pathParentDirectory, NodeTaskBuilder builder)
+        private async Task MapInputsAsync(List<TesInput> inputs, string pathParentDirectory,
+            NodeTaskBuilder builder, CancellationToken cancellationToken)
         {
             if (inputs is null || inputs.Count == 0)
             {
@@ -558,9 +562,9 @@ namespace TesApi.Web.Runner
                     // Nextflow directory example
                     // input.Url = /storageaccount/work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
                     // input.Path = /work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
-                    var blobDirectoryUrlWithSasToken = await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, default, default, getContainerSas: true);
+                    var blobDirectoryUrlWithSasToken = await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, Azure.Storage.Sas.BlobSasPermissions.List, cancellationToken);
                     var blobDirectoryUrlWithoutSasToken = blobDirectoryUrlWithSasToken.GetLeftPart(UriPartial.Path);
-                    var blobAbsoluteUrls = await storageAccessProvider.GetBlobUrlsAsync(blobDirectoryUrlWithSasToken, default);
+                    var blobAbsoluteUrls = await storageAccessProvider.GetBlobUrlsAsync(blobDirectoryUrlWithSasToken, cancellationToken);
 
                     if (input.Type == default)
                     {
