@@ -71,32 +71,31 @@ namespace Tes.Runner.Logs
                 var buffer = new byte[16 * KiB]; //16K at the time
                 using (multiplexedStream)
                 {
-                    for (var result = await multiplexedStream.ReadOutputAsync(buffer, 0, buffer.Length, CancellationToken.None);
-                        !result.EOF;
-                        result = await multiplexedStream.ReadOutputAsync(buffer, 0, buffer.Length, CancellationToken.None))
+                    var result = await multiplexedStream.ReadOutputAsync(buffer, 0, buffer.Length, CancellationToken.None);
+
+                    while (!result.EOF)
                     {
                         var data = Encoding.UTF8.GetString(buffer, 0, result.Count);
-
-                        switch (result.Target)
+                        if (result.Target == MultiplexedStream.TargetStream.StandardOut)
                         {
-                            case MultiplexedStream.TargetStream.StandardOut:
-                                await AppendStandardOutputAsync(data);
+                            await AppendStandardOutputAsync(data);
 
-                                if (stdOut is not null)
-                                {
-                                    await stdOut.WriteAsync(buffer, 0, result.Count);
-                                }
-                                break;
-
-                            case MultiplexedStream.TargetStream.StandardError:
-                                await AppendStandardErrAsync(data);
-
-                                if (stdErr is not null)
-                                {
-                                    await stdErr.WriteAsync(buffer, 0, result.Count);
-                                }
-                                break;
+                            if (stdOut is not null)
+                            {
+                                await stdOut.WriteAsync(buffer, 0, result.Count);
+                            }
                         }
+                        else if (result.Target == MultiplexedStream.TargetStream.StandardError)
+                        {
+                            await AppendStandardErrAsync(data);
+
+                            if (stdErr is not null)
+                            {
+                                await stdErr.WriteAsync(buffer, 0, result.Count);
+                            }
+                        }
+
+                        result = await multiplexedStream.ReadOutputAsync(buffer, 0, buffer.Length, CancellationToken.None);
                     }
                 }
             }

@@ -80,7 +80,7 @@ namespace Tes.Runner
         {
             return new(executor.ImageName, executor.ImageTag, executor.CommandsToExecute, bindings,
                 executor.ContainerWorkDir, tesNodeTask.RuntimeOptions, tesNodeTask.ContainerDeviceRequests,
-                executor.ContainerEnv, executor.ContainerStdIn, executor.ContainerStdOut, executor.ContainerStdErr);
+                executor.ContainerEnv, executor.ContainerStdInPath, executor.ContainerStdOutPath, executor.ContainerStdErrPath);
         }
 
         private static string ToStatusMessage(ContainerExecutionResult result)

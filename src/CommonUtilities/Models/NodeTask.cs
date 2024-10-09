@@ -10,7 +10,6 @@ namespace Tes.Runner.Models
     {
         public string? Id { get; set; }
         public string? WorkflowId { get; set; }
-        public string? MountParentDirectory { get; set; }
         public List<Executor>? Executors { get; set; }
         public List<ContainerDeviceRequest>? ContainerDeviceRequests { get; set; }
         public List<string>? ContainerVolumes { get; set; }
@@ -31,9 +30,9 @@ namespace Tes.Runner.Models
         public string? ImageName { get; set; }
         public string? ContainerWorkDir { get; set; }
         public List<string>? CommandsToExecute { get; set; }
-        public string? ContainerStdIn { get; set; }
-        public string? ContainerStdOut { get; set; }
-        public string? ContainerStdErr { get; set; }
+        public string? ContainerStdInPath { get; set; }
+        public string? ContainerStdOutPath { get; set; }
+        public string? ContainerStdErrPath { get; set; }
         public Dictionary<string, string>? ContainerEnv { get; set; }
         public bool IgnoreError { get; set; }
     }

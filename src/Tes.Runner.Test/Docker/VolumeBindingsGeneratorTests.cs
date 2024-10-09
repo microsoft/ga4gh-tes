@@ -26,7 +26,6 @@ namespace Tes.Runner.Test.Docker
         [DataRow("/wkd/input/file.bam", "/wkd/", "/wkd/input:/input")]
         public void GenerateVolumeBindings_SingleInputWithWorkingDir_SingleVolumeBinding(string path, string mountParent, string expected)
         {
-            var volumeBindingsGenerator = new VolumeBindingsGenerator(mountParent);
             var input = new FileInput() { Path = path };
 
             var bindings = new VolumeBindingsGenerator(mountParent).GenerateVolumeBindings(new List<FileInput>() { input }, outputs: default);
@@ -39,7 +38,6 @@ namespace Tes.Runner.Test.Docker
         [DataRow("/wkd/output/file.bam", "/wkd/", "/wkd/output:/output")]
         public void GenerateVolumeBindings_SingleOutputWithWorkingDir_SingleVolumeBinding(string path, string mountParent, string expected)
         {
-            var volumeBindingsGenerator = new VolumeBindingsGenerator(mountParent);
             var output = new FileOutput() { Path = path };
 
             var bindings = new VolumeBindingsGenerator(mountParent).GenerateVolumeBindings(inputs: default, new List<FileOutput>() { output });
@@ -53,7 +51,6 @@ namespace Tes.Runner.Test.Docker
         [DataRow("/wkd", "/wkd/output:/output", "/wkd/output/file.bam", "/wkd/output/dir1/file1.bam", "/wkd/output/dir2/file1.bam")]
         public void GenerateVolumeBindings_OutputsWithWorkingDir_SingleVolumeBinding(string mountParent, string expected, params string[] paths)
         {
-            var volumeBindingsGenerator = new VolumeBindingsGenerator(mountParent);
             var outputs = paths.Select(p => new FileOutput() { Path = p }).ToList();
 
             var bindings = new VolumeBindingsGenerator(mountParent).GenerateVolumeBindings(inputs: default, outputs);
@@ -66,7 +63,6 @@ namespace Tes.Runner.Test.Docker
         [DataRow("/wkd", "/wkd/output:/output", "/wkd/out:/out", "/wkd/out/dir1/file1.bam", "/wkd/output/dir2/file1.bam")]
         public void GenerateVolumeBindings_OutputsWitDifferentParentsAfterWd_TwoVolumeBinding(string mountParent, string expected1, string expected2, params string[] paths)
         {
-            var volumeBindingsGenerator = new VolumeBindingsGenerator(mountParent);
             var outputs = paths.Select(p => new FileOutput() { Path = p }).ToList();
 
             var bindings = new VolumeBindingsGenerator(mountParent).GenerateVolumeBindings(inputs: default, outputs);
@@ -79,13 +75,14 @@ namespace Tes.Runner.Test.Docker
         [TestMethod]
         public void GenerateVolumeBindings_MultipleInputsAndOutputsWitDifferentParentsAfterWd_TwoVolumeBinding()
         {
+            var mountParent = "/wkd";
             var paths = new string[] { "/wkd/outputs/f.bam", "/wkd/outputs/b.bam" };
             var outputs = paths.Select(p => new FileOutput() { Path = p }).ToList();
 
             paths = new string[] { "/wkd/inputs/f.bam", "/wkd/inputs/b.bam" };
             var inputs = paths.Select(p => new FileInput() { Path = p }).ToList();
 
-            var bindings = new VolumeBindingsGenerator("/wkd").GenerateVolumeBindings(inputs, outputs);
+            var bindings = new VolumeBindingsGenerator(mountParent).GenerateVolumeBindings(inputs, outputs);
 
             Assert.AreEqual(2, bindings.Count);
             Assert.IsTrue(bindings.Any(p => p.Equals("/wkd/inputs:/inputs", StringComparison.OrdinalIgnoreCase)));
