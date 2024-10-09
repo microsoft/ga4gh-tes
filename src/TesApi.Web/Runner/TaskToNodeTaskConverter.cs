@@ -88,9 +88,6 @@ namespace TesApi.Web.Runner
             try
             {
                 var builder = new NodeTaskBuilder();
-                builder.WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
-                    .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath: string.Empty))
-                    .WithResourceIdManagedIdentity(GetNodeManagedIdentityResourceId(nodeTaskConversionOptions.GlobalManagedIdentity, task));
 
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
                 {
@@ -98,6 +95,12 @@ namespace TesApi.Web.Runner
                     builder.WithTerraAsRuntimeEnvironment(terraOptions.WsmApiHost, terraOptions.LandingZoneApiHost,
                         terraOptions.SasAllowedIpRange);
                 }
+
+                builder.WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
+                    .WithContainerMountParentDirectory(containerMountParentDirectory)
+                    .WithStorageEventSink(storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath: string.Empty))
+                    .WithLogPublisher(storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath: string.Empty))
+                    .WithResourceIdManagedIdentity(GetNodeManagedIdentityResourceId(nodeTaskConversionOptions.GlobalManagedIdentity, task));
 
                 var runtimeOptions = builder.Build().RuntimeOptions;
                 runtimeOptions.StorageEventSink.TargetUrl = default;
@@ -129,6 +132,13 @@ namespace TesApi.Web.Runner
             {
                 var builder = new NodeTaskBuilder();
 
+                if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
+                {
+                    logger.LogInformation("Setting up Terra as the runtime environment for the runner");
+                    builder.WithTerraAsRuntimeEnvironment(terraOptions.WsmApiHost, terraOptions.LandingZoneApiHost,
+                        terraOptions.SasAllowedIpRange);
+                }
+
                 //TODO: Revise this assumption (carried over from the current implementation) and consider Single() if in practice only one executor per task is supported.
                 var executor = task.Executors.First();
 
@@ -154,13 +164,6 @@ namespace TesApi.Web.Runner
                     case BatchScheduler.VmFamilySeries.standardNVFamilies:
                         builder.WithGpuSupport();
                         break;
-                }
-
-                if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
-                {
-                    logger.LogInformation("Setting up Terra as the runtime environment for the runner");
-                    builder.WithTerraAsRuntimeEnvironment(terraOptions.WsmApiHost, terraOptions.LandingZoneApiHost,
-                        terraOptions.SasAllowedIpRange);
                 }
 
                 await BuildInputsAsync(task, builder, nodeTaskConversionOptions.AdditionalInputs, nodeTaskConversionOptions.DefaultStorageAccountName, cancellationToken);
