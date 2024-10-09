@@ -16,7 +16,7 @@ namespace Tes.Runner.Test
         [TestInitialize]
         public void SetUp()
         {
-            runtimeOptions = new RuntimeOptions();
+            runtimeOptions = new RuntimeOptions() { MountParentDirectoryPath = "/task" };
             resolutionPolicyHandler = new ResolutionPolicyHandler(runtimeOptions, Runner.Transfer.BlobPipelineOptions.DefaultApiVersion);
         }
 

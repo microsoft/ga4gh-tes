@@ -423,7 +423,7 @@ namespace TesApi.Tests
         {
             var protocolObject = new Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun(DateTime.UtcNow, results, error);
             var autoScaleRun = (AutoScaleRun)typeof(AutoScaleRun).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, [typeof(Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun)], default)
-                .Invoke(new object[] { protocolObject });
+                .Invoke([protocolObject]);
             return autoScaleRun;
         }
 
@@ -451,12 +451,7 @@ namespace TesApi.Tests
 
             metadata ??= [];
 
-            Mock<Microsoft.Azure.Batch.Protocol.IComputeNodeOperations> computeNodeOperations = new();
-            MockServiceClient batchServiceClient = new(computeNodeOperations.Object);
-            var protocolLayer = typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("ProtocolLayer").GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient)], null)
-                .Invoke([batchServiceClient]);
-            var parentClient = (BatchClient)typeof(BatchClient).GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("IProtocolLayer")], null)
-                .Invoke([protocolLayer]);
+            var parentClient = CreateMockBatchClient();
             Microsoft.Azure.Batch.Protocol.Models.CloudPool modelPool = new(
                 id: id,
                 currentDedicatedNodes: currentDedicatedNodes,
@@ -489,12 +484,7 @@ namespace TesApi.Tests
                 stateTransitionTime = DateTime.UtcNow;
             }
 
-            Mock<Microsoft.Azure.Batch.Protocol.IComputeNodeOperations> computeNodeOperations = new();
-            MockServiceClient batchServiceClient = new(computeNodeOperations.Object);
-            var protocolLayer = typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("ProtocolLayer").GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient)], null)
-                .Invoke([batchServiceClient]);
-            var parentClient = (BatchClient)typeof(BatchClient).GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("IProtocolLayer")], null)
-                .Invoke([protocolLayer]);
+            var parentClient = CreateMockBatchClient();
             Microsoft.Azure.Batch.Protocol.Models.CloudTask modelTask = new(id: id, stateTransitionTime: stateTransitionTime, state: Microsoft.Azure.Batch.Protocol.Models.TaskState.Active);
             var task = (CloudTask)typeof(CloudTask).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, [typeof(BatchClient), typeof(string), typeof(Microsoft.Azure.Batch.Protocol.Models.CloudTask), typeof(IEnumerable<BatchClientBehavior>)], default)
                 .Invoke([parentClient, jobId, modelTask, Enumerable.Empty<BatchClientBehavior>()]);
@@ -508,16 +498,21 @@ namespace TesApi.Tests
                 stateTransitionTime = DateTime.UtcNow;
             }
 
-            Mock<Microsoft.Azure.Batch.Protocol.IComputeNodeOperations> computeNodeOperations = new();
-            MockServiceClient batchServiceClient = new(computeNodeOperations.Object);
-            var protocolLayer = typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("ProtocolLayer").GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient)], null)
-                .Invoke([batchServiceClient]);
-            var parentClient = (BatchClient)typeof(BatchClient).GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("IProtocolLayer")], null)
-                .Invoke([protocolLayer]);
+            var parentClient = CreateMockBatchClient();
             Microsoft.Azure.Batch.Protocol.Models.ComputeNode modelNode = new(stateTransitionTime: stateTransitionTime, id: id, affinityId: AffinityPrefix + id, isDedicated: isDedicated, state: isIdle ? Microsoft.Azure.Batch.Protocol.Models.ComputeNodeState.Idle : Microsoft.Azure.Batch.Protocol.Models.ComputeNodeState.Running);
             var node = (ComputeNode)typeof(ComputeNode).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, [typeof(BatchClient), typeof(string), typeof(Microsoft.Azure.Batch.Protocol.Models.ComputeNode), typeof(IEnumerable<BatchClientBehavior>)], default)
                 .Invoke([parentClient, poolId, modelNode, null]);
             return node;
+        }
+
+        private static BatchClient CreateMockBatchClient()
+        {
+            Mock<Microsoft.Azure.Batch.Protocol.IComputeNodeOperations> computeNodeOperations = new();
+            MockServiceClient batchServiceClient = new(computeNodeOperations.Object);
+            var protocolLayer = typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.ProtocolLayer").GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient)], null)
+                .Invoke([batchServiceClient]);
+            return (BatchClient)typeof(BatchClient).GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.IProtocolLayer")], null)
+                .Invoke([protocolLayer]);
         }
     }
 }
