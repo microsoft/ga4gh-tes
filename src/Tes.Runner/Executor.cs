@@ -5,6 +5,7 @@ using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Tes.Runner.Docker;
 using Tes.Runner.Events;
+using Tes.Runner.Logs;
 using Tes.Runner.Models;
 using Tes.Runner.Storage;
 using Tes.Runner.Transfer;
@@ -20,9 +21,10 @@ namespace Tes.Runner
         private readonly FileOperationResolver operationResolver;
         private readonly EventsPublisher eventsPublisher;
         private readonly ITransferOperationFactory transferOperationFactory;
+        private readonly string apiVersion;
 
         public Executor(NodeTask tesNodeTask, EventsPublisher eventsPublisher, string apiVersion)
-            : this(tesNodeTask, new(tesNodeTask, apiVersion), eventsPublisher, new TransferOperationFactory())
+            : this(tesNodeTask, new(tesNodeTask, apiVersion), eventsPublisher, new TransferOperationFactory(), apiVersion)
         { }
 
         public static Host.IRunnerHost RunnerHost { get; internal set; } = new Host.AzureBatchRunnerHost();
@@ -34,7 +36,7 @@ namespace Tes.Runner
             return new Executor(nodeTask, publisher, apiVersion);
         }
 
-        public Executor(NodeTask tesNodeTask, FileOperationResolver operationResolver, EventsPublisher eventsPublisher, ITransferOperationFactory transferOperationFactory)
+        public Executor(NodeTask tesNodeTask, FileOperationResolver operationResolver, EventsPublisher eventsPublisher, ITransferOperationFactory transferOperationFactory, string apiVersion)
         {
             ArgumentNullException.ThrowIfNull(transferOperationFactory);
             ArgumentNullException.ThrowIfNull(tesNodeTask);
@@ -45,6 +47,7 @@ namespace Tes.Runner
             this.operationResolver = operationResolver;
             this.eventsPublisher = eventsPublisher;
             this.transferOperationFactory = transferOperationFactory;
+            this.apiVersion = apiVersion;
         }
 
         public async Task<NodeTaskResult> ExecuteNodeContainerTaskAsync(DockerExecutor dockerExecutor, int selector)
@@ -53,11 +56,11 @@ namespace Tes.Runner
             {
                 await eventsPublisher.PublishExecutorStartEventAsync(tesNodeTask, selector);
 
-                var bindings = new VolumeBindingsGenerator(tesNodeTask.MountParentDirectory!).GenerateVolumeBindings(tesNodeTask.Inputs, tesNodeTask.Outputs, tesNodeTask.ContainerVolumes);
+                var bindings = new VolumeBindingsGenerator(tesNodeTask.MountParentDirectoryPath!).GenerateVolumeBindings(tesNodeTask.Inputs, tesNodeTask.Outputs, tesNodeTask.ContainerVolumes);
 
                 var executionOptions = CreateExecutionOptions(tesNodeTask.Executors![selector], bindings);
 
-                var result = await dockerExecutor.RunOnContainerAsync(executionOptions);
+                var result = await dockerExecutor.RunOnContainerAsync(executionOptions, prefix => LogPublisher.CreateStreamReaderLogPublisherAsync(executionOptions.RuntimeOptions, prefix, apiVersion));
 
                 await eventsPublisher.PublishExecutorEndEventAsync(tesNodeTask, selector, result.ExitCode, ToStatusMessage(result), result.Error);
 

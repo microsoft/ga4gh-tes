@@ -29,7 +29,7 @@ namespace Tes.Runner.Test.Docker
             var volumeBindingsGenerator = new VolumeBindingsGenerator(mountParent);
             var input = new FileInput() { Path = path };
 
-            var bindings = volumeBindingsGenerator.GenerateVolumeBindings(new List<FileInput>() { input }, outputs: default);
+            var bindings = new VolumeBindingsGenerator(mountParent).GenerateVolumeBindings(new List<FileInput>() { input }, outputs: default);
 
             Assert.AreEqual(expected, bindings.Single());
         }
@@ -42,7 +42,7 @@ namespace Tes.Runner.Test.Docker
             var volumeBindingsGenerator = new VolumeBindingsGenerator(mountParent);
             var output = new FileOutput() { Path = path };
 
-            var bindings = volumeBindingsGenerator.GenerateVolumeBindings(inputs: default, new List<FileOutput>() { output });
+            var bindings = new VolumeBindingsGenerator(mountParent).GenerateVolumeBindings(inputs: default, new List<FileOutput>() { output });
 
             Assert.AreEqual(expected, bindings.Single());
         }
@@ -56,7 +56,7 @@ namespace Tes.Runner.Test.Docker
             var volumeBindingsGenerator = new VolumeBindingsGenerator(mountParent);
             var outputs = paths.Select(p => new FileOutput() { Path = p }).ToList();
 
-            var bindings = volumeBindingsGenerator.GenerateVolumeBindings(inputs: default, outputs);
+            var bindings = new VolumeBindingsGenerator(mountParent).GenerateVolumeBindings(inputs: default, outputs);
 
             Assert.AreEqual(expected, bindings.Single());
         }
@@ -69,7 +69,7 @@ namespace Tes.Runner.Test.Docker
             var volumeBindingsGenerator = new VolumeBindingsGenerator(mountParent);
             var outputs = paths.Select(p => new FileOutput() { Path = p }).ToList();
 
-            var bindings = volumeBindingsGenerator.GenerateVolumeBindings(inputs: default, outputs);
+            var bindings = new VolumeBindingsGenerator(mountParent).GenerateVolumeBindings(inputs: default, outputs);
 
             Assert.AreEqual(2, bindings.Count);
             Assert.IsTrue(bindings.Any(p => p.Equals(expected1, StringComparison.OrdinalIgnoreCase)));
@@ -79,14 +79,13 @@ namespace Tes.Runner.Test.Docker
         [TestMethod]
         public void GenerateVolumeBindings_MultipleInputsAndOutputsWitDifferentParentsAfterWd_TwoVolumeBinding()
         {
-            var volumeBindingsGenerator = new VolumeBindingsGenerator("/wkd");
             var paths = new string[] { "/wkd/outputs/f.bam", "/wkd/outputs/b.bam" };
             var outputs = paths.Select(p => new FileOutput() { Path = p }).ToList();
 
             paths = new string[] { "/wkd/inputs/f.bam", "/wkd/inputs/b.bam" };
             var inputs = paths.Select(p => new FileInput() { Path = p }).ToList();
 
-            var bindings = volumeBindingsGenerator.GenerateVolumeBindings(inputs, outputs);
+            var bindings = new VolumeBindingsGenerator("/wkd").GenerateVolumeBindings(inputs, outputs);
 
             Assert.AreEqual(2, bindings.Count);
             Assert.IsTrue(bindings.Any(p => p.Equals("/wkd/inputs:/inputs", StringComparison.OrdinalIgnoreCase)));

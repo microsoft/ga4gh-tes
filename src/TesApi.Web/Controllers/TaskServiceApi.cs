@@ -134,6 +134,11 @@ namespace TesApi.Controllers
                 return BadRequest("At least one executor is required.");
             }
 
+            if ((tesTask.Executors ?? []).Select(executor => executor.Image).Any(string.IsNullOrWhiteSpace))
+            {
+                return BadRequest("At least one executor is required.");
+            }
+
             foreach (var executor in (tesTask.Executors ?? []))
             {
                 if (string.IsNullOrWhiteSpace(executor.Image))
@@ -162,7 +167,7 @@ namespace TesApi.Controllers
                 }
             }
 
-            foreach (var input in (tesTask.Inputs ?? []))
+            foreach (var input in tesTask.Inputs ?? [])
             {
                 if (string.IsNullOrWhiteSpace(input.Path) || !input.Path.StartsWith('/'))
                 {
@@ -190,7 +195,7 @@ namespace TesApi.Controllers
                 }
             }
 
-            foreach (var output in (tesTask.Outputs ?? []))
+            foreach (var output in tesTask.Outputs ?? [])
             {
                 if (string.IsNullOrWhiteSpace(output.Path) || !output.Path.StartsWith('/'))
                 {

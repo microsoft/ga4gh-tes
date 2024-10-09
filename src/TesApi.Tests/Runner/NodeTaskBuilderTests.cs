@@ -39,9 +39,9 @@ namespace TesApi.Tests.Runner
         [TestMethod]
         public void WithMountParentDirectory_MountParentDirIsProvided_MountParentDirIsSet()
         {
-            var workingDir = "/root/task";
-            nodeTaskBuilder.WithMountParentDirectory(workingDir);
-            Assert.AreEqual(workingDir, nodeTaskBuilder.Build().MountParentDirectory);
+            var workingDir = "/home";
+            nodeTaskBuilder.WithContainerMountParentDirectory(workingDir);
+            Assert.AreEqual(workingDir, nodeTaskBuilder.Build().MountParentDirectoryPath);
         }
 
         [TestMethod]

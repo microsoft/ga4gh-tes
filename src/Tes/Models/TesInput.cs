@@ -70,7 +70,7 @@ namespace Tes.Models
         /// <summary>
         /// Indicates that the file should not be downloaded
         /// https://github.com/ga4gh/task-execution-schemas/blob/1df37d34242f74d3f03475c6b9de3324b8094054/openapi/task_execution_service.openapi.yaml#L481
-        /// </summary
+        /// </summary>
         /// <value>
         /// Indicate that a file resource could be accessed using a streaming
         /// interface, ie a FUSE mounted s3 object. This flag indicates that

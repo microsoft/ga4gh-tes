@@ -20,5 +20,15 @@ namespace TesApi.Web.Management
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         public Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsync(string region, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Returns the set of disks to attach to batch VMs
+        /// </summary>
+        /// <param name="region"></param>
+        /// <param name="capacity">The required resources disk size, in GB.</param>
+        /// <param name="maxDataDiskCount">The max number of data disks.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        public Task<List<VmDataDisks>> GetStorageDisksAndPricesAsync(string region, double capacity, int maxDataDiskCount, CancellationToken cancellationToken);
     }
 }

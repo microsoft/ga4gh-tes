@@ -159,6 +159,7 @@ namespace TesApi.Tests.Runner
             Assert.IsNotNull(nodeTask);
             Assert.IsNull(nodeTask.Inputs);
             Assert.AreEqual(3, nodeTask.Outputs.Count);
+            Assert.AreEqual(3, nodeTask.Outputs?.Count(output => output.Path!.StartsWith($"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%")));
         }
 
         [TestMethod]

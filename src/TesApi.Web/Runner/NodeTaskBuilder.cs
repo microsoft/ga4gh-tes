@@ -72,7 +72,18 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
-        /// Sets container volumes
+        /// Sets the host directory for container mounts
+        /// </summary>
+        /// <param name="mountDirectory"></param>
+        /// <returns></returns>
+        public NodeTaskBuilder WithContainerMountParentDirectory(string mountDirectory)
+        {
+            nodeTask.MountParentDirectoryPath = mountDirectory;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the container working directory of the NodeTask
         /// </summary>
         /// <param name="volumes"></param>
         /// <returns></returns>

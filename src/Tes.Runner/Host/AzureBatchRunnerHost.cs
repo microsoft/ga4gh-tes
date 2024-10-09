@@ -10,6 +10,7 @@ namespace Tes.Runner.Host
         private const string NodeTaskDir = "AZ_BATCH_TASK_DIR";
         private const string NodeTaskWorkDir = "AZ_BATCH_TASK_WORKING_DIR";
 
+        /// <inheritdoc/>
         public override string GetTaskWorkingContainerPath(FileInfo file)
         {
             var path = Path.GetRelativePath(Environment.GetEnvironmentVariable(NodeTaskWorkDir) ?? throw new InvalidOperationException("Task working directory not found"), file.FullName);
@@ -22,6 +23,7 @@ namespace Tes.Runner.Host
             return $"/{path.TrimStart('/')}";
         }
 
+        /// <inheritdoc/>
         public override string GetTaskWorkingContainerPath(DirectoryInfo directory)
         {
             var path = Path.GetRelativePath(Environment.GetEnvironmentVariable(NodeTaskWorkDir) ?? throw new InvalidOperationException("Task working directory not found"), directory.FullName);
@@ -34,11 +36,13 @@ namespace Tes.Runner.Host
             return $"/{path.TrimStart('/')}";
         }
 
+        /// <inheritdoc/>
         public override DirectoryInfo GetTaskWorkingHostDirectory(string path)
         {
             return new(Path.Combine(Environment.GetEnvironmentVariable(NodeTaskWorkDir) ?? throw new InvalidOperationException("Task working directory not found"), path.TrimStart('/')));
         }
 
+        /// <inheritdoc/>
         public override FileInfo GetTaskWorkingHostFile(string path)
         {
             return new(Path.Combine(Environment.GetEnvironmentVariable(NodeTaskWorkDir) ?? throw new InvalidOperationException("Task working directory not found"), path.TrimStart('/')));

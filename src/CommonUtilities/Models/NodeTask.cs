@@ -21,6 +21,7 @@ namespace Tes.Runner.Models
         public string? OutputsMetricsFormat { get; set; }
         public List<string>? TimestampMetricsFormats { get; set; }
         public List<string>? BashScriptMetricsFormats { get; set; }
+        public string? MountParentDirectoryPath { get; set; }
         public RuntimeOptions RuntimeOptions { get; set; } = null!;
     }
 

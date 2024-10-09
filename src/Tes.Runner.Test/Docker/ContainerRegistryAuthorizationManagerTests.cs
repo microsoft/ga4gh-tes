@@ -40,6 +40,8 @@ public class ContainerRegistryAuthorizationManagerTests
     }
 
     [DataTestMethod]
+    [DataRow("test.azurecr.us/azure-cli", true, new[] { "test.azurecr.us", "azure-cli" })]  // Test case for Azure Government ACRs
+    [DataRow("test.azurecr.cn/azure-cli", true, new[] { "test.azurecr.cn", "azure-cli" })]  // Test case for Azure China ACRs
     [DataRow("test.azurecr.io/azure-cli", true, new[] { "test.azurecr.io", "azure-cli" })]
     [DataRow("mcr.microsoft.com/azure-cli", false, new[] { "mcr.microsoft.com", "azure-cli" })]
     [DataRow("azure-cli", false, new[] { "azure-cli" })]

@@ -26,10 +26,10 @@ namespace Tes.Runner.Logs
                 throw new InvalidOperationException("Reader was already started");
             }
 
-            var multiplexReader = ReadOutputToEndAsync(multiplexedStream, stdOut, stdErr);
+            var multiplexedReader = ReadOutputToEndAsync(multiplexedStream, stdOut, stdErr);
             var stdInWriter = stdIn is null ? Task.CompletedTask : WriteInputStream(multiplexedStream, stdIn);
 
-            Reader = Task.WhenAll(multiplexReader, stdInWriter);
+            Reader = Task.WhenAll(multiplexedReader, stdInWriter);
         }
 
         public void StartReadingFromLogStreams(StreamReader stdOut, StreamReader stdErr)
@@ -64,12 +64,6 @@ namespace Tes.Runner.Logs
             }
         }
 
-        private static async Task WriteInputStream(MultiplexedStream multiplexedStream, Stream stream)
-        {
-            await multiplexedStream.CopyFromAsync(stream, CancellationToken.None);
-            multiplexedStream.CloseWrite();
-        }
-
         private async Task ReadOutputToEndAsync(MultiplexedStream multiplexedStream, Stream? stdOut, Stream? stdErr)
         {
             try
@@ -81,26 +75,25 @@ namespace Tes.Runner.Logs
                         !result.EOF;
                         result = await multiplexedStream.ReadOutputAsync(buffer, 0, buffer.Length, CancellationToken.None))
                     {
-                        var data = buffer.AsMemory(0, result.Count);
-                        var text = Encoding.UTF8.GetString(data.Span);
+                        var data = Encoding.UTF8.GetString(buffer, 0, result.Count);
 
                         switch (result.Target)
                         {
                             case MultiplexedStream.TargetStream.StandardOut:
-                                await AppendStandardOutputAsync(text);
+                                await AppendStandardOutputAsync(data);
 
                                 if (stdOut is not null)
                                 {
-                                    await stdOut.WriteAsync(data);
+                                    await stdOut.WriteAsync(buffer, 0, result.Count);
                                 }
                                 break;
 
                             case MultiplexedStream.TargetStream.StandardError:
-                                await AppendStandardErrAsync(text);
+                                await AppendStandardErrAsync(data);
 
                                 if (stdErr is not null)
                                 {
-                                    await stdErr.WriteAsync(data);
+                                    await stdErr.WriteAsync(buffer, 0, result.Count);
                                 }
                                 break;
                         }
@@ -145,6 +138,12 @@ namespace Tes.Runner.Logs
             {
                 logger.LogError(e, "Failed to read and process stream");
             }
+        }
+
+        private static async Task WriteInputStream(MultiplexedStream multiplexedStream, Stream stream)
+        {
+            await multiplexedStream.CopyFromAsync(stream, CancellationToken.None);
+            multiplexedStream.CloseWrite();
         }
     }
 

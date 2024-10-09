@@ -137,6 +137,7 @@ namespace TesApi.Web.Runner
                     .WithWorkflowId(task.WorkflowId)
                     .WithContainerVolumes(task.Volumes)
                     .WithExecutors(task.Executors)
+                    .WithContainerMountParentDirectory(containerMountParentDirectory)
                     .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath: string.Empty))
                     .WithLogPublisher(storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath: string.Empty))
                     .WithDrsHubUrl(nodeTaskConversionOptions.DrsHubApiHost)
@@ -536,8 +537,7 @@ namespace TesApi.Web.Runner
             });
         }
 
-        private async Task MapInputsAsync(List<TesInput> inputs, string pathParentDirectory,
-            NodeTaskBuilder builder)
+        private async Task MapInputsAsync(List<TesInput> inputs, string pathParentDirectory, NodeTaskBuilder builder)
         {
             if (inputs is null || inputs.Count == 0)
             {
