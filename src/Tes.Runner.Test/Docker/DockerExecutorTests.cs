@@ -20,13 +20,11 @@ namespace Tes.Runner.Test.Docker
         private Host.IRunnerHost runnerHost = null!;
         private Mock<IImageOperations> dockerImageMock = null!;
         private Mock<IVolumeOperations> dockerVolumeMock = null!;
-        private IStreamLogReader streamLogReader = null!;
         private ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager = null!;
 
         [TestInitialize]
         public void SetUp()
         {
-            streamLogReader = new Mock<IStreamLogReader>().Object;
             dockerImageMock = new();
             dockerVolumeMock = new();
             runnerHost = new TestRunnerHost();
@@ -54,7 +52,7 @@ namespace Tes.Runner.Test.Docker
             Models.RuntimeOptions runtimeOptions = new();
             try
             {
-                var result = await executor.RunOnContainerAsync(new("msftsc022830.azurecr.io/broadinstitute/gatk", "4.5.0.0-squash", [""], default, default, runtimeOptions, default), _ => Task.FromResult(streamLogReader));
+                var result = await executor.RunOnContainerAsync(new("msftsc022830.azurecr.io/broadinstitute/gatk", "4.5.0.0-squash", [""], default, default, runtimeOptions, default), _ => Task.FromResult(new Mock<IStreamLogReader>().Object));
             }
             catch (IdentityUnavailableException) { } // Success
             catch (Exception ex)
@@ -79,7 +77,7 @@ namespace Tes.Runner.Test.Docker
             Models.RuntimeOptions runtimeOptions = new();
             try
             {
-                var result = await executor.RunOnContainerAsync(new("msftsc022830.azurecr.io/broadinstitute/gatk", "4.5.0.0-squash", [""], default, default, runtimeOptions, default), _ => Task.FromResult(streamLogReader));
+                var result = await executor.RunOnContainerAsync(new("msftsc022830.azurecr.io/broadinstitute/gatk", "4.5.0.0-squash", [""], default, default, runtimeOptions, default), _ => Task.FromResult(new Mock<IStreamLogReader>().Object));
                 Assert.Fail();
             }
             catch (IdentityUnavailableException)
@@ -96,13 +94,13 @@ namespace Tes.Runner.Test.Docker
 
         //[DataTestMethod]
         //[DataRow(System.Net.HttpStatusCode.BadRequest, "")]
-        //[DataRow(System.Net.HttpStatusCode.InternalServerError, "{\"message\":\"Something went wrong: badrequest: something else happended.\"}")]
+        //[DataRow(System.Net.HttpStatusCode.InternalServerError, "{\"message\":\"Something went wrong: badrequest: something else happened.\"}")]
         //public async Task RunOnContainerAsync_DockerClientReturnsSuccess_DoesNotCallContainerRegistryAuthorizationManager(System.Net.HttpStatusCode statusCode, string responseBody)
         //{
         //    dockerImageMock.Setup(d => d.CreateImageAsync(It.IsAny<ImagesCreateParameters>(), It.IsAny<AuthConfig>(), It.IsAny<IProgress<JSONMessage>>(), It.IsAny<CancellationToken>()))
         //        .Returns(Task.CompletedTask);
 
-        //    DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager);
+        //    DockerExecutor executor = new(dockerClient, containerRegistryAuthorizationManager, runnerHost);
         //    Models.RuntimeOptions runtimeOptions = new();
         //    try
         //    {
