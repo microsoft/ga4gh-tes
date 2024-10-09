@@ -50,19 +50,19 @@ namespace Tes.Runner
             this.apiVersion = apiVersion;
         }
 
-        public async Task<NodeTaskResult> ExecuteNodeContainerTaskAsync(DockerExecutor dockerExecutor)
+        public async Task<NodeTaskResult> ExecuteNodeContainerTaskAsync(DockerExecutor dockerExecutor, int selector)
         {
             try
             {
-                await eventsPublisher.PublishExecutorStartEventAsync(tesNodeTask);
+                await eventsPublisher.PublishExecutorStartEventAsync(tesNodeTask, selector);
 
-                var bindings = new VolumeBindingsGenerator(tesNodeTask.MountParentDirectoryPath!).GenerateVolumeBindings(tesNodeTask.Inputs, tesNodeTask.Outputs);
+                var bindings = new VolumeBindingsGenerator(tesNodeTask.MountParentDirectoryPath!).GenerateVolumeBindings(tesNodeTask.Inputs, tesNodeTask.Outputs, tesNodeTask.ContainerVolumes);
 
-                var executionOptions = CreateExecutionOptions(bindings);
+                var executionOptions = CreateExecutionOptions(tesNodeTask.Executors![selector], bindings);
 
                 var result = await dockerExecutor.RunOnContainerAsync(executionOptions, prefix => LogPublisher.CreateStreamReaderLogPublisherAsync(executionOptions.RuntimeOptions, prefix, apiVersion));
 
-                await eventsPublisher.PublishExecutorEndEventAsync(tesNodeTask, result.ExitCode, ToStatusMessage(result), result.Error);
+                await eventsPublisher.PublishExecutorEndEventAsync(tesNodeTask, selector, result.ExitCode, ToStatusMessage(result), result.Error);
 
                 return new NodeTaskResult(result);
             }
@@ -70,17 +70,17 @@ namespace Tes.Runner
             {
                 logger.LogError(e, "Failed to execute container");
 
-                await eventsPublisher.PublishExecutorEndEventAsync(tesNodeTask, DefaultErrorExitCode, EventsPublisher.FailedStatus, e.Message);
+                await eventsPublisher.PublishExecutorEndEventAsync(tesNodeTask, selector, DefaultErrorExitCode, EventsPublisher.FailedStatus, e.Message);
 
                 throw;
             }
         }
 
-        private ExecutionOptions CreateExecutionOptions(List<string> bindings)
+        private ExecutionOptions CreateExecutionOptions(Models.Executor executor, List<string> bindings)
         {
-            return new(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute, bindings,
-                tesNodeTask.ContainerWorkDir, tesNodeTask.RuntimeOptions, tesNodeTask.ContainerDeviceRequests,
-                tesNodeTask.ContainerEnv, tesNodeTask.ContainerStdInPath, tesNodeTask.ContainerStdOutPath, tesNodeTask.ContainerStdErrPath);
+            return new(executor.ImageName, executor.ImageTag, executor.CommandsToExecute, bindings,
+                executor.ContainerWorkDir, tesNodeTask.RuntimeOptions, tesNodeTask.ContainerDeviceRequests,
+                executor.ContainerEnv, executor.ContainerStdInPath, executor.ContainerStdOutPath, executor.ContainerStdErrPath);
         }
 
         private static string ToStatusMessage(ContainerExecutionResult result)

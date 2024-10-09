@@ -44,6 +44,7 @@ namespace Tes.Runner.Test
             nodeTask = new()
             {
                 MountParentDirectoryPath = "/root/parent",
+                Executors = [new()],
                 Outputs =
                 [
                     new()
@@ -156,7 +157,7 @@ namespace Tes.Runner.Test
             dockerExecutorMock.Setup(d => d.RunOnContainerAsync(It.IsAny<ExecutionOptions>(), It.IsAny<Func<string, Task<IStreamLogReader>>>()))
                 .ReturnsAsync(new ContainerExecutionResult("taskId", Error: string.Empty, ExitCode: 0));
 
-            var result = await executor.ExecuteNodeContainerTaskAsync(dockerExecutorMock.Object);
+            var result = await executor.ExecuteNodeContainerTaskAsync(dockerExecutorMock.Object, 0);
 
             Assert.AreEqual(0, result.ContainerResult.ExitCode);
             Assert.AreEqual(string.Empty, result.ContainerResult.Error);
@@ -169,7 +170,7 @@ namespace Tes.Runner.Test
             dockerExecutorMock.Setup(d => d.RunOnContainerAsync(It.IsAny<ExecutionOptions>(), It.IsAny<Func<string, Task<IStreamLogReader>>>()))
                 .ReturnsAsync(new ContainerExecutionResult("taskId", Error: "Error", ExitCode: 1));
 
-            var result = await executor.ExecuteNodeContainerTaskAsync(dockerExecutorMock.Object);
+            var result = await executor.ExecuteNodeContainerTaskAsync(dockerExecutorMock.Object, 0);
 
             Assert.AreEqual(1, result.ContainerResult.ExitCode);
             Assert.AreEqual("Error", result.ContainerResult.Error);
@@ -181,10 +182,10 @@ namespace Tes.Runner.Test
             dockerExecutorMock.Setup(d => d.RunOnContainerAsync(It.IsAny<ExecutionOptions>(), It.IsAny<Func<string, Task<IStreamLogReader>>>()))
                 .ReturnsAsync(new ContainerExecutionResult("taskId", Error: string.Empty, ExitCode: 0));
 
-            await executor.ExecuteNodeContainerTaskAsync(dockerExecutorMock.Object);
+            await executor.ExecuteNodeContainerTaskAsync(dockerExecutorMock.Object, 0);
 
-            eventsPublisherMock.Verify(p => p.PublishExecutorStartEventAsync(It.IsAny<NodeTask>()), Times.Once);
-            eventsPublisherMock.Verify(p => p.PublishExecutorEndEventAsync(It.IsAny<NodeTask>(), 0, EventsPublisher.SuccessStatus, string.Empty), Times.Once);
+            eventsPublisherMock.Verify(p => p.PublishExecutorStartEventAsync(It.IsAny<NodeTask>(), 0), Times.Once);
+            eventsPublisherMock.Verify(p => p.PublishExecutorEndEventAsync(It.IsAny<NodeTask>(), 0, 0, EventsPublisher.SuccessStatus, string.Empty), Times.Once);
         }
 
         [TestMethod]
@@ -193,10 +194,10 @@ namespace Tes.Runner.Test
             dockerExecutorMock.Setup(d => d.RunOnContainerAsync(It.IsAny<ExecutionOptions>(), It.IsAny<Func<string, Task<IStreamLogReader>>>()))
                 .ReturnsAsync(new ContainerExecutionResult("taskId", Error: "Error", ExitCode: 1));
 
-            await executor.ExecuteNodeContainerTaskAsync(dockerExecutorMock.Object);
+            await executor.ExecuteNodeContainerTaskAsync(dockerExecutorMock.Object, 0);
 
-            eventsPublisherMock.Verify(p => p.PublishExecutorStartEventAsync(It.IsAny<NodeTask>()), Times.Once);
-            eventsPublisherMock.Verify(p => p.PublishExecutorEndEventAsync(It.IsAny<NodeTask>(), 1, EventsPublisher.FailedStatus, "Error"), Times.Once);
+            eventsPublisherMock.Verify(p => p.PublishExecutorStartEventAsync(It.IsAny<NodeTask>(), 0), Times.Once);
+            eventsPublisherMock.Verify(p => p.PublishExecutorEndEventAsync(It.IsAny<NodeTask>(), 0, 1, EventsPublisher.FailedStatus, "Error"), Times.Once);
         }
 
         [TestMethod]
@@ -205,10 +206,10 @@ namespace Tes.Runner.Test
             dockerExecutorMock.Setup(d => d.RunOnContainerAsync(It.IsAny<ExecutionOptions>(), It.IsAny<Func<string, Task<IStreamLogReader>>>()))
                 .ThrowsAsync(new Exception("Error"));
 
-            await Assert.ThrowsExceptionAsync<Exception>(async () => await executor.ExecuteNodeContainerTaskAsync(dockerExecutorMock.Object));
+            await Assert.ThrowsExceptionAsync<Exception>(async () => await executor.ExecuteNodeContainerTaskAsync(dockerExecutorMock.Object, 0));
 
-            eventsPublisherMock.Verify(p => p.PublishExecutorStartEventAsync(It.IsAny<NodeTask>()), Times.Once);
-            eventsPublisherMock.Verify(p => p.PublishExecutorEndEventAsync(It.IsAny<NodeTask>(), Executor.DefaultErrorExitCode, EventsPublisher.FailedStatus, "Error"), Times.Once);
+            eventsPublisherMock.Verify(p => p.PublishExecutorStartEventAsync(It.IsAny<NodeTask>(), 0), Times.Once);
+            eventsPublisherMock.Verify(p => p.PublishExecutorEndEventAsync(It.IsAny<NodeTask>(), 0, Executor.DefaultErrorExitCode, EventsPublisher.FailedStatus, "Error"), Times.Once);
         }
     }
 }

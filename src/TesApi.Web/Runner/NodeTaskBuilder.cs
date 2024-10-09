@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using CommonUtilities;
 using Tes.Runner.Models;
@@ -84,19 +85,29 @@ namespace TesApi.Web.Runner
         /// <summary>
         /// Sets the container working directory of the NodeTask
         /// </summary>
-        /// <param name="workingDirectory"></param>
-        /// <param name="stdId"></param>
-        /// <param name="stdOut"></param>
-        /// <param name="stdErr"></param>
-        /// <param name="env"></param>
+        /// <param name="volumes"></param>
         /// <returns></returns>
-        public NodeTaskBuilder WithContainerExecutionParameters(string workingDirectory, string stdId, string stdOut, string stdErr, Dictionary<string, string> env)
+        public NodeTaskBuilder WithContainerVolumes(List<string> volumes)
         {
-            nodeTask.ContainerWorkDir = workingDirectory;
-            nodeTask.ContainerStdInPath = stdId;
-            nodeTask.ContainerStdOutPath = stdOut;
-            nodeTask.ContainerStdErrPath = stdErr;
-            nodeTask.ContainerEnv = env;
+            nodeTask.ContainerVolumes = volumes;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the executors
+        /// </summary>
+        /// <param name="executors"></param>
+        /// <returns></returns>
+        public NodeTaskBuilder WithExecutors(List<Tes.Models.TesExecutor> executors)
+        {
+            ArgumentNullException.ThrowIfNull(executors);
+
+            if (executors.Count == 0)
+            {
+                throw new ArgumentException("The list executors can't be empty.", nameof(executors));
+            }
+
+            nodeTask.Executors = [.. executors.Select(ConvertExecutor)];
             return this;
         }
 
@@ -168,49 +179,57 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
-        /// Sets the commands to the NodeTask
+        /// Set the host path for the container root
         /// </summary>
-        /// <param name="commands"></param>
+        /// <param name="mountParentDirectory"></param>
         /// <returns></returns>
-        /// <exception cref="InvalidOperationException"></exception>
-        public NodeTaskBuilder WithContainerCommands(List<string> commands)
+        public NodeTaskBuilder WithMountParentDirectory(string mountParentDirectory)
         {
-            ArgumentNullException.ThrowIfNull(commands);
-
-            if (commands.Count == 0)
-            {
-                throw new InvalidOperationException("The list commands can't be empty");
-            }
-
-            nodeTask.CommandsToExecute = commands;
-
+            nodeTask.MountParentDirectoryPath = mountParentDirectory;
             return this;
         }
 
         /// <summary>
-        ///
+        /// Parses an Executor from a TesExecutor
         /// </summary>
-        /// <param name="image"></param>
+        /// <param name="executor"></param>
         /// <returns></returns>
-        public NodeTaskBuilder WithContainerImage(string image)
+        internal static Executor ConvertExecutor(Tes.Models.TesExecutor executor)
         {
-            ArgumentException.ThrowIfNullOrEmpty(image);
+            ArgumentNullException.ThrowIfNull(executor);
 
-            //check if the image name is a digest
-            if (image.Contains('@'))
+            if (executor.Command.Count == 0)
             {
-                var splitByDigest = image.Split('@', 2);
-                nodeTask.ImageName = splitByDigest[0];
-                nodeTask.ImageTag = splitByDigest[1];
-                return this;
+                throw new InvalidOperationException("The list commands can't be empty");
             }
 
-            var splitByTag = image.Split(':', 2);
+            ArgumentException.ThrowIfNullOrWhiteSpace(executor.Image, nameof(executor));
 
-            nodeTask.ImageName = splitByTag[0];
-            nodeTask.ImageTag = splitByTag.Length == 2 ? splitByTag[1] : DefaultDockerImageTag;
+            Executor nodeExecutor = new();
 
-            return this;
+            //check if the image name is a digest
+            if (executor.Image.Contains('@'))
+            {
+                var splitByDigest = executor.Image.Split('@', 2);
+                nodeExecutor.ImageName = splitByDigest[0];
+                nodeExecutor.ImageTag = splitByDigest[1];
+            }
+            else
+            {
+                var splitByTag = executor.Image.Split(':', 2);
+                nodeExecutor.ImageName = splitByTag[0];
+                nodeExecutor.ImageTag = splitByTag.Length == 2 ? splitByTag[1] : DefaultDockerImageTag;
+            }
+
+            nodeExecutor.CommandsToExecute = executor.Command;
+            nodeExecutor.ContainerWorkDir = executor.Workdir;
+            nodeExecutor.ContainerStdInPath = executor.Stdin;
+            nodeExecutor.ContainerStdOutPath = executor.Stdout;
+            nodeExecutor.ContainerStdErrPath = executor.Stderr;
+            nodeExecutor.ContainerEnv = executor.Env;
+            nodeExecutor.IgnoreError = executor.IgnoreError ?? false;
+
+            return nodeExecutor;
         }
 
         /// <summary>

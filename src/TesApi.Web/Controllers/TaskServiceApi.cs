@@ -136,7 +136,7 @@ namespace TesApi.Controllers
 
             if ((tesTask.Executors ?? []).Select(executor => executor.Image).Any(string.IsNullOrWhiteSpace))
             {
-                return BadRequest("Docker container image name is required.");
+                return BadRequest("At least one executor is required.");
             }
 
             foreach (var executor in (tesTask.Executors ?? []))

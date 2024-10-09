@@ -190,7 +190,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateTaskAsync_ReturnsBadRequest_ForMissingDockerImage()
         {
-            TesTask tesTask = new() { Executors = [new()] };
+            TesTask tesTask = new() { Executors = [new() { Command = ["cmd"] }] };
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
@@ -203,7 +203,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateTaskAsync_ReturnsBadRequest_ForRelativeInputPath()
         {
-            TesTask tesTask = new() { Inputs = [new() { Path = "xyz/path" }] };
+            TesTask tesTask = new() { Inputs = [new() { Path = "xyz/path" }], Executors = [new() { Image = "image", Command = ["cmd"] }] };
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
@@ -216,7 +216,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateTaskAsync_ReturnsBadRequest_ForInputMissingContentAndPath()
         {
-            TesTask tesTask = new() { Inputs = [new() { Url = "http://host/path" }] };
+            TesTask tesTask = new() { Inputs = [new() { Url = "http://host/path" }], Executors = [new() { Image = "image", Command = ["cmd"] }] };
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
@@ -229,7 +229,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateTaskAsync_ReturnsBadRequest_ForInputContentAndPath()
         {
-            TesTask tesTask = new() { Inputs = [new() { Url = "http://host/path", Path = "/path/file", Content = "content" }] };
+            TesTask tesTask = new() { Inputs = [new() { Url = "http://host/path", Path = "/path/file", Content = "content" }], Executors = [new() { Image = "image", Command = ["cmd"] }] };
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
