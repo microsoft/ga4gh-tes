@@ -212,14 +212,12 @@ namespace TesApi.Web
                         logger.LogDebug(@"For task {TesTask} there's nothing to change.", tesTask.Id);
                         return false;
                     }
-
                     logger.LogDebug(@"Setting task {TesTask} with metadata {BatchTaskState} {Metadata}.", tesTask.Id, batchInfo.State, newDataText);
                 }
 
                 var (batchNodeMetrics, taskStartTime, taskEndTime, cromwellRcCode) = newTaskState == TesState.COMPLETE
                     ? await GetBatchNodeMetricsAndCromwellResultCodeAsync(tesTask, cancellationToken)
                     : default;
-
                 var taskAsString = SerializeToString(tesTask);
 
                 lock (setTaskStateLock)
@@ -238,6 +236,13 @@ namespace TesApi.Web
                         tesTaskExecutorLog.StartTime ??= batchInfo.ExecutorStartTime;
                         tesTaskExecutorLog.EndTime ??= batchInfo.ExecutorEndTime;
                         tesTaskExecutorLog.ExitCode ??= batchInfo.ExecutorExitCode;
+
+                        if ((tesTaskExecutorLog?.ExitCode > 1 || tesTaskExecutorLog?.ExitCode < 0) && (tesTaskExecutorLog.Stderr is not null || tesTaskExecutorLog.Stdout is not null))
+                        {
+                            tesTask.AddToSystemLog(Enumerable.Repeat("Check the following logs:", 1)
+                                .Concat(DeserializeJsonStringArray(tesTaskExecutorLog.Stderr) ?? [])
+                                .Concat(DeserializeJsonStringArray(tesTaskExecutorLog.Stdout) ?? []));
+                        }
                     }
 
                     if (batchInfo.OutputFileLogs is not null)
@@ -291,6 +296,9 @@ namespace TesApi.Web
 
                 string SerializeToString<T>(T item)
                     => System.Text.Json.JsonSerializer.Serialize(item, setTaskStateAndLogJsonSerializerOptions);
+
+                IEnumerable<string> DeserializeJsonStringArray(string json)
+                  => string.IsNullOrWhiteSpace(json) ? null : System.Text.Json.JsonSerializer.Deserialize<IEnumerable<string>>(json, setTaskStateAndLogJsonSerializerOptions);
             }
 
             async Task<bool> SetCompletedWithErrors(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
@@ -541,8 +549,8 @@ namespace TesApi.Web
 
         // Collections and records managing the processing of TesTasks in Queued status
         private record struct PendingCloudTask(CloudTask CloudTask, TaskCompletionSource TaskCompletion);
-        private record struct PendingPoolRequest(string PoolKey, VirtualMachineInformation VirtualMachineInfo, IList<string> Identities, string PoolDisplayName, TaskCompletionSource<string> TaskCompletion);
-        private record struct PendingPool(string PoolKey, VirtualMachineInformation VirtualMachineInfo, IList<string> Identities, string PoolDisplayName, int InitialTarget, IEnumerable<TaskCompletionSource<string>> TaskCompletions);
+        private record struct PendingPoolRequest(string PoolKey, VirtualMachineInformationWithDataDisks VirtualMachineInfo, IList<string> Identities, string PoolDisplayName, TaskCompletionSource<string> TaskCompletion);
+        private record struct PendingPool(string PoolKey, VirtualMachineInformationWithDataDisks VirtualMachineInfo, IList<string> Identities, string PoolDisplayName, int InitialTarget, IEnumerable<TaskCompletionSource<string>> TaskCompletions);
         private record struct ImmutableQueueWithTimer<T>(Timer Timer, ImmutableQueue<T> Queue);
 
         private readonly ConcurrentDictionary<string, ImmutableQueueWithTimer<PendingCloudTask>> _queuedTesTaskPendingTasksByJob = new();
@@ -584,7 +592,7 @@ namespace TesApi.Web
 
                 var virtualMachineInfo = await GetVmSizeAsync(tesTask, cancellationToken);
                 (poolKey, var displayName) = GetPoolKey(tesTask, virtualMachineInfo, identities);
-                await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, needPoolOrJobQuotaCheck: !IsPoolAvailable(poolKey), cancellationToken: cancellationToken);
+                await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo.VM, needPoolOrJobQuotaCheck: !IsPoolAvailable(poolKey), cancellationToken: cancellationToken);
 
                 // double await because the method call returns a System.Task. When that Task returns, the TesTask has been queued to a job and a pool exists to run that job's tasks
                 await await AttachQueuedTesTaskToBatchPoolAsync(poolKey, tesTask, virtualMachineInfo, identities, displayName, cancellationToken);
@@ -636,7 +644,7 @@ namespace TesApi.Web
             }
         }
 
-        private async ValueTask<Task> AttachQueuedTesTaskToBatchPoolAsync(string poolKey, TesTask tesTask, VirtualMachineInformation virtualMachineInfo, IList<string> identities, string poolDisplayName, CancellationToken cancellationToken)
+        private async ValueTask<Task> AttachQueuedTesTaskToBatchPoolAsync(string poolKey, TesTask tesTask, VirtualMachineInformationWithDataDisks virtualMachineInfo, IList<string> identities, string poolDisplayName, CancellationToken cancellationToken)
         {
             TaskCompletionSource taskCompletion = new(); // This provides the System.Task this method returns
 
@@ -664,12 +672,12 @@ namespace TesApi.Web
                 }
 
                 var tesTaskLog = tesTask.AddTesTaskLog();
-                tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
+                tesTaskLog.VirtualMachineInfo = virtualMachineInfo.VM;
                 var cloudTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
                 tesTask.PoolId = pool.PoolId;
-                var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(cloudTaskId, tesTask, identities.Last(), virtualMachineInfo.VmFamily, cancellationToken);
+                var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(cloudTaskId, tesTask, identities.Last(), virtualMachineInfo.VM.VmFamily, cancellationToken);
 
-                logger.LogInformation(@"Creating batch task for TES task {TesTaskId}. Using VM size {VmSize}.", tesTask.Id, virtualMachineInfo.VmSize);
+                logger.LogInformation(@"Creating batch task for TES task {TesTaskId}. Using VM size {VmSize}.", tesTask.Id, virtualMachineInfo.VM.VmSize);
 
                 AddTValueToCollectorQueue(
                     key: pool.PoolId,
@@ -842,22 +850,18 @@ namespace TesApi.Web
             if (_queuedTesTaskPendingPools.TryDequeue(out var pool))
             {
                 logger.LogDebug(@"Creating pool for {PoolKey}.", pool.PoolKey);
-                var useGen2 = pool.VirtualMachineInfo.HyperVGenerations?.Contains("V2", StringComparer.OrdinalIgnoreCase);
+                var useGen2 = pool.VirtualMachineInfo.VM.HyperVGenerations?.Contains("V2", StringComparer.OrdinalIgnoreCase);
                 await PerformTaskOfTAsync(
                     method: async token => (await GetOrAddPoolAsync(
                             key: pool.PoolKey,
-                            isPreemptable: pool.VirtualMachineInfo.LowPriority,
+                            isPreemptable: pool.VirtualMachineInfo.VM.LowPriority,
                             modelPoolFactory: async (id, ct) => await GetPoolSpecification(
                                 name: id,
                                 displayName: pool.PoolDisplayName,
                                 poolIdentity: GetBatchPoolIdentity(pool.Identities.WhereNot(string.IsNullOrWhiteSpace).ToList()),
-                                vmSize: pool.VirtualMachineInfo.VmSize,
-                                vmFamily: pool.VirtualMachineInfo.VmFamily,
-                                useGenV2: useGen2.GetValueOrDefault(),
-                                preemptable: pool.VirtualMachineInfo.LowPriority,
+                                vmInfo: pool.VirtualMachineInfo,
                                 initialTarget: pool.InitialTarget,
-                                nodeInfo: (pool.VirtualMachineInfo.HyperVGenerations?.Contains("V2", StringComparer.OrdinalIgnoreCase) ?? false) ? gen2BatchNodeInfo : gen1BatchNodeInfo,
-                                encryptionAtHostSupported: pool.VirtualMachineInfo.EncryptionAtHostSupported,
+                                nodeInfo: (useGen2 ?? false) ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                                 cancellationToken: ct),
                             cancellationToken: token))
                         .PoolId,
@@ -1098,7 +1102,7 @@ namespace TesApi.Web
         }.AsReadOnly();
 
         /// <summary>
-        /// Selected vmfamily groups
+        /// Selected vmFamily groups
         /// </summary>
         public enum /*StartScript*/VmFamilySeries
         {
@@ -1149,21 +1153,23 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="poolId">Pool Id</param>
         /// <param name="machineConfiguration">A <see cref="BatchModels.BatchVmConfiguration"/> describing the OS of the pool's nodes.</param>
-        /// <param name="vmFamily"></param>
-        /// <param name="useGenV2"></param>
+        /// <param name="vmInfo"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         /// <remarks>This method also mitigates errors associated with docker daemons that are not configured to place their filesystem assets on the data drive.</remarks>
-        private async Task<BatchModels.BatchAccountPoolStartTask> GetStartTaskAsync(string poolId, BatchModels.BatchVmConfiguration machineConfiguration, string vmFamily, bool useGenV2, CancellationToken cancellationToken)
+        private async Task<BatchModels.BatchAccountPoolStartTask> GetStartTaskAsync(string poolId, BatchModels.BatchVmConfiguration machineConfiguration, VirtualMachineInformationWithDataDisks vmInfo, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
             ArgumentNullException.ThrowIfNull(machineConfiguration);
-            ArgumentNullException.ThrowIfNull(vmFamily);
+            ArgumentNullException.ThrowIfNull(vmInfo);
+            ArgumentNullException.ThrowIfNull(vmInfo.DataDisks, nameof(vmInfo));
+            ArgumentNullException.ThrowIfNull(vmInfo.VM, nameof(vmInfo));
 
             List<BatchModels.BatchVmExtension> extensions = [];
 
             var nodeOs = GetNodeOS(machineConfiguration);
-            var vmFamilySeries = GetVmFamily(vmFamily);
+            var vmFamilySeries = GetVmFamily(vmInfo.VM.VmFamily);
+            var vmGen = (vmInfo.VM.HyperVGenerations ?? []).OrderBy(g => g, StringComparer.OrdinalIgnoreCase).LastOrDefault() ?? "<missing>";
 
             var globalStartTaskConfigured = !string.IsNullOrWhiteSpace(globalStartTaskPath);
 
@@ -1189,7 +1195,7 @@ namespace TesApi.Web
                 && (machineConfiguration.ImageReference.Offer.StartsWith("ubuntu-server-container", StringComparison.OrdinalIgnoreCase) || machineConfiguration.ImageReference.Offer.StartsWith("centos-container", StringComparison.OrdinalIgnoreCase));
 
             StringBuilder cmd = new("#!/bin/sh\n");
-            cmd.Append($"mkdir -p {BatchNodeSharedEnvVar} && {CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, BlobSasPermissions.Read, cancellationToken), $"{BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)}");
+            cmd.Append($"mkdir -p {BatchNodeSharedEnvVar} && {DownloadViaWget(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, BlobSasPermissions.Read, cancellationToken), $"{BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)}");
 
             if (!dockerConfigured)
             {
@@ -1201,40 +1207,26 @@ namespace TesApi.Web
                 };
 
                 var script = "config-docker.sh";
-                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new((await ReadScript("config-docker.sh")).Replace("{PackageInstalls}", packageInstallScript))), $"{BatchNodeTaskWorkingDirEnvVar}/{script}", setExecutable: true)} && {BatchNodeTaskWorkingDirEnvVar}/{script}");
+                // TODO: optimize this by uploading all vmfamily scripts when uploading runner binary rather then for each individual pool as relevant
+                cmd.Append($" && {DownloadAndExecuteScriptAsync(await UploadScriptAsync(script, await ReadScriptAsync("config-docker.sh", sb => sb.Replace("{PackageInstalls}", packageInstallScript))), $"{BatchNodeTaskWorkingDirEnvVar}/{script}")}");
             }
 
-            if (useGenV2)
-            {
-                var script = @"config-nvme.sh";
-                // TODO: optimize this by uploading all non-personalized scripts when uploading runner binary rather then for each individual pool
-                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new(await ReadScript(script))), $"{BatchNodeTaskWorkingDirEnvVar}/{script}", setExecutable: true)} && {BatchNodeTaskWorkingDirEnvVar}/{script}");
-            }
+            string vmFamilyStartupScript = null;
 
-            var vmFamilyStartupScript = nodeOs switch
+            if (vmInfo.DataDisks.Count > 0)
             {
-                NodeOS.Ubuntu => vmFamilySeries switch
-                {
-                    VmFamilySeries.standardNCFamilies => @"config-n-gpu-apt.sh",
-                    VmFamilySeries.standardNDFamilies => @"config-n-gpu-apt.sh",
-                    VmFamilySeries.standardNVFamilies => @"config-n-gpu-apt.sh",
-                    _ => null,
-                },
-                NodeOS.Centos => vmFamilySeries switch
-                {
-                    VmFamilySeries.standardNCFamilies => @"config-n-gpu-yum.sh",
-                    VmFamilySeries.standardNDFamilies => @"config-n-gpu-yum.sh",
-                    VmFamilySeries.standardNVFamilies => @"config-n-gpu-yum.sh",
-                    _ => null,
-                },
-                _ => null
-            };
+                vmFamilyStartupScript = @"config-disks.sh";
+            }
+            else if ((vmInfo.VM.NvmeDiskSizeInGiB ?? 0) > 0)
+            {
+                vmFamilyStartupScript = @"config-nvme.sh";
+            }
 
             if (!string.IsNullOrWhiteSpace(vmFamilyStartupScript))
             {
                 var script = "config-vmfamily.sh";
-                // TODO: optimize this by uploading all non-personalized scripts when uploading runner binary rather then for each individual pool
-                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new(await ReadScript(vmFamilyStartupScript))), $"{BatchNodeTaskWorkingDirEnvVar}/{script}", setExecutable: true)} && {BatchNodeTaskWorkingDirEnvVar}/{script}");
+                // TODO: optimize this by uploading all vmfamily scripts when uploading runner binary rather then for each individual pool as relevant
+                cmd.Append($" && {DownloadAndExecuteScriptAsync(await UploadScriptAsync(script, await ReadScriptAsync(vmFamilyStartupScript, sb => sb.Replace("{HctlPrefix}", vmGen switch { "V1" => "3:0:0", "V2" => "1:0:0", _ => throw new InvalidOperationException($"Unrecognized VM Generation. Please send open an issue @ 'https://github.com/microsoft/ga4gh-tes/issues' with this message ({vmGen})") }))), $"{BatchNodeTaskWorkingDirEnvVar}/{script}")}");
             }
 
             switch (vmFamilySeries)
@@ -1242,25 +1234,47 @@ namespace TesApi.Web
                 case VmFamilySeries.standardNCFamilies:
                 case VmFamilySeries.standardNDFamilies:
                 case VmFamilySeries.standardNVFamilies:
-                    // https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/hpccompute-gpu-linux
-                    extensions.Add(new(name: "gpu", publisher: "Microsoft.HpcCompute", extensionType: "NvidiaGpuDriverLinux") { AutoUpgradeMinorVersion = true, TypeHandlerVersion = "1.6" });
+                    if (vmInfo.VM.GpusAvailable > 0)
+                    {
+                        // https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/hpccompute-gpu-linux
+                        extensions.Add(new(name: "gpu", publisher: "Microsoft.HpcCompute", extensionType: "NvidiaGpuDriverLinux") { AutoUpgradeMinorVersion = true, TypeHandlerVersion = "1.6" });
+                        var script = nodeOs switch
+                        {
+                            NodeOS.Ubuntu => @"config-n-gpu-apt.sh",
+                            NodeOS.Centos => @"config-n-gpu-yum.sh",
+                            _ => throw new InvalidOperationException($"Unrecognized OS. Please send open an issue @ 'https://github.com/microsoft/ga4gh-tes/issues' with this message ({machineConfiguration.NodeAgentSkuId})"),
+                        };
+                        // TODO: optimize this by uploading all non-personalized scripts when uploading runner binary rather then for each individual pool
+                        cmd.Append($" && {DownloadAndExecuteScriptAsync(await UploadScriptAsync(script, await ReadScriptAsync(script)), $"{BatchNodeTaskWorkingDirEnvVar}/{script}")}");
+                    }
                     break;
             }
 
             if (globalStartTaskConfigured)
             {
-                cmd.Append($" && {CreateWgetDownloadCommand(globalStartTaskSasUrl, $"{BatchNodeTaskWorkingDirEnvVar}/global-{StartTaskScriptFilename}", setExecutable: true)} && {BatchNodeTaskWorkingDirEnvVar}/global-{StartTaskScriptFilename}");
+                cmd.Append($" && {DownloadAndExecuteScriptAsync(globalStartTaskSasUrl, $"{BatchNodeTaskWorkingDirEnvVar}/global-{StartTaskScriptFilename}")}");
             }
 
             machineConfiguration.Extensions.AddRange(extensions);
 
             return new()
             {
-                CommandLine = $"/bin/sh -c \"{CreateWgetDownloadCommand(await UploadScriptAsync(StartTaskScriptFilename, cmd), $"{BatchNodeTaskWorkingDirEnvVar}/{StartTaskScriptFilename}", true)} && {BatchNodeTaskWorkingDirEnvVar}/{StartTaskScriptFilename}\"",
+                CommandLine = $"/bin/sh -c \"{DownloadViaWget(await UploadScriptAsync(StartTaskScriptFilename, cmd), $"{BatchNodeTaskWorkingDirEnvVar}/{StartTaskScriptFilename}", execute: true)}\"",
                 UserIdentity = new() { AutoUser = new() { ElevationLevel = BatchModels.BatchUserAccountElevationLevel.Admin, Scope = BatchModels.BatchAutoUserScope.Pool } },
                 MaxTaskRetryCount = 4,
                 WaitForSuccess = true
             };
+
+            string DownloadAndExecuteScriptAsync(Uri url, string localFilePathDownloadLocation) // TODO: download via node runner
+                => DownloadViaWget(url, localFilePathDownloadLocation, execute: true);
+
+            string DownloadViaWget(Uri url, string localFilePathDownloadLocation, bool execute = false, bool setExecutable = false)
+            {
+                var content = CreateWgetDownloadCommand(url, localFilePathDownloadLocation, setExecutable: execute || setExecutable);
+                return execute
+                    ? $"{content} && {localFilePathDownloadLocation}"
+                    : content;
+            }
 
             async ValueTask<Uri> UploadScriptAsync(string name, StringBuilder content)
             {
@@ -1271,11 +1285,13 @@ namespace TesApi.Web
                 return await storageAccessProvider.GetInternalTesBlobUrlAsync(path, BlobSasPermissions.Read, cancellationToken);
             }
 
-            async ValueTask<string> ReadScript(string name)
+            async ValueTask<StringBuilder> ReadScriptAsync(string name, Action<StringBuilder> munge = default)
             {
                 var path = Path.Combine(AppContext.BaseDirectory, "scripts", name);
-                return (await File.ReadAllTextAsync(path, cancellationToken))
-                    .ReplaceLineEndings("\n");
+                StringBuilder content = new((await File.ReadAllTextAsync(path, cancellationToken))
+                    .ReplaceLineEndings("\n"));
+                munge?.Invoke(content);
+                return content;
             }
         }
 
@@ -1302,19 +1318,15 @@ namespace TesApi.Web
         /// <param name="name"></param>
         /// <param name="displayName"></param>
         /// <param name="poolIdentity"></param>
-        /// <param name="vmSize"></param>
-        /// <param name="vmFamily"></param>
-        /// <param name="useGenV2"></param>
-        /// <param name="preemptable"></param>
+        /// <param name="vmInfo"></param>
         /// <param name="initialTarget"></param>
         /// <param name="nodeInfo"></param>
-        /// <param name="encryptionAtHostSupported">VM supports encryption at host.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>The specification for the pool <see cref="BatchAccountPoolData"/>.</returns>
         /// <remarks>
         /// Devs: Any changes to any properties set in this method will require corresponding changes to all classes implementing <see cref="Management.Batch.IBatchPoolManager"/> along with possibly any systems they call, with the possible exception of <seealso cref="Management.Batch.ArmBatchPoolManager"/>.
         /// </remarks>
-        private async ValueTask<BatchAccountPoolData> GetPoolSpecification(string name, string displayName, Azure.ResourceManager.Models.ManagedServiceIdentity poolIdentity, string vmSize, string vmFamily, bool useGenV2, bool preemptable, int initialTarget, BatchNodeInfo nodeInfo, bool? encryptionAtHostSupported, CancellationToken cancellationToken)
+        private async ValueTask<BatchAccountPoolData> GetPoolSpecification(string name, string displayName, Azure.ResourceManager.Models.ManagedServiceIdentity poolIdentity, VirtualMachineInformationWithDataDisks vmInfo, int initialTarget, BatchNodeInfo nodeInfo, CancellationToken cancellationToken)
         {
             ValidateString(name, 64);
             ValidateString(displayName, 1024);
@@ -1329,22 +1341,22 @@ namespace TesApi.Web
                 },
                 nodeAgentSkuId: nodeInfo.BatchNodeAgentSkuId);
 
-            var startTask = await GetStartTaskAsync(name, vmConfig, vmFamily, useGenV2, cancellationToken);
-
-            if (encryptionAtHostSupported ?? false)
+            if (vmInfo.VM.EncryptionAtHostSupported ?? false)
             {
                 vmConfig.DiskEncryptionTargets.AddRange([BatchModels.BatchDiskEncryptionTarget.OSDisk, BatchModels.BatchDiskEncryptionTarget.TemporaryDisk]);
             }
+
+            vmConfig.DataDisks.AddRange(vmInfo.DataDisks.Select(VirtualMachineInformationWithDataDisks.ToBatchVmDataDisk));
 
             BatchAccountPoolData poolSpecification = new()
             {
                 DisplayName = displayName,
                 Identity = poolIdentity,
-                VmSize = vmSize,
-                ScaleSettings = new() { AutoScale = new(BatchPool.AutoPoolFormula(preemptable, initialTarget)) { EvaluationInterval = BatchPool.AutoScaleEvaluationInterval } },
-                DeploymentConfiguration = new() { VmConfiguration = vmConfig },
+                VmSize = vmInfo.VM.VmSize,
+                ScaleSettings = new() { AutoScale = new(BatchPool.AutoPoolFormula(vmInfo.VM.LowPriority, initialTarget)) { EvaluationInterval = BatchPool.AutoScaleEvaluationInterval } },
+                DeploymentVmConfiguration = vmConfig,
                 //ApplicationPackages = ,
-                StartTask = startTask,
+                StartTask = await GetStartTaskAsync(name, vmConfig, vmInfo, cancellationToken),
                 TargetNodeCommunicationMode = BatchModels.NodeCommunicationMode.Simplified,
             };
 
@@ -1376,10 +1388,10 @@ namespace TesApi.Web
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="forcePreemptibleVmsOnly">Force consideration of preemptible virtual machines only.</param>
         /// <returns>The virtual machine info</returns>
-        public async Task<VirtualMachineInformation> GetVmSizeAsync(TesTask tesTask, CancellationToken cancellationToken, bool forcePreemptibleVmsOnly = false)
+        internal async Task<VirtualMachineInformationWithDataDisks> GetVmSizeAsync(TesTask tesTask, CancellationToken cancellationToken, bool forcePreemptibleVmsOnly = false)
         {
             var allowedVmSizes = await allowedVmSizesService.GetAllowedVmSizes(cancellationToken);
-            bool AllowedVmSizesFilter(VirtualMachineInformation vm) => allowedVmSizes is null || !allowedVmSizes.Any() || allowedVmSizes.Contains(vm.VmSize, StringComparer.OrdinalIgnoreCase) || allowedVmSizes.Contains(vm.VmFamily, StringComparer.OrdinalIgnoreCase);
+            bool AllowedVmSizesFilter(VirtualMachineInformationWithDataDisks vm) => allowedVmSizes is null || !allowedVmSizes.Any() || allowedVmSizes.Contains(vm.VM.VmSize, StringComparer.OrdinalIgnoreCase) || allowedVmSizes.Contains(vm.VM.VmFamily, StringComparer.OrdinalIgnoreCase);
 
             var tesResources = tesTask.Resources;
 
@@ -1392,7 +1404,7 @@ namespace TesApi.Web
             var virtualMachineInfoList = await skuInformationProvider.GetVmSizesAndPricesAsync(azureProxy.GetArmRegion(), cancellationToken);
             var preemptible = forcePreemptibleVmsOnly || usePreemptibleVmsOnly || (tesResources?.Preemptible).GetValueOrDefault(true);
 
-            List<VirtualMachineInformation> eligibleVms = [];
+            List<VirtualMachineInformationWithDataDisks> eligibleVms = [];
             var noVmFoundMessage = string.Empty;
 
             var vmSize = tesResources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.vm_size);
@@ -1403,6 +1415,7 @@ namespace TesApi.Web
                     .Where(vm =>
                         vm.LowPriority == preemptible
                         && vm.VmSize.Equals(vmSize, StringComparison.OrdinalIgnoreCase))
+                    .Select<VirtualMachineInformation, VirtualMachineInformationWithDataDisks>(vm => new(vm, []))
                     .ToList();
 
                 noVmFoundMessage = $"No VM (out of {virtualMachineInfoList.Count}) available with the required resources (vmsize: {vmSize}, preemptible: {preemptible}) for task id {tesTask.Id}.";
@@ -1413,13 +1426,18 @@ namespace TesApi.Web
                 var requiredMemoryInGB = (tesResources?.RamGb).GetValueOrDefault(DefaultMemoryGb);
                 var requiredDiskSizeInGB = (tesResources?.DiskGb).GetValueOrDefault(DefaultDiskGb);
 
-                eligibleVms = virtualMachineInfoList
+                eligibleVms = await virtualMachineInfoList
+                    .ToAsyncEnumerable()
+                    .SelectAwaitWithCancellation<VirtualMachineInformation, VirtualMachineInformationWithDataDisks>(async (vm, token) => new(vm,
+                        double.Max(vm.NvmeDiskSizeInGiB ?? 0, vm.ResourceDiskSizeInGiB ?? 0) < requiredDiskSizeInGB
+                        ? await skuInformationProvider.GetStorageDisksAndPricesAsync(azureProxy.GetArmRegion(), requiredDiskSizeInGB, vm.MaxDataDiskCount ?? 0, token)
+                        : []))
                     .Where(vm =>
-                        vm.LowPriority == preemptible
-                        && vm.VCpusAvailable >= requiredNumberOfCores
-                        && vm.MemoryInGiB >= requiredMemoryInGB
-                        && vm.ResourceDiskSizeInGiB >= requiredDiskSizeInGB)
-                    .ToList();
+                        vm.VM.LowPriority == preemptible
+                        && vm.VM.VCpusAvailable >= requiredNumberOfCores
+                        && vm.VM.MemoryInGiB >= requiredMemoryInGB
+                        && (vm.DataDisks.Count != 0 || double.Max(vm.VM.NvmeDiskSizeInGiB ?? 0, vm.VM.ResourceDiskSizeInGiB ?? 0) >= requiredDiskSizeInGB)) // recheck because skuInformationProvider.GetStorageDisksAndPricesAsync can return an empty list
+                    .ToListAsync(cancellationToken);
 
                 noVmFoundMessage = $"No VM (out of {virtualMachineInfoList.Count}) available with the required resources (cores: {requiredNumberOfCores}, memory: {requiredMemoryInGB} GB, disk: {requiredDiskSizeInGB} GB, preemptible: {preemptible}) for task id {tesTask.Id}.";
             }
@@ -1429,25 +1447,27 @@ namespace TesApi.Web
                 .GetBatchQuotaProvider()
                 .GetVmCoreQuotaAsync(preemptible, cancellationToken);
 
+            static decimal Cost(VirtualMachineInformationWithDataDisks vm) => (vm.VM.PricePerHour ?? 0M) + vm.DataDisks.Sum(disk => disk.PricePerHour);
+
             var selectedVm = eligibleVms
                 .Where(AllowedVmSizesFilter)
-                .Where(vm => IsThereSufficientCoreQuota(coreQuota, vm))
+                .Where(vm => IsThereSufficientCoreQuota(coreQuota, vm.VM))
                 .Where(vm =>
-                    !(previouslyFailedVmSizes?.Contains(vm.VmSize, StringComparer.OrdinalIgnoreCase) ?? false))
-                .MinBy(vm => vm.PricePerHour);
+                    !(previouslyFailedVmSizes?.Contains(vm.VM.VmSize, StringComparer.OrdinalIgnoreCase) ?? false))
+                .MinBy(Cost);
 
             if (!preemptible && selectedVm is not null)
             {
                 var idealVm = eligibleVms
                     .Where(AllowedVmSizesFilter)
-                    .Where(vm => !(previouslyFailedVmSizes?.Contains(vm.VmSize, StringComparer.OrdinalIgnoreCase) ?? false))
-                    .MinBy(x => x.PricePerHour);
+                    .Where(vm => !(previouslyFailedVmSizes?.Contains(vm.VM.VmSize, StringComparer.OrdinalIgnoreCase) ?? false))
+                    .MinBy(Cost);
 
-                if (selectedVm.PricePerHour >= idealVm.PricePerHour * 2)
+                if (selectedVm.VM.PricePerHour >= idealVm.VM.PricePerHour * 2)
                 {
                     tesTask.SetWarning("UsedLowPriorityInsteadOfDedicatedVm",
-                        $"This task ran on low priority machine because dedicated quota was not available for VM Series '{idealVm.VmFamily}'.",
-                        $"Increase the quota for VM Series '{idealVm.VmFamily}' to run this task on a dedicated VM. Please submit an Azure Support request to increase your quota: {AzureSupportUrl}");
+                        $"This task ran on low priority machine because dedicated quota was not available for VM Series '{idealVm.VM.VmFamily}'.",
+                        $"Increase the quota for VM Series '{idealVm.VM.VmFamily}' to run this task on a dedicated VM. Please submit an Azure Support request to increase your quota: {AzureSupportUrl}");
 
                     return await GetVmSizeAsync(tesTask, cancellationToken, true);
                 }
@@ -1716,6 +1736,16 @@ namespace TesApi.Web
             }
 
             public string AlternateSystemLogItem { get; set; }
+        }
+
+        internal record class VirtualMachineInformationWithDataDisks(VirtualMachineInformation VM, IList<Tes.Models.VmDataDisks> DataDisks)
+        {
+            /// <summary>
+            /// Converts <see cref="Tes.Models.VmDataDisks"/> to <see cref="BatchModels.BatchVmDataDisk"/>.
+            /// </summary>
+            /// <param name="disk">The disk.</param>
+            /// <returns></returns>
+            public static BatchModels.BatchVmDataDisk ToBatchVmDataDisk(Tes.Models.VmDataDisks disk) => new(disk.Lun, disk.CapacityInGiB) { Caching = disk.Caching is null ? null : Enum.Parse<BatchModels.BatchDiskCachingType>(disk.Caching), StorageAccountType = Enum.Parse<BatchModels.BatchStorageAccountType>(disk.StorageAccountType) };
         }
     }
 }

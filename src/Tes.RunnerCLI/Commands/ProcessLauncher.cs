@@ -96,7 +96,7 @@ namespace Tes.RunnerCLI.Commands
         {
             ArgumentNullException.ThrowIfNull(nodeTask);
 
-            var logPublisher = await LogPublisher.CreateStreamReaderLogPublisherAsync(nodeTask, logNamePrefix, apiVersion);
+            var logPublisher = await LogPublisher.CreateStreamReaderLogPublisherAsync(nodeTask.RuntimeOptions, logNamePrefix, apiVersion);
 
             return new ProcessLauncher(logReader: logPublisher);
         }

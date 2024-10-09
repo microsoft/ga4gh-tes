@@ -130,9 +130,42 @@ namespace TesApi.Controllers
                 return BadRequest("Id should not be included by the client in the request; the server is responsible for generating a unique Id.");
             }
 
+            if (!(tesTask.Executors ?? []).Any())
+            {
+                return BadRequest("At least one executor is required.");
+            }
+
             if ((tesTask.Executors ?? []).Select(executor => executor.Image).Any(string.IsNullOrWhiteSpace))
             {
                 return BadRequest("Docker container image name is required.");
+            }
+
+            foreach (var executor in (tesTask.Executors ?? []))
+            {
+                if (string.IsNullOrWhiteSpace(executor.Image))
+                {
+                    return BadRequest("Docker container image name is required.");
+                }
+
+                if (!(executor.Command ?? []).Any())
+                {
+                    return BadRequest("Executor command is required.");
+                }
+
+                if (executor.Stdin is not null && !executor.Stdin.StartsWith('/'))
+                {
+                    return BadRequest("Standard in must be an absolute path in the container.");
+                }
+
+                if (executor.Stdout is not null && !executor.Stdout.StartsWith('/'))
+                {
+                    return BadRequest("Standard out must be an absolute path in the container.");
+                }
+
+                if (executor.Stderr is not null && !executor.Stderr.StartsWith('/'))
+                {
+                    return BadRequest("Standard error must be an absolute path in the container.");
+                }
             }
 
             foreach (var input in tesTask.Inputs ?? [])
@@ -161,14 +194,9 @@ namespace TesApi.Controllers
                 {
                     return BadRequest("Content inputs cannot be directories.");
                 }
-
-                if (input.Type == default)
-                {
-                    await ResolveInputType(input);
-                }
             }
 
-            foreach (var output in tesTask.Outputs ?? Enumerable.Empty<TesOutput>())
+            foreach (var output in tesTask.Outputs ?? [])
             {
                 if (string.IsNullOrWhiteSpace(output.Path) || !output.Path.StartsWith('/'))
                 {
@@ -240,16 +268,6 @@ namespace TesApi.Controllers
             logger.LogDebug("Creating task with id {TesTask} state {TesTaskState}", tesTask.Id, tesTask.State);
             await repository.CreateItemAsync(tesTask, cancellationToken);
             return StatusCode(200, new TesCreateTaskResponse { Id = tesTask.Id });
-
-            async Task ResolveInputType(TesInput input)
-            {
-                input.Type = (await storageAccessProvider.GetBlobUrlsAsync(
-                        await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, Azure.Storage.Sas.BlobSasPermissions.List, cancellationToken),
-                        default))
-                    .Any()
-                    ? TesFileType.DIRECTORY
-                    : TesFileType.FILE;
-            }
         }
 
         /// <summary>

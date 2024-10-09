@@ -76,10 +76,10 @@ namespace TesApi.Web.Management.Models.Terra
         public ApiVirtualMachineConfiguration VirtualMachineConfiguration { get; set; }
 
         [JsonPropertyName("cloudServiceConfiguration")]
-        public ApiCloudServiceConfiguration CloudServiceConfiguration { get; set; }
+        public ApiCloudServiceConfiguration CloudServiceConfiguration { get; set; }  // This is now deprecated
     }
 
-    public class ApiCloudServiceConfiguration
+    public class ApiCloudServiceConfiguration // This is now deprecated
     {
         [JsonPropertyName("osFamily")]
         public string OsFamily { get; set; }

@@ -215,7 +215,7 @@ namespace TesApi.Web.Storage
             var resultPathSegments = pathSegments.IsContainer
                 ? await AddSasTokenAsync(pathSegments, SasTokenDuration, ConvertSasPermissions(sasPermissions, nameof(sasPermissions)), cancellationToken)
                 : await AddSasTokenAsync(pathSegments, SasTokenDuration, sasPermissions, cancellationToken);
-            return resultPathSegments.ToUri();
+            return resultPathSegments?.ToUri();
         }
 
         private static BlobContainerSasPermissions ConvertSasPermissions(BlobSasPermissions sasPermissions, string paramName)
@@ -287,7 +287,7 @@ namespace TesApi.Web.Storage
             var resultPathSegments = pathSegments.IsContainer
                 ? await AddSasTokenAsync(pathSegments, SasTokenDuration, ConvertSasPermissions(sasPermissions, nameof(sasPermissions)), cancellationToken)
                 : await AddSasTokenAsync(pathSegments, SasTokenDuration, sasPermissions, cancellationToken);
-            return resultPathSegments.ToUri();
+            return resultPathSegments?.ToUri();
         }
 
         private async Task<bool> TryGetStorageAccountInfoAsync(string accountName, CancellationToken cancellationToken, Action<StorageAccountInfo> onSuccess = null)

@@ -196,7 +196,6 @@ namespace Tes.Runner.Storage
                 Path = absoluteFilePath,
                 TargetUrl = ToCombinedTargetUrl(output.TargetUrl!, prefixToRemoveFromPath: string.Empty, relativePathToSearchPath),
                 TransformationStrategy = output.TransformationStrategy,
-                MountParentDirectory = string.IsNullOrWhiteSpace(output.MountParentDirectory) ? null : fileInfoProvider.GetExpandedFileName(output.MountParentDirectory),
                 FileType = FileType.File,
             };
         }
@@ -208,7 +207,6 @@ namespace Tes.Runner.Storage
                 Path = absoluteFilePath,
                 TargetUrl = output.TargetUrl,
                 TransformationStrategy = output.TransformationStrategy,
-                MountParentDirectory = string.IsNullOrWhiteSpace(output.MountParentDirectory) ? null : fileInfoProvider.GetExpandedFileName(output.MountParentDirectory),
                 FileType = FileType.File,
             };
         }

@@ -199,7 +199,7 @@ namespace TesApi.Tests
             internal bool PoolStateExists(string poolId)
                 => poolState.ContainsKey(poolId);
 
-            private record PoolState(int? CurrentDedicatedNodes, int? CurrentLowPriorityNodes, Microsoft.Azure.Batch.Common.AllocationState? AllocationState, DateTime? AllocationStateTransitionTime, Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun AutoScaleRun, DateTime? CreationTime, IList<Microsoft.Azure.Batch.Protocol.Models.ResizeError> ResizeErrors, IList<Microsoft.Azure.Batch.MetadataItem> PoolMetadata)
+            private record PoolState(int? CurrentDedicatedNodes, int? CurrentLowPriorityNodes, Microsoft.Azure.Batch.Common.AllocationState? AllocationState, DateTime? AllocationStateTransitionTime, Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun AutoScaleRun, DateTime? CreationTime, IList<Microsoft.Azure.Batch.Protocol.Models.ResizeError> ResizeErrors, IList<MetadataItem> PoolMetadata, IList<DataDisk> DataDisks)
             {
                 public int? TargetDedicatedNodes { get; set; }
                 public int? TargetLowPriorityNodes { get; set; }
@@ -207,7 +207,6 @@ namespace TesApi.Tests
             }
 
             private readonly Dictionary<string, PoolState> poolState = [];
-
 
             internal void SetPoolState(
                 string id,
@@ -221,7 +220,8 @@ namespace TesApi.Tests
                 Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun autoScaleRun = default,
                 bool? enableAutoScale = default,
                 DateTime? creationTime = default,
-                IList<MetadataItem> poolMetadata = default)
+                IList<MetadataItem> poolMetadata = default,
+                IList<DataDisk> dataDisks = default)
             {
                 if (poolState.TryGetValue(id, out var state))
                 {
@@ -246,7 +246,7 @@ namespace TesApi.Tests
                         autoScaleRun ?? state.AutoScaleRun,
                         creationTime ?? state.CreationTime,
                         resizeErrors ?? state.ResizeErrors,
-                        metadata.Count == 0 ? null : metadata.Select(ConvertMetadata).ToList())
+                        metadata.Count == 0 ? null : metadata.Select(ConvertMetadata).ToList(), dataDisks ?? [])
                     {
                         TargetDedicatedNodes = targetDedicatedNodes ?? state.TargetDedicatedNodes,
                         TargetLowPriorityNodes = targetLowPriorityNodes ?? state.TargetLowPriorityNodes,
@@ -258,7 +258,7 @@ namespace TesApi.Tests
                 }
                 else
                 {
-                    poolState.Add(id, new(currentDedicatedNodes, currentLowPriorityNodes, allocationState, allocationStateTransitionTime, autoScaleRun, creationTime, resizeErrors, poolMetadata)
+                    poolState.Add(id, new(currentDedicatedNodes, currentLowPriorityNodes, allocationState, allocationStateTransitionTime, autoScaleRun, creationTime, resizeErrors, poolMetadata, dataDisks ?? [])
                     { TargetDedicatedNodes = targetDedicatedNodes, TargetLowPriorityNodes = targetLowPriorityNodes, EnableAutoScale = enableAutoScale });
                 }
             }
@@ -286,11 +286,14 @@ namespace TesApi.Tests
                 var poolIdItem = pool.Metadata.Single(i => string.IsNullOrEmpty(i.Name));
                 pool.Metadata.Remove(poolIdItem);
 
-                poolState.Add(poolIdItem.Value, new(default, default, Microsoft.Azure.Batch.Common.AllocationState.Steady, default, default, default, default, pool.Metadata?.Select(ConvertMetadata).ToList()) { EnableAutoScale = true });
+                poolState.Add(poolIdItem.Value, new(default, default, Microsoft.Azure.Batch.Common.AllocationState.Steady, default, default, default, default, pool.Metadata?.Select(ConvertMetadata).ToList(), (pool.DeploymentVmConfiguration ?? new(new(), "nodeAgentSkuId")).DataDisks.Select(ConvertDataDisk).ToList()) { EnableAutoScale = true });
                 return poolIdItem.Value;
 
                 static MetadataItem ConvertMetadata(Azure.ResourceManager.Batch.Models.BatchAccountPoolMetadataItem item)
                     => new(item.Name, item.Value);
+
+                static DataDisk ConvertDataDisk(Azure.ResourceManager.Batch.Models.BatchVmDataDisk disk)
+                    => new(disk.Lun, disk.DiskSizeInGB, (Microsoft.Azure.Batch.Common.CachingType)disk.Caching, (Microsoft.Azure.Batch.Common.StorageAccountType)disk.StorageAccountType);
             }
 
             internal CloudPool GetBatchPoolImpl(string poolId)
@@ -317,7 +320,8 @@ namespace TesApi.Tests
                     autoScaleRun: poolState.AutoScaleRun,
                     enableAutoScale: poolState.EnableAutoScale,
                     creationTime: poolState.CreationTime,
-                    metadata: poolState.PoolMetadata);
+                    metadata: poolState.PoolMetadata,
+                    dataDisks: poolState.DataDisks);
             }
         }
 
@@ -415,10 +419,10 @@ namespace TesApi.Tests
         }
 
         // Below this line we use reflection and internal details of the Azure libraries in order to generate Mocks of CloudPool and ComputeNode. A newer version of the library is supposed to enable this scenario, so hopefully we can soon drop this code.
-        internal static Microsoft.Azure.Batch.AutoScaleRun GenerateAutoScaleRun(Microsoft.Azure.Batch.Protocol.Models.AutoScaleRunError error = default, string results = default)
+        internal static AutoScaleRun GenerateAutoScaleRun(Microsoft.Azure.Batch.Protocol.Models.AutoScaleRunError error = default, string results = default)
         {
             var protocolObject = new Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun(DateTime.UtcNow, results, error);
-            var autoScaleRun = (Microsoft.Azure.Batch.AutoScaleRun)typeof(Microsoft.Azure.Batch.AutoScaleRun).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, new Type[] { typeof(Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun) }, default)
+            var autoScaleRun = (AutoScaleRun)typeof(AutoScaleRun).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, [typeof(Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun)], default)
                 .Invoke(new object[] { protocolObject });
             return autoScaleRun;
         }
@@ -437,7 +441,8 @@ namespace TesApi.Tests
             Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun autoScaleRun = default,
             bool? enableAutoScale = default,
             DateTime? creationTime = default,
-            IList<MetadataItem> metadata = default)
+            IList<MetadataItem> metadata = default,
+            IList<DataDisk> dataDisks = default)
         {
             if (default == creationTime)
             {
@@ -448,9 +453,9 @@ namespace TesApi.Tests
 
             Mock<Microsoft.Azure.Batch.Protocol.IComputeNodeOperations> computeNodeOperations = new();
             MockServiceClient batchServiceClient = new(computeNodeOperations.Object);
-            var protocolLayer = typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.ProtocolLayer").GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient)], null)
+            var protocolLayer = typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("ProtocolLayer").GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient)], null)
                 .Invoke([batchServiceClient]);
-            var parentClient = (BatchClient)typeof(BatchClient).GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.IProtocolLayer")], null)
+            var parentClient = (BatchClient)typeof(BatchClient).GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("IProtocolLayer")], null)
                 .Invoke([protocolLayer]);
             Microsoft.Azure.Batch.Protocol.Models.CloudPool modelPool = new(
                 id: id,
@@ -464,13 +469,17 @@ namespace TesApi.Tests
                 autoScaleRun: autoScaleRun,
                 enableAutoScale: enableAutoScale,
                 creationTime: creationTime,
-                metadata: metadata.Select(ConvertMetadata).ToList());
+                metadata: metadata.Select(ConvertMetadata).ToList(),
+                virtualMachineConfiguration: new() { DataDisks = dataDisks?.Select(ConvertDataDisk).ToList() ?? [] });
             var pool = (CloudPool)typeof(CloudPool).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, [typeof(BatchClient), typeof(Microsoft.Azure.Batch.Protocol.Models.CloudPool), typeof(IEnumerable<BatchClientBehavior>)], default)
                 .Invoke([parentClient, modelPool, null]);
             return pool;
 
             static Microsoft.Azure.Batch.Protocol.Models.MetadataItem ConvertMetadata(MetadataItem item)
                 => item is null ? default : new(item.Name, item.Value);
+
+            static Microsoft.Azure.Batch.Protocol.Models.DataDisk ConvertDataDisk(DataDisk disk)
+                => disk is null ? default : new(disk.Lun, disk.DiskSizeGB, (Microsoft.Azure.Batch.Protocol.Models.CachingType)disk.Caching, (Microsoft.Azure.Batch.Protocol.Models.StorageAccountType)disk.StorageAccountType);
         }
 
         internal static CloudTask GenerateTask(string jobId, string id, DateTime stateTransitionTime = default, Microsoft.Azure.Batch.Protocol.Models.TaskExecutionInformation executionInfo = default)
@@ -482,9 +491,9 @@ namespace TesApi.Tests
 
             Mock<Microsoft.Azure.Batch.Protocol.IComputeNodeOperations> computeNodeOperations = new();
             MockServiceClient batchServiceClient = new(computeNodeOperations.Object);
-            var protocolLayer = typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.ProtocolLayer").GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient)], null)
+            var protocolLayer = typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("ProtocolLayer").GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient)], null)
                 .Invoke([batchServiceClient]);
-            var parentClient = (BatchClient)typeof(BatchClient).GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.IProtocolLayer")], null)
+            var parentClient = (BatchClient)typeof(BatchClient).GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("IProtocolLayer")], null)
                 .Invoke([protocolLayer]);
             Microsoft.Azure.Batch.Protocol.Models.CloudTask modelTask = new(id: id, stateTransitionTime: stateTransitionTime, state: Microsoft.Azure.Batch.Protocol.Models.TaskState.Active);
             var task = (CloudTask)typeof(CloudTask).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, [typeof(BatchClient), typeof(string), typeof(Microsoft.Azure.Batch.Protocol.Models.CloudTask), typeof(IEnumerable<BatchClientBehavior>)], default)
@@ -501,9 +510,9 @@ namespace TesApi.Tests
 
             Mock<Microsoft.Azure.Batch.Protocol.IComputeNodeOperations> computeNodeOperations = new();
             MockServiceClient batchServiceClient = new(computeNodeOperations.Object);
-            var protocolLayer = typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.ProtocolLayer").GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient)], null)
+            var protocolLayer = typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("ProtocolLayer").GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient)], null)
                 .Invoke([batchServiceClient]);
-            var parentClient = (BatchClient)typeof(BatchClient).GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.IProtocolLayer")], null)
+            var parentClient = (BatchClient)typeof(BatchClient).GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, [typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("IProtocolLayer")], null)
                 .Invoke([protocolLayer]);
             Microsoft.Azure.Batch.Protocol.Models.ComputeNode modelNode = new(stateTransitionTime: stateTransitionTime, id: id, affinityId: AffinityPrefix + id, isDedicated: isDedicated, state: isIdle ? Microsoft.Azure.Batch.Protocol.Models.ComputeNodeState.Idle : Microsoft.Azure.Batch.Protocol.Models.ComputeNodeState.Running);
             var node = (ComputeNode)typeof(ComputeNode).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, [typeof(BatchClient), typeof(string), typeof(Microsoft.Azure.Batch.Protocol.Models.ComputeNode), typeof(IEnumerable<BatchClientBehavior>)], default)

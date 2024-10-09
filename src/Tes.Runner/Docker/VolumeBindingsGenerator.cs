@@ -11,16 +11,18 @@ namespace Tes.Runner.Docker
     {
         private readonly ILogger<VolumeBindingsGenerator> logger = PipelineLoggerFactory.Create<VolumeBindingsGenerator>();
         private readonly IFileInfoProvider fileInfoProvider;
+        private readonly string mountParentDirectory;
 
-        public VolumeBindingsGenerator() : this(new DefaultFileInfoProvider())
+        public VolumeBindingsGenerator(string mountParentDirectory) : this(mountParentDirectory, new DefaultFileInfoProvider())
         {
         }
 
-        protected VolumeBindingsGenerator(IFileInfoProvider fileInfoProvider)
+        protected VolumeBindingsGenerator(string mountParentDirectory, IFileInfoProvider fileInfoProvider)
         {
             ArgumentNullException.ThrowIfNull(fileInfoProvider);
 
             this.fileInfoProvider = fileInfoProvider;
+            this.mountParentDirectory = string.IsNullOrWhiteSpace(mountParentDirectory) ? null! : fileInfoProvider.GetExpandedFileName(mountParentDirectory);
         }
 
         public List<string> GenerateVolumeBindings(List<FileInput>? inputs, List<FileOutput>? outputs)
@@ -31,7 +33,7 @@ namespace Tes.Runner.Docker
             {
                 foreach (var input in inputs)
                 {
-                    AddVolumeBindingIfRequired(volumeBindings, input.MountParentDirectory, input.Path!);
+                    AddVolumeBindingIfRequired(volumeBindings, input.Path!);
                 }
             }
 
@@ -39,14 +41,14 @@ namespace Tes.Runner.Docker
             {
                 foreach (var output in outputs)
                 {
-                    AddVolumeBindingIfRequired(volumeBindings, output.MountParentDirectory, output.Path!);
+                    AddVolumeBindingIfRequired(volumeBindings, output.Path!);
                 }
             }
 
             return volumeBindings.ToList();
         }
 
-        private void AddVolumeBindingIfRequired(HashSet<string> volumeBindings, string? mountParentDirectory, string path)
+        private void AddVolumeBindingIfRequired(HashSet<string> volumeBindings, string path)
         {
             var mountPath = ToVolumeBinding(mountParentDirectory, path);
 
@@ -60,26 +62,24 @@ namespace Tes.Runner.Docker
         {
             if (string.IsNullOrEmpty(mountParentDirectory))
             {
-                logger.LogDebug(
-                    $"The file {path} does not have a mount parent directory defined in the task definition. No volume binding will be created for this file in the container.");
                 return default;
             }
 
-            var expandedMountParentDirectory = fileInfoProvider.GetExpandedFileName(mountParentDirectory);
             var expandedPath = fileInfoProvider.GetExpandedFileName(path);
 
-            if (!expandedPath.StartsWith(expandedMountParentDirectory))
+            if (!expandedPath.StartsWith(mountParentDirectory))
             {
-                logger.LogWarning(
-                    $"The expanded path value {expandedPath} does not contain the specified mount parent directory: {expandedMountParentDirectory}. No volume binding will be created for this file in the container.");
+                logger.LogDebug(
+                    @"The expanded path value {ExpandedPath} does not contain the specified mount parent directory: {MountParentDirectory}. No volume binding will be created for this file in the container.",
+                    expandedPath, mountParentDirectory);
                 return default;
             }
 
-            var targetDir = $"{expandedPath.Substring(expandedMountParentDirectory.Length).Split('/', StringSplitOptions.RemoveEmptyEntries)[0].TrimStart('/')}";
+            var targetDir = $"{expandedPath.Substring(mountParentDirectory.Length).Split('/', StringSplitOptions.RemoveEmptyEntries)[0].TrimStart('/')}";
 
-            var volBinding = $"{expandedMountParentDirectory.TrimEnd('/')}/{targetDir}:/{targetDir}";
+            var volBinding = $"{mountParentDirectory.TrimEnd('/')}/{targetDir}:/{targetDir}";
 
-            logger.LogDebug($"Volume binding for {expandedPath} is {volBinding}");
+            logger.LogDebug(@"Volume binding for {ExpandedPath} is {VolBinding}", expandedPath, volBinding);
 
             return volBinding;
         }

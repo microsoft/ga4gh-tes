@@ -26,7 +26,7 @@ namespace Tes.Runner.Host
         /// </summary>
         /// <param name="name">File name.</param>
         /// <returns>File content.</returns>
-        IMemoryOwner<byte>? ReadSharedFile(string name);
+        FileBuffer ReadSharedFile(string name);
 
         /// <summary>
         /// Ensure previous tasks working and metadata directories are removed.
@@ -34,15 +34,74 @@ namespace Tes.Runner.Host
         /// <returns></returns>
         Task NodeCleanupPreviousTasksAsync();
 
+        /// <summary>
+        /// Gets container path for file in task working directory.
+        /// </summary>
+        /// <param name="file"></param>
+        /// <returns></returns>
+        string GetTaskWorkingContainerPath(FileInfo file);
+
+        /// <summary>
+        /// Gets container path for directory in task working directory.
+        /// </summary>
+        /// <param name="directory"></param>
+        /// <returns></returns>
+        string GetTaskWorkingContainerPath(DirectoryInfo directory);
+
+        /// <summary>
+        /// Gets file on host for path in task container.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        FileInfo GetTaskWorkingHostFile(string path);
+
+        /// <summary>
+        /// Gets directory on host for path in task container.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        DirectoryInfo GetTaskWorkingHostDirectory(string path);
+
         //void WriteMetric(string key);
 
         //void WriteMetric(string key, string value);
+    }
+
+    public readonly record struct FileBuffer(IMemoryOwner<byte>? Owner, int Length) : IDisposable
+    {
+        /// <summary>
+        /// True if empty/not allocated
+        /// </summary>
+        public bool IsDefault => Owner is null;
+
+        /// <summary>
+        /// Gets the buffer content
+        /// </summary>
+        public Memory<byte>? Buffer => Owner?.Memory[..Length];
+
+        /// <inheritdoc/>
+        public void Dispose()
+        {
+            Owner?.Dispose();
+        }
     }
 
     internal abstract class RunnerHost : IRunnerHost
     {
         /// <inheritdoc/>
         public abstract FileInfo GetSharedFile(string name);
+
+        /// <inheritdoc/>
+        public abstract string GetTaskWorkingContainerPath(FileInfo file);
+
+        /// <inheritdoc/>
+        public abstract string GetTaskWorkingContainerPath(DirectoryInfo directory);
+
+        /// <inheritdoc/>
+        public abstract DirectoryInfo GetTaskWorkingHostDirectory(string path);
+
+        /// <inheritdoc/>
+        public abstract FileInfo GetTaskWorkingHostFile(string path);
 
         /// <inheritdoc/>
         public abstract Task NodeCleanupPreviousTasksAsync();
@@ -55,14 +114,14 @@ namespace Tes.Runner.Host
         //    => WriteMetric(key, DateTimeOffset.UtcNow.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'sszzz", System.Globalization.CultureInfo.InvariantCulture));
 
         /// <inheritdoc/>
-        IMemoryOwner<byte>? IRunnerHost.ReadSharedFile(string name)
+        FileBuffer IRunnerHost.ReadSharedFile(string name)
         {
             var file = GetSharedFile(name);
             return file.Exists
                 ? ReadFile(file.OpenRead())
-                : null;
+                : default;
 
-            static IMemoryOwner<byte> ReadFile(FileStream stream)
+            static FileBuffer ReadFile(FileStream stream)
             {
                 if (stream.Length > int.MaxValue)
                 {
@@ -72,15 +131,13 @@ namespace Tes.Runner.Host
                 try
                 {
                     var buffer = MemoryPool<byte>.Shared.Rent((int)stream.Length);
-                    stream.Read(buffer.Memory.Span);
-                    return buffer;
+                    return new(buffer, stream.Read(buffer.Memory.Span));
                 }
                 finally
                 {
                     stream.Dispose();
                 }
             }
-            throw new NotImplementedException();
         }
 
         /// <inheritdoc/>

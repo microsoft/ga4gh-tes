@@ -137,8 +137,10 @@ namespace TesApi.Web.Runner
                     .WithResourceIdManagedIdentity(GetNodeManagedIdentityResourceId(task, nodeTaskConversionOptions.GlobalManagedIdentity))
                     .WithAcrPullResourceIdManagedIdentity(nodeTaskConversionOptions.AcrPullIdentity)
                     .WithWorkflowId(task.WorkflowId)
+                    .WithContainerMountParentDirectory(containerMountParentDirectory)
                     .WithContainerCommands(executor.Command)
                     .WithContainerImage(executor.Image)
+                    .WithContainerExecutionParameters(executor.Workdir, executor.Stdin, executor.Stdout, executor.Stderr, executor.Env)
                     .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath: string.Empty))
                     .WithLogPublisher(storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath: string.Empty))
                     .WithDrsHubUrl(nodeTaskConversionOptions.DrsHubApiHost)
@@ -184,8 +186,7 @@ namespace TesApi.Web.Runner
                 builder.WithOutputUsingCombinedTransformationStrategy(
                     AppendParentDirectoryIfSet(path, $"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%"),
                     url.AbsoluteUri,
-                    fileType: FileType.File,
-                    mountParentDirectory: null);
+                    fileType: FileType.File);
             }
         }
 
@@ -197,7 +198,7 @@ namespace TesApi.Web.Runner
 
                 var outputs = PrepareLocalOutputsForMapping(task, defaultStorageAccount);
 
-                MapOutputs(outputs, pathParentDirectory, containerMountParentDirectory, builder);
+                MapOutputs(outputs, pathParentDirectory, builder);
             }
         }
 
@@ -262,7 +263,7 @@ namespace TesApi.Web.Runner
                     inputs.AddRange(distinctAdditionalInputs);
                 }
 
-                await MapInputsAsync(inputs, pathParentDirectory, containerMountParentDirectory, builder, cancellationToken);
+                await MapInputsAsync(inputs, pathParentDirectory, builder, cancellationToken);
             }
         }
 
@@ -302,6 +303,8 @@ namespace TesApi.Web.Runner
                     continue;
                 }
 
+                await ResolveInputType(input, cancellationToken);
+
                 preparedInput = PrepareLocalFileInput(input, defaultStorageAccountName);
 
                 if (preparedInput != null)
@@ -328,6 +331,23 @@ namespace TesApi.Web.Runner
             }
 
             return [.. inputs.Values];
+        }
+
+        private async Task ResolveInputType(TesInput input, CancellationToken cancellationToken)
+        {
+            var uri = await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, Azure.Storage.Sas.BlobSasPermissions.List, cancellationToken);
+
+            if (uri is null)
+            {
+                return; // Not azure storage. We'll let other parts of the system handle it.
+            }
+
+            input.Type = (await storageAccessProvider.GetBlobUrlsAsync(
+                    uri,
+                    cancellationToken))
+                .Any()
+                ? TesFileType.DIRECTORY
+                : TesFileType.FILE;
         }
 
         /// <summary>
@@ -510,18 +530,17 @@ namespace TesApi.Web.Runner
             return await UploadContentAndCreateTesInputAsync(tesTask, input.Path, input.Content, cancellationToken);
         }
 
-        private static void MapOutputs(List<TesOutput> outputs, string pathParentDirectory, string containerMountParentDirectory,
+        private static void MapOutputs(List<TesOutput> outputs, string pathParentDirectory,
             NodeTaskBuilder builder)
         {
             outputs?.ForEach(output =>
             {
                 builder.WithOutputUsingCombinedTransformationStrategy(
-                    AppendParentDirectoryIfSet(output.Path, pathParentDirectory), output.Url, ToNodeTaskFileType(output.Type),
-                    containerMountParentDirectory);
+                    AppendParentDirectoryIfSet(output.Path, pathParentDirectory), output.Url, ToNodeTaskFileType(output.Type));
             });
         }
 
-        private async Task MapInputsAsync(List<TesInput> inputs, string pathParentDirectory, string containerMountParentDirectory,
+        private async Task MapInputsAsync(List<TesInput> inputs, string pathParentDirectory,
             NodeTaskBuilder builder, CancellationToken cancellationToken)
         {
             if (inputs is null || inputs.Count == 0)
@@ -531,7 +550,7 @@ namespace TesApi.Web.Runner
 
             foreach (var input in inputs)
             {
-                if (input?.Type == TesFileType.FILE)
+                if (input.Type == TesFileType.FILE)
                 {
                     AddInputToBuilder(input.Path, input.Url);
                 }
@@ -566,8 +585,7 @@ namespace TesApi.Web.Runner
             void AddInputToBuilder(string path, string url)
             {
                 builder.WithInputUsingCombinedTransformationStrategy(
-                    AppendParentDirectoryIfSet(path, pathParentDirectory), url,
-                    containerMountParentDirectory);
+                    AppendParentDirectoryIfSet(path, pathParentDirectory), url);
             }
         }
 

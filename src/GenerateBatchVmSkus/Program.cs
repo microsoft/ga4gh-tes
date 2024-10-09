@@ -3,7 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
-using System.Globalization;
+using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using Azure;
@@ -28,7 +28,8 @@ namespace GenerateBatchVmSkus
     internal class Configuration
     {
         public string? SubscriptionId { get; set; }
-        public string? OutputFilePath { get; set; }
+        public string? VmOutputFilePath { get; set; }
+        public string? DiskOutputFilePath { get; set; }
         public string[]? BatchAccounts { get; set; }
         public string[]? SubnetIds { get; set; }
 
@@ -118,6 +119,7 @@ namespace GenerateBatchVmSkus
         private readonly ConcurrentDictionary<string, ComputeResourceSku> skuForVm = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, PricingItem> priceForVm = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, PricingItem> lowPrPriceForVm = new(StringComparer.OrdinalIgnoreCase);
+        private IEnumerable<StorageDiskPriceInformation> diskPrices = [];
         private readonly CancellationTokenSource cancellationTokenSource = new();
 
         private void CancelKeyPress(object? sender, ConsoleCancelEventArgs e)
@@ -189,9 +191,25 @@ namespace GenerateBatchVmSkus
             }
         }
 
+        private static void AddUpdatePrice(Dictionary<string, PricingItem> prices, PricingItem price, string key)
+        {
+            if (prices.TryGetValue(key, out var existing))
+            {
+                if (price.effectiveStartDate > existing.effectiveStartDate)
+                {
+                    prices[key] = price;
+                }
+            }
+            else
+            {
+                prices.Add(key, price);
+            }
+        }
+
         private async Task<int> RunAsync(Configuration configuration)
         {
-            ArgumentException.ThrowIfNullOrEmpty(configuration.OutputFilePath);
+            ArgumentException.ThrowIfNullOrEmpty(configuration.VmOutputFilePath);
+            ArgumentException.ThrowIfNullOrEmpty(configuration.DiskOutputFilePath);
             ArgumentException.ThrowIfNullOrEmpty(configuration.SubscriptionId);
             ArgumentNullException.ThrowIfNull(configuration.BatchAccounts);
 
@@ -216,7 +234,7 @@ namespace GenerateBatchVmSkus
             {
                 async () =>
                 {
-                    Console.WriteLine("Getting pricing data...");
+                    Console.WriteLine("Getting VM pricing data...");
                     var now = DateTime.UtcNow + TimeSpan.FromSeconds(60);
                     await foreach (var price in priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(AzureLocation.WestEurope, cancellationTokenSource.Token)
                         .Where(p => p.effectiveStartDate < now)
@@ -225,29 +243,38 @@ namespace GenerateBatchVmSkus
                         switch (price.meterName.Contains("Low Priority", StringComparison.OrdinalIgnoreCase))
                         {
                             case true: // Low Priority
-                                AddUpdatePrice(lowPrPriceForVm, price);
+                                AddUpdatePrice(lowPrPriceForVm, price, price.armSkuName);
                                 break;
 
                             case false: // Dedicated
-                                AddUpdatePrice(priceForVm, price);
+                                AddUpdatePrice(priceForVm, price, price.armSkuName);
                                 break;
                         }
 
-                        static void AddUpdatePrice(Dictionary<string, PricingItem> prices, PricingItem price)
-                        {
-                            if (prices.TryGetValue(price.armSkuName, out var existing))
-                            {
-                                if (price.effectiveStartDate > existing.effectiveStartDate)
-                                {
-                                    prices[price.armSkuName] = price;
-                                }
-                            }
-                            else
-                            {
-                                prices.Add(price.armSkuName, price);
-                            }
-                        }
                     }
+                },
+
+                async () =>
+                {
+                    Console.WriteLine("Getting Storage pricing data...");
+                    var now = DateTime.UtcNow + TimeSpan.FromSeconds(60);
+                    Dictionary<string, PricingItem> prices = [];
+                    await foreach (var price in priceApiClient.GetAllPricingInformationForStandardStorageLRSDisksAsync(AzureLocation.WestEurope, cancellationTokenSource.Token)
+                        .Where(p => p.effectiveStartDate < now)
+                        .Where(p => "1/Month".Equals(p.unitOfMeasure, StringComparison.OrdinalIgnoreCase))
+                        .Where(p => StorageDiskPriceInformation.StandardLrsSsdCapacityInGiB.ContainsKey(p.meterName))
+                        .WithCancellation(cancellationTokenSource.Token))
+                    {
+                        price.unitPrice = StorageDiskPriceInformation.ConvertPricePerMonthToPricePerHour(price.unitPrice);
+                        price.tierMinimumUnits = StorageDiskPriceInformation.ConvertPricePerMonthToPricePerHour(price.tierMinimumUnits);
+                        price.unitOfMeasure = "1 Hour";
+
+                        AddUpdatePrice(prices, price, price.meterName);
+                    }
+
+                    diskPrices = [.. diskPrices
+                        .Concat(prices.Values.Select(item => new StorageDiskPriceInformation(item.meterName, StorageDiskPriceInformation.StandardLrsSsdCapacityInGiB[item.meterName], Convert.ToDecimal(item.unitPrice))))
+                        .OrderBy(item => item.CapacityInGiB)];
                 },
 
                 async () =>
@@ -264,8 +291,13 @@ namespace GenerateBatchVmSkus
                                 List<string>? skusInSkus = null;
                                 var count = 0;
 
-                                await foreach (var vm in subscription.GetBatchSupportedVirtualMachineSkusAsync(region, cancellationToken: token).Select(s => s.Name).WithCancellation(token))
+                                await foreach (var (vm, batchCapabilities) in subscription.GetBatchSupportedVirtualMachineSkusAsync(region, cancellationToken: token).Select(s => (s.Name, s.Capabilities)).WithCancellation(token))
                                 {
+                                    if (!"x64".Equals(batchCapabilities.FirstOrDefault(capability => "CpuArchitectureType".Equals(capability.Name, StringComparison.InvariantCultureIgnoreCase))?.Value, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        continue;
+                                    }
+
                                     ++count;
                                     _ = regionsForVm.AddOrUpdate(vm, _ => ImmutableHashSet<string>.Empty.Add(region.Name), (_, value) => value.Add(region.Name));
 
@@ -278,7 +310,7 @@ namespace GenerateBatchVmSkus
                                     }
 
                                     _ = skuForVm.GetOrAdd(vm, vm =>
-                                        skus.Single(sku => sku.Name.Equals(vm, StringComparison.OrdinalIgnoreCase)));
+                                        (skus.Single(sku => sku.Name.Equals(vm, StringComparison.OrdinalIgnoreCase))));
                                 }
 
                                 Console.WriteLine($"{region.Name} supportedSkuCount:{count}");
@@ -311,7 +343,7 @@ namespace GenerateBatchVmSkus
                 skuForVm
                     .Select(sku => (sku.Key, Info: new AzureBatchSkuValidator.BatchSkuInfo(
                         sku.Value.Family,
-                        int.TryParse(sku.Value.Capabilities.SingleOrDefault(x => x.Name.Equals("vCPUsAvailable", StringComparison.OrdinalIgnoreCase))?.Value, NumberFormatInfo.InvariantInfo, out var vCpus) ? vCpus : null)))
+                        int.TryParse(sku.Value.Capabilities.SingleOrDefault(x => x.Name.Equals("vCPUsAvailable", StringComparison.OrdinalIgnoreCase))?.Value, System.Globalization.NumberFormatInfo.InvariantInfo, out var vCpus) ? vCpus : null)))
                     .ToDictionary(sku => sku.Key, sku => sku.Info, StringComparer.OrdinalIgnoreCase),
                 cancellationTokenSource.Token);
 
@@ -354,10 +386,15 @@ namespace GenerateBatchVmSkus
                 WriteIndented = true
             };
 
-            var data = JsonSerializer.Serialize(batchVmInfo, options: jsonOptions);
-            await File.WriteAllTextAsync(configuration.OutputFilePath!, data, cancellationTokenSource.Token);
+            await Task.WhenAll(WriteOutput((configuration.VmOutputFilePath, batchVmInfo)), WriteOutput((configuration.DiskOutputFilePath, diskPrices)));
             AzureBatchSkuValidator.ConsoleWriteLine(Assembly.GetEntryAssembly()!.GetName().Name!, ConsoleColor.Green, $"Completed in {DateTimeOffset.UtcNow - startTime:g}.");
             return 0;
+
+            Task WriteOutput<T>((string Path, T Value) output)
+            {
+                var data = JsonSerializer.Serialize(output.Value, options: jsonOptions);
+                return File.WriteAllTextAsync(output.Path, data, cancellationTokenSource.Token);
+            }
         }
 
         private IEnumerable<VirtualMachineInformation> GetVirtualMachineInformations(string name)
@@ -367,7 +404,15 @@ namespace GenerateBatchVmSkus
                 yield break;
             }
 
-            var sku = skuForVm[name] ?? throw new Exception($"Sku info is null for VM {name}");
+            if (!skuForVm.TryGetValue(name, out var sku))
+            {
+                throw new Exception($"Sku info is null for VM {name}");
+            }
+
+            if (name.Contains("_L"))
+            {
+                System.Diagnostics.Debugger.Break();
+            }
 
             var generations = AttemptParseString("HyperVGenerations")?.Split(",").ToList() ?? new();
             var vCpusAvailable = AttemptParseInt32("vCPUsAvailable");
@@ -376,6 +421,8 @@ namespace GenerateBatchVmSkus
             var maxDataDiskCount = AttemptParseInt32("MaxDataDiskCount");
             var maxResourceVolumeMB = AttemptParseInt32("MaxResourceVolumeMB");
             var memoryGB = AttemptParseDouble("MemoryGB");
+            var mvmeMB = AttemptParseInt32("NvmeDiskSizeInMiB");
+            var gpus = AttemptParseInt32("GPUs");
 
             yield return new()
             {
@@ -389,6 +436,8 @@ namespace GenerateBatchVmSkus
                 HyperVGenerations = generations,
                 RegionsAvailable = regionsForVm[name].Order().ToList(),
                 EncryptionAtHostSupported = encryptionAtHostSupported,
+                NvmeDiskSizeInGiB = ConvertMiBToGiB(mvmeMB),
+                GpusAvailable = gpus,
                 PricePerHour = priceForVm.TryGetValue(name, out var priceItem) ? (decimal)priceItem.retailPrice : null,
             };
 
@@ -406,6 +455,8 @@ namespace GenerateBatchVmSkus
                     HyperVGenerations = generations,
                     RegionsAvailable = regionsForVm[name].Order().ToList(),
                     EncryptionAtHostSupported = encryptionAtHostSupported,
+                    NvmeDiskSizeInGiB = ConvertMiBToGiB(mvmeMB),
+                    GpusAvailable = gpus,
                     PricePerHour = lowPrPriceForVm.TryGetValue(name, out var lowPrPriceItem) ? (decimal)lowPrPriceItem.retailPrice : null,
                 };
             }

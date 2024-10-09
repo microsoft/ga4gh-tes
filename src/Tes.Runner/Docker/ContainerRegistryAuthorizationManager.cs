@@ -3,11 +3,8 @@
 
 using Azure.Containers.ContainerRegistry;
 using Azure.Core;
-using CommonUtilities;
-using CommonUtilities.AzureCloud;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
-using Tes.ApiClients;
 using Tes.Runner.Authentication;
 using Tes.Runner.Models;
 using Tes.Runner.Transfer;
@@ -16,7 +13,11 @@ namespace Tes.Runner.Docker
 {
     public class ContainerRegistryAuthorizationManager
     {
-        const string AzureContainerRegistryHostSuffix = ".azurecr.io";
+        private static readonly HashSet<string> AzureContainerRegistryHostSuffixes =
+                                [".azurecr.io",
+                                    ".azurecr.cn",
+                                    ".azurecr.us"];
+
         public static readonly string NullGuid = Guid.Empty.ToString("D");
 
         private readonly ILogger logger = PipelineLoggerFactory.Create<ContainerRegistryAuthorizationManager>();
@@ -73,7 +74,7 @@ namespace Tes.Runner.Docker
             imageParts = imageName.Split('/', 2);
             var registry = imageParts.FirstOrDefault();
 
-            return registry?.EndsWith(AzureContainerRegistryHostSuffix, StringComparison.OrdinalIgnoreCase) ?? false;
+            return AzureContainerRegistryHostSuffixes.Any(suffix => registry?.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) ?? false);
         }
 
 

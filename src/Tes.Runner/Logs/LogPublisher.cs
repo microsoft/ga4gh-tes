@@ -11,16 +11,16 @@ namespace Tes.Runner.Logs
     {
         const BlobSasPermissions LogLocationPermissions = BlobSasPermissions.Read | BlobSasPermissions.Create | BlobSasPermissions.Write | BlobSasPermissions.Add;
 
-        public static async Task<IStreamLogReader> CreateStreamReaderLogPublisherAsync(NodeTask nodeTask, string logNamePrefix, string apiVersion)
+        public static async Task<IStreamLogReader> CreateStreamReaderLogPublisherAsync(RuntimeOptions runtimeOptions, string logNamePrefix, string apiVersion)
         {
-            ArgumentNullException.ThrowIfNull(nodeTask);
+            ArgumentNullException.ThrowIfNull(runtimeOptions);
             ArgumentException.ThrowIfNullOrEmpty(logNamePrefix);
 
-            if (!string.IsNullOrWhiteSpace(nodeTask.RuntimeOptions?.StreamingLogPublisher?.TargetUrl))
+            if (!string.IsNullOrWhiteSpace(runtimeOptions?.StreamingLogPublisher?.TargetUrl))
             {
                 var transformedUrl = await UrlTransformationStrategyFactory.GetTransformedUrlAsync(
-                    nodeTask.RuntimeOptions,
-                    nodeTask.RuntimeOptions.StreamingLogPublisher,
+                    runtimeOptions,
+                    runtimeOptions.StreamingLogPublisher,
                     LogLocationPermissions,
                     apiVersion);
 

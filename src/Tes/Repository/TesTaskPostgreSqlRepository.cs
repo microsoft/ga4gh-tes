@@ -17,6 +17,7 @@ namespace Tes.Repository
     using Microsoft.EntityFrameworkCore;
     using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Options;
+    using Npgsql;
     using Polly;
     using Tes.Models;
     using Tes.Utilities;
@@ -33,8 +34,8 @@ namespace Tes.Repository
             // Create, configure and return JsonSerializerOptions.
             JsonSerializerOptions options = new(JsonSerializerOptions.Default)
             {
-                // Be somewhat minimilistic when serializing. Non-null default property values (for any given type) are still written.
-                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+                // Be somewhat minimalistic when serializing. Non-null default property values (for any given type) are still written.
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
 
                 // Required since adding modifiers to the default TypeInfoResolver appears to not be possible.
                 TypeInfoResolver = GetAndConfigureTypeInfoResolver()
@@ -61,7 +62,7 @@ namespace Tes.Repository
             {
                 case Type type when typeof(TesTask).Equals(type):
                     // Configure tasks created with previous versions of TES when tasks are retrieved.
-                    typeInfo.UnmappedMemberHandling ??= System.Text.Json.Serialization.JsonUnmappedMemberHandling.Skip;
+                    typeInfo.UnmappedMemberHandling ??= JsonUnmappedMemberHandling.Skip;
                     typeInfo.OnDeserialized ??= obj => ((TesTask)obj).TaskSubmitter ??= TaskSubmitters.TaskSubmitter.Parse((TesTask)obj);
                     break;
 
@@ -75,8 +76,8 @@ namespace Tes.Repository
         /// <summary>
         /// NpgsqlDataSource factory
         /// </summary>
-        public static Func<string, Npgsql.NpgsqlDataSource> NpgsqlDataSourceFunc => connectionString =>
-            new Npgsql.NpgsqlDataSourceBuilder(connectionString)
+        public static Func<string, NpgsqlDataSource> NpgsqlDataSourceFunc => connectionString =>
+            new NpgsqlDataSourceBuilder(connectionString)
                 .ConfigureJsonOptions(serializerOptions: GetSerializerOptions.Value)
                 .EnableDynamicJson(jsonbClrTypes: [typeof(TesTask)])
                 .Build();
@@ -183,7 +184,7 @@ namespace Tes.Repository
         public async Task<TesTask> CreateItemAsync(TesTask task, CancellationToken cancellationToken)
         {
             var item = new TesTaskDatabaseItem { Json = task };
-            item = await AddUpdateOrRemoveItemInDbAsync(item, db => db.Json, WriteAction.Add, cancellationToken);
+            item = await ExecuteNpgsqlActionAsync(async () => await AddUpdateOrRemoveItemInDbAsync(item, db => db.Json, WriteAction.Add, cancellationToken));
             return EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState(), CopyTesTask).TesTask;
         }
 
@@ -199,16 +200,16 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public async Task<TesTask> UpdateItemAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
-            var item = await GetItemFromCacheOrDatabase(tesTask.Id, true, cancellationToken);
+            var item = await ExecuteNpgsqlActionAsync(async () => await GetItemFromCacheOrDatabase(tesTask.Id, true, cancellationToken));
             item.Json = tesTask;
-            item = await AddUpdateOrRemoveItemInDbAsync(item, db => db.Json, WriteAction.Update, cancellationToken);
+            item = await ExecuteNpgsqlActionAsync(async () => await AddUpdateOrRemoveItemInDbAsync(item, db => db.Json, WriteAction.Update, cancellationToken));
             return EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState(), CopyTesTask).TesTask;
         }
 
         /// <inheritdoc/>
         public async Task DeleteItemAsync(string id, CancellationToken cancellationToken)
         {
-            _ = await AddUpdateOrRemoveItemInDbAsync(await GetItemFromCacheOrDatabase(id, true, cancellationToken), db => db.Json, WriteAction.Delete, cancellationToken);
+            _ = await ExecuteNpgsqlActionAsync(async () => await AddUpdateOrRemoveItemInDbAsync(await GetItemFromCacheOrDatabase(id, true, cancellationToken), db => db.Json, WriteAction.Delete, cancellationToken));
             _ = Cache?.TryRemove(id);
         }
 
@@ -307,7 +308,7 @@ namespace Tes.Repository
                 using var dbContext = CreateDbContext();
 
                 // Search for Id within the JSON
-                item = await asyncPolicy.ExecuteAsync(ct => dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id, ct), cancellationToken);
+                item = await ExecuteNpgsqlActionAsync(async () => await asyncPolicy.ExecuteAsync(ct => dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id, ct), cancellationToken));
 
                 if (throwIfNotFound && item is null)
                 {
@@ -330,8 +331,41 @@ namespace Tes.Repository
         private async Task<IEnumerable<GetItemsResult>> InternalGetItemsAsync(CancellationToken cancellationToken, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> orderBy = default, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> pagination = default, IEnumerable<Expression<Func<TesTask, bool>>> efPredicates = default, FormattableString rawPredicate = default)
         {
             using var dbContext = CreateDbContext();
-            return (await GetItemsAsync(dbContext.TesTasks, cancellationToken, orderBy, pagination, efPredicates?.Select(WhereTesTask), rawPredicate))
-                .Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState(), CopyTesTask));
+            return await ExecuteNpgsqlActionAsync(async () =>
+                (await GetItemsAsync(dbContext.TesTasks, cancellationToken, orderBy, pagination, efPredicates?.Select(WhereTesTask), rawPredicate))
+                    .Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState(), CopyTesTask)));
+        }
+
+        private async Task<T> ExecuteNpgsqlActionAsync<T>(Func<Task<T>> action)
+        {
+            try
+            {
+                return await action();
+            }
+            catch (NpgsqlException npgEx) when (npgEx.InnerException is TimeoutException)
+            {
+                Logger?.LogError(npgEx, "PostgreSQL: {NpgsqlTimeoutMessage}", npgEx.Message);
+                throw LogDatabaseOverloadedException(npgEx);
+            }
+            catch (InvalidOperationException ioEx) when (ioEx.InnerException is TimeoutException)
+            {
+                Logger?.LogError(ioEx, "PostgreSQL: {InvalidOpTimeoutMessage}", ioEx.Message);
+                throw LogDatabaseOverloadedException(ioEx);
+            }
+            catch (InvalidOperationException ioEx) when
+                (ioEx.InnerException is NpgsqlException npgSqlEx
+                && npgSqlEx.Message?.StartsWith("The connection pool has been exhausted", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                Logger?.LogError(ioEx, "PostgreSQL: {InvalidOpNpgsqMessage}", ioEx.Message);
+                throw LogDatabaseOverloadedException(ioEx);
+            }
+        }
+
+        public DatabaseOverloadedException LogDatabaseOverloadedException(Exception exception)
+        {
+            var dbException = new DatabaseOverloadedException(exception);
+            Logger?.LogCritical(dbException, "PostgreSQL: {FailureMessage}", dbException.Message);
+            return dbException;
         }
 
         /// <summary>
@@ -372,6 +406,5 @@ namespace Tes.Repository
     [JsonSourceGenerationOptions(WriteIndented = false, GenerationMode = JsonSourceGenerationMode.Default)]
     [JsonSerializable(typeof(TesTaskPostgreSqlRepository.ContinuationToken))]
     internal partial class SourceGenerationContext : JsonSerializerContext
-    {
-    }
+    { }
 }

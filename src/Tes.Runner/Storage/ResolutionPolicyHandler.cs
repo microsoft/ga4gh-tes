@@ -15,6 +15,7 @@ public class ResolutionPolicyHandler
     const BlobSasPermissions UploadBlobSasPermissions = BlobSasPermissions.Read | BlobSasPermissions.Write | BlobSasPermissions.Create | BlobSasPermissions.List;
 
     private readonly RuntimeOptions runtimeOptions = null!;
+    private readonly string mountParentDirectoryPath = null!;
     private readonly string apiVersion;
 
     public ResolutionPolicyHandler(RuntimeOptions runtimeOptions, string apiVersion)
@@ -24,6 +25,7 @@ public class ResolutionPolicyHandler
 
         this.runtimeOptions = runtimeOptions;
         this.apiVersion = apiVersion;
+        this.mountParentDirectoryPath = Environment.ExpandEnvironmentVariables(runtimeOptions.MountParentDirectoryPath ?? throw new ArgumentException($"{nameof(runtimeOptions.MountParentDirectoryPath)} is missing.", nameof(runtimeOptions)));
     }
 
     /// <summary>
@@ -98,7 +100,7 @@ public class ResolutionPolicyHandler
     {
         var uri = await ApplySasResolutionToUrlAsync(output.TargetUrl, output.TransformationStrategy, uploadBlobSasPermissions, runtimeOptions, apiVersion);
 
-        return new UploadInfo(output.Path!, uri, output.MountParentDirectory);
+        return new UploadInfo(output.Path!, uri, mountParentDirectoryPath);
     }
 
     protected virtual async Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, TransformationStrategy? strategy,

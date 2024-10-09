@@ -306,14 +306,15 @@ namespace TesApi.Web.Events
                         ExecutorExitCode: int.Parse(nodeMessage.EventData["exitCode"]))
                         .WithActionAsync(() => AddProcessLogsAsync(tesTask, cancellationToken)),
 
-                    Tes.Runner.Events.EventsPublisher.FailedStatus => new(
+                    Tes.Runner.Events.EventsPublisher.FailedStatus => await new AzureBatchTaskState(
                         AzureBatchTaskState.TaskState.InfoUpdate,
                         Failure: new(AzureBatchTaskState.ExecutorError,
                         Enumerable.Empty<string>()
                             .Append(nodeMessage.EventData["errorMessage"])
                             .Concat(await AddProcessLogsIfAvailableAsync(nodeMessage, tesTask, cancellationToken))),
                         ExecutorEndTime: nodeMessage.Created,
-                        ExecutorExitCode: int.Parse(nodeMessage.EventData["exitCode"])),
+                        ExecutorExitCode: int.Parse(nodeMessage.EventData["exitCode"]))
+                        .WithActionAsync(() => AddProcessLogsAsync(tesTask, cancellationToken)),
 
                     _ => throw new System.Diagnostics.UnreachableException(),
                 },
@@ -388,12 +389,8 @@ namespace TesApi.Web.Events
                 return processLogs;
             }
 
-            async IAsyncEnumerable<string> GetProcessLogsAsync(string messageName, Tes.Models.TesTask tesTask, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+            IAsyncEnumerable<string> GetProcessLogsAsync(string messageName, Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
             {
-                var alsoAddToExecutorLog = Tes.Runner.Events.EventsPublisher.ExecutorEndEvent.Equals(messageName, StringComparison.Ordinal);
-                var stderr = Enumerable.Empty<string>();
-                var stdout = Enumerable.Empty<string>();
-
                 var blobNameStartsWith = messageName switch
                 {
                     Tes.Runner.Events.EventsPublisher.DownloadEndEvent => "download_std",
@@ -402,6 +399,11 @@ namespace TesApi.Web.Events
                     _ => string.Empty,
                 };
 
+                return GetAvailableProcessLogsAsync(blobNameStartsWith, tesTask, cancellationToken).Select(t => t.Uri.AbsoluteUri);
+            }
+
+            async IAsyncEnumerable<(Uri Uri, string stream)> GetAvailableProcessLogsAsync(string blobNameStartsWith, Tes.Models.TesTask tesTask, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+            {
                 if (string.IsNullOrEmpty(blobNameStartsWith))
                 {
                     yield break;
@@ -424,7 +426,17 @@ namespace TesApi.Web.Events
                     .Select(blob => (blob.BlobUri, blob.BlobNameParts[1])) // uri and which standard stream
                     .WithCancellation(cancellationToken))
                 {
-                    yield return uri.AbsoluteUri;
+                    yield return (uri, label);
+                }
+            }
+
+            async ValueTask AddProcessLogsAsync(Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
+            {
+                var stderr = Enumerable.Empty<string>();
+                var stdout = Enumerable.Empty<string>();
+
+                await foreach (var (uri, label) in GetAvailableProcessLogsAsync("task-executor-1", tesTask, cancellationToken).WithCancellation(cancellationToken))
+                {
 
                     switch (label)
                     {
@@ -438,35 +450,26 @@ namespace TesApi.Web.Events
                     }
                 }
 
-                if (alsoAddToExecutorLog)
+                stderr = stderr.ToList();
+                stdout = stdout.ToList();
+
+                if (stderr.Any() || stdout.Any())
                 {
-                    stderr = stderr.ToList();
-                    stdout = stdout.ToList();
+                    var log = tesTask.GetOrAddTesTaskLog().GetOrAddExecutorLog();
 
-                    if (stderr.Any() || stdout.Any())
+                    if (stderr.Any())
                     {
-                        var log = tesTask.GetOrAddTesTaskLog().GetOrAddExecutorLog();
+                        log.Stderr = JsonArrayAsIndentedString(stderr);
+                    }
 
-                        if (stderr.Any())
-                        {
-                            log.Stderr = JsonArrayAsIndentedString(stderr);
-                        }
-
-                        if (stdout.Any())
-                        {
-                            log.Stdout = JsonArrayAsIndentedString(stdout);
-                        }
+                    if (stdout.Any())
+                    {
+                        log.Stdout = JsonArrayAsIndentedString(stdout);
                     }
                 }
 
                 static string JsonArrayAsIndentedString(IEnumerable<string> array)
                     => System.Text.Json.JsonSerializer.Serialize(array, jsonIndentedSerializerOptions);
-            }
-
-            async ValueTask AddProcessLogsAsync(Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
-            {
-                await foreach (var _ in GetProcessLogsAsync(Tes.Runner.Events.EventsPublisher.ExecutorEndEvent, tesTask, cancellationToken).WithCancellation(cancellationToken))
-                { }
             }
         }
 

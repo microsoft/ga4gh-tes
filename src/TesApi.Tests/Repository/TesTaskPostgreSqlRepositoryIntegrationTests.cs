@@ -25,7 +25,7 @@ namespace Tes.Repository.Tests
     /// <summary>
     /// These tests will automatically create an "Azure Database for PostgreSQL - Flexible Server",
     /// and then delete it when done.
-    /// 
+    ///
     /// To run these tests,
     /// 1.  From a command prompt, log in with "az login" then start Visual Studio
     /// 2.  Set "subscriptionId" to your subscriptionId
@@ -168,6 +168,11 @@ namespace Tes.Repository.Tests
         [TestMethod]
         public async Task Create1mAndQuery1mAsync()
         {
+            await Create1mItemsAsync();
+        }
+
+        private static async Task Create1mItemsAsync()
+        {
             const bool createItems = true;
             const int itemCount = 1_000_000;
 
@@ -221,6 +226,44 @@ namespace Tes.Repository.Tests
             Assert.IsTrue(runningTasks.Count != allOtherTasks.Count);
             Assert.IsTrue(runningTasks.All(c => c.State == TesState.RUNNING));
             Assert.IsTrue(allOtherTasks.All(c => c.State != TesState.RUNNING));
+        }
+
+        [TestMethod]
+        public async Task OverloadedDbIsHandled()
+        {
+            await Create1mItemsAsync();
+            var tasks = new List<Task>();
+            long overloadedDbExceptionCount = 0;
+            long exceptionCount = 0;
+
+            for (var i = 0; i < 200; i++)
+            {
+                tasks.Add(Task.Run(async () =>
+                {
+                    try
+                    {
+                        var allOtherTasks = await repository.GetItemsAsync(c => c.State != TesState.RUNNING, CancellationToken.None);
+                    }
+                    catch (DatabaseOverloadedException)
+                    {
+                        Interlocked.Increment(ref overloadedDbExceptionCount);
+                    }
+                    catch (Exception ex)
+                    {
+                        Interlocked.Increment(ref exceptionCount);
+                        var exType = ex.GetType();
+                        var inexType = ex.InnerException?.GetType();
+                        var n1 = exType.Name;
+                        var n2 = inexType?.Name;
+                        Debugger.Break();
+                    }
+                }));
+            }
+
+            await Task.WhenAll(tasks);
+            Console.WriteLine(overloadedDbExceptionCount);
+            Assert.IsTrue(overloadedDbExceptionCount > 0);
+            Assert.IsTrue(exceptionCount == 0);
         }
 
         [TestMethod]
@@ -368,7 +411,7 @@ namespace Tes.Repository.Tests
             var isFound = await repository.TryGetItemAsync(id, CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
 
             Assert.IsTrue(isFound);
-            Assert.IsTrue(updatedAndRetrievedItem.State == Models.TesState.COMPLETE);
+            Assert.IsTrue(updatedAndRetrievedItem.State == TesState.COMPLETE);
             Assert.IsTrue(updatedAndRetrievedItem.Description == description);
         }
 

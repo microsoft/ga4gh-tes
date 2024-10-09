@@ -227,7 +227,7 @@ namespace TesApi.Tests
             var batchScheduler = serviceProvider.GetT();
 
             var size = await ((BatchScheduler)batchScheduler).GetVmSizeAsync(task, CancellationToken.None);
-            GuardAssertsWithTesTask(task, () => Assert.AreEqual(vmSize, size.VmSize));
+            GuardAssertsWithTesTask(task, () => Assert.AreEqual(vmSize, size.VM.VmSize));
         }
 
         private static BatchAccountResourceInformation GetNewBatchResourceInfo()
@@ -745,7 +745,7 @@ namespace TesApi.Tests
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual("TES-hostname-edicated1-vibnmgoytavzom4xpzeq56u7xkqevpks-", tesTask.PoolId[0..^8]);
+                Assert.AreEqual("TES-hostname-edicated1-replaceme-", tesTask.PoolId[0..^8]);
                 Assert.AreEqual("VmSizeDedicated1", pool.VmSize);
                 Assert.IsTrue(((BatchScheduler)batchScheduler).TryGetPool(tesTask.PoolId, out _));
             });
@@ -1141,6 +1141,52 @@ namespace TesApi.Tests
                 Assert.AreEqual(2, tesTask.GetOrAddTesTaskLog().CromwellResultCode);
                 Assert.AreEqual(2, tesTask.CromwellResultCode);
             });
+        }
+
+        [DataTestMethod]
+        [DataRow(["task-executor-1_stdout_20241007203438616.txt", "task-executor-1_stderr_20241007203438616.txt"])]
+        [DataRow(["task-executor-1_stdout_20241007203438616.txt", "task-executor-1_stderr_20241007203438616.txt", "task-executor-1_stdout_20241007203438616_1.txt",])]
+        public async Task ExecutorLogsAreAddedToExecutorLog(IEnumerable<string> logs)
+        {
+            List<Uri> expectedStdErrLogs = [];
+            List<Uri> expectedStdOutLogs = [];
+            var tesTask = GetTesTask();
+            tesTask.State = TesState.RUNNING;
+
+            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
+            azureProxyReturnValues.BatchTaskState = BatchTaskStates.TaskCompletedSuccessfully[0];
+            var azureProxy = GetMockAzureProxy(azureProxyReturnValues);
+            var batchPoolManager = GetMockBatchPoolManager(azureProxyReturnValues);
+
+            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), batchPoolManager, azureProxyReturnValues, serviceProviderActions: serviceProvider =>
+            {
+                var storageAccessProvider = serviceProvider.GetServiceOrCreateInstance<IStorageAccessProvider>();
+                var executionDirectoryUri = storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, null, Azure.Storage.Sas.BlobSasPermissions.Read, CancellationToken.None).GetAwaiter().GetResult();
+
+                logs.Order().ForEach(log =>
+                {
+                    var uri = storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(tesTask, log);
+
+                    if (log.Contains("stderr"))
+                    {
+                        expectedStdErrLogs.Add(uri);
+                    }
+                    else if (log.Contains("stdout"))
+                    {
+                        expectedStdOutLogs.Add(uri);
+                    }
+                });
+
+                serviceProvider.AzureProxy.Setup(p => p.ListBlobsAsync(It.Is(executionDirectoryUri, new UrlMutableSASEqualityComparer()), It.IsAny<CancellationToken>())).Returns(expectedStdErrLogs.Concat(expectedStdOutLogs).OrderBy(uri => uri.AbsoluteUri).Select(log => new BlobNameAndUri(new BlobUriBuilder(log).BlobName, log)).ToAsyncEnumerable());
+            });
+
+            GuardAssertsWithTesTask(tesTask, () =>
+            {
+                Assert.IsTrue(expectedStdOutLogs.SequenceEqual(GetLogs(tesTask.Logs.LastOrDefault()?.Logs.FirstOrDefault()?.Stdout ?? string.Empty) ?? []));
+                Assert.IsTrue(expectedStdErrLogs.SequenceEqual(GetLogs(tesTask.Logs.LastOrDefault()?.Logs.FirstOrDefault()?.Stderr ?? string.Empty) ?? []));
+            });
+
+            static IEnumerable<Uri> GetLogs(string logs) => logs is null ? null : System.Text.Json.JsonSerializer.Deserialize<IEnumerable<string>>(logs).Select(log => new Uri(log));
         }
 
         [DataTestMethod]

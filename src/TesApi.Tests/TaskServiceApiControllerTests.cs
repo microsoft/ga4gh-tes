@@ -37,7 +37,7 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "ubuntu", Command = ["cmd"] }],
                 Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
@@ -67,7 +67,7 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "ubuntu", Command = ["cmd"] }],
                 Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
@@ -97,7 +97,7 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "ubuntu", Command = ["cmd"] }],
                 Resources = new() { BackendParameters = backendParameters }
             };
 
@@ -129,7 +129,7 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "ubuntu", Command = ["cmd"] }],
                 Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
@@ -161,7 +161,7 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "ubuntu", Command = ["cmd"] }],
                 Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
@@ -178,7 +178,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateTaskAsync_ReturnsBadRequest_ForInvalidId()
         {
-            var tesTask = new TesTask { Id = "ClientProvidedId", Executors = [new() { Image = "ubuntu" }] };
+            var tesTask = new TesTask { Id = "ClientProvidedId", Executors = [new() { Image = "ubuntu", Command = ["cmd"] }] };
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
@@ -243,7 +243,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateTaskAsync_ReturnsTesCreateTaskResponse()
         {
-            var tesTask = new TesTask() { Executors = [new() { Image = "ubuntu" }] };
+            var tesTask = new TesTask() { Executors = [new() { Image = "ubuntu", Command = ["cmd"] }] };
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
@@ -689,7 +689,7 @@ namespace TesApi.Tests
             var tesTask1 = new TesTask()
             {
                 Description = taskDescription,
-                Executors = [new() { Image = "ubuntu" }]
+                Executors = [new() { Image = "ubuntu", Command = ["cmd"] }]
             };
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
@@ -702,7 +702,7 @@ namespace TesApi.Tests
             var tesTask2 = new TesTask()
             {
                 Description = taskDescription,
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "ubuntu", Command = ["cmd"] }],
                 Inputs = [new() { Path = "/cromwell-executions/" }]
             };
 
@@ -713,7 +713,7 @@ namespace TesApi.Tests
             var tesTask3 = new TesTask()
             {
                 Description = taskDescription,
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "ubuntu", Command = ["cmd"] }],
                 Inputs = [new() { Path = "/cromwell-executions/" }]
             };
 
@@ -724,7 +724,7 @@ namespace TesApi.Tests
             var tesTask4 = new TesTask()
             {
                 Description = taskDescription,
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "ubuntu", Command = ["cmd"] }],
                 Inputs = [new() { Path = "/cromwell-executions/test/" }]
             };
 
@@ -744,7 +744,7 @@ namespace TesApi.Tests
             var tesTask = new TesTask()
             {
                 Description = taskDescription,
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "ubuntu", Command = ["cmd"] }],
                 Inputs = [new() { Type = TesFileType.FILE, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script", Content = "command" }],
                 Outputs =
                 [
@@ -773,7 +773,7 @@ namespace TesApi.Tests
             var tesTask = new TesTask()
             {
                 Description = taskDescription,
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "ubuntu", Command = ["cmd"] }],
                 Inputs = [new() { Type = TesFileType.FILE, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script", Content = "command" }],
                 Outputs =
                 [
@@ -802,7 +802,7 @@ namespace TesApi.Tests
             var tesTask = new TesTask()
             {
                 Description = taskDescription,
-                Executors = [new() { Image = "ubuntu" }],
+                Executors = [new() { Image = "ubuntu", Command = ["cmd"] }],
                 Inputs = [new() { Type = TesFileType.FILE, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"{path}/script", Url = $"{path}/script" }],
                 Outputs =
                 [

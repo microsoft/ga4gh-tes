@@ -1,0 +1,72 @@
+[
+  {
+    "MeterName": "E1 LRS Disk",
+    "CapacityInGiB": 4,
+    "PricePerHour": 0.00041068607242777944
+  },
+  {
+    "MeterName": "E2 LRS Disk",
+    "CapacityInGiB": 8,
+    "PricePerHour": 0.0008213721448555589
+  },
+  {
+    "MeterName": "E3 LRS Disk",
+    "CapacityInGiB": 16,
+    "PricePerHour": 0.0016427442897111177
+  },
+  {
+    "MeterName": "E4 LRS Disk",
+    "CapacityInGiB": 32,
+    "PricePerHour": 0.0032854885794222355
+  },
+  {
+    "MeterName": "E6 LRS Disk",
+    "CapacityInGiB": 64,
+    "PricePerHour": 0.006570977158844471
+  },
+  {
+    "MeterName": "E10 LRS Disk",
+    "CapacityInGiB": 128,
+    "PricePerHour": 0.013141954317688942
+  },
+  {
+    "MeterName": "E15 LRS Disk",
+    "CapacityInGiB": 256,
+    "PricePerHour": 0.026283908635377884
+  },
+  {
+    "MeterName": "E20 LRS Disk",
+    "CapacityInGiB": 512,
+    "PricePerHour": 0.05256781727075577
+  },
+  {
+    "MeterName": "E30 LRS Disk",
+    "CapacityInGiB": 1024,
+    "PricePerHour": 0.10513563454151154
+  },
+  {
+    "MeterName": "E40 LRS Disk",
+    "CapacityInGiB": 2048,
+    "PricePerHour": 0.21027126908302307
+  },
+  {
+    "MeterName": "E50 LRS Disk",
+    "CapacityInGiB": 4096,
+    "PricePerHour": 0.42054253816604614
+  },
+  {
+    "MeterName": "E60 LRS Disk",
+    "CapacityInGiB": 8192,
+    "PricePerHour": 0.8410850763320923
+  },
+  {
+    "MeterName": "E70 LRS Disk",
+    "CapacityInGiB": 16384,
+    "PricePerHour": 1.6821701526641846
+  },
+  {
+    "MeterName": "E80 LRS Disk",
+    "CapacityInGiB": 32767,
+    "PricePerHour": 3.364340305328369
+  }
+]
