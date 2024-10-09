@@ -4,6 +4,8 @@
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
+using Azure.Identity;
+using Azure.Storage.Blobs;
 using Newtonsoft.Json;
 using Polly;
 using Tes.Models;
@@ -187,13 +189,15 @@ namespace Tes.SDK
             while (true)
             {
                 var task = await retryPolicy.ExecuteAsync(() => GetTaskAsync(taskId, TesView.MINIMAL, cancellationToken));
+                // TODO support DI ILogger for TesClient
+                Console.WriteLine($"[{DateTime.Now}] Id: {task.Id} State: {task.State}");
 
                 if (!task.IsActiveState())
                 {
                     return await GetTaskAsync(taskId, TesView.FULL, cancellationToken);
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
             }
         }
 
