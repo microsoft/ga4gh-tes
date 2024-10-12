@@ -30,7 +30,7 @@ namespace Tes.Repository
             .WaitAndRetryAsync(10, i => TimeSpan.FromSeconds(Math.Pow(2, i)));
 
         private record struct WriteItem(TDbItem DbItem, WriteAction Action, TaskCompletionSource<TDbItem> TaskSource);
-        private readonly Channel<WriteItem> itemsToWrite = Channel.CreateUnbounded<WriteItem>();
+        private readonly Channel<WriteItem> itemsToWrite = Channel.CreateUnbounded<WriteItem>(new() { SingleReader = true });
         private readonly ConcurrentDictionary<TDbItem, object> updatingItems = new(); // Collection of all pending updates to be written, to faciliate detection of simultaneous parallel updates.
         private readonly CancellationTokenSource writerWorkerCancellationTokenSource = new();
         private readonly Task writerWorkerTask;
@@ -108,7 +108,7 @@ namespace Tes.Repository
         /// <param name="dbSet">The <see cref="DbSet{T}"/> of <typeparamref name="T"/> to query.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="orderBy"><see cref="IQueryable{T}"/> order-by function.</param>
-        /// <param name="pagination"><see cref="IQueryable{T}"/> pagination selection (within the order-by).</param>
+        /// <param name="pagination"><see cref="IQueryable{T}"/> pagination selection (within <paramref name="orderBy"/>).</param>
         /// <param name="efPredicates">The WHERE clause parts <see cref="Expression"/> for <typeparamref name="T"/> selection in the query.</param>
         /// <param name="rawPredicate">The WHERE clause for raw SQL for <typeparamref name="T"/> selection in the query.</param>
         /// <returns></returns>
@@ -246,6 +246,7 @@ namespace Tes.Repository
             {
                 if (disposing)
                 {
+                    //_ = itemsToWrite.Writer.TryComplete();
                     writerWorkerCancellationTokenSource.Cancel();
 
                     try

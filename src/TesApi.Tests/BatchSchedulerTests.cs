@@ -735,7 +735,7 @@ namespace TesApi.Tests
             var batchScheduler = serviceProvider.GetT();
 
             {
-                await using var schedulerBackgroundTasks = new PerformBatchSchedulerBackgroundTasks(batchScheduler);
+                await using PerformBatchSchedulerBackgroundTasks _1 = new(batchScheduler);
                 _ = await batchScheduler.ProcessQueuedTesTaskAsync(tesTask, CancellationToken.None);
             }
 
@@ -1358,7 +1358,7 @@ namespace TesApi.Tests
 
             if (azureProxyReturnValues.BatchTaskState is null)
             {
-                await using PerformBatchSchedulerBackgroundTasks schedulerBackgroundTasks = new(batchScheduler);
+                await using PerformBatchSchedulerBackgroundTasks _1 = new(batchScheduler);
                 await Parallel.ForEachAsync(tesTasks, async (task, token) => _ = await batchScheduler.ProcessQueuedTesTaskAsync(task, token));
             }
             else
@@ -1652,7 +1652,9 @@ namespace TesApi.Tests
                 {
                     try
                     {
-                        await batchScheduler.PerformBackgroundTasksAsync(cancellationToken.Token);
+                        await batchScheduler.PerformShortBackgroundTasksAsync(CancellationToken.None);
+                        await Task.WhenAll(batchScheduler.PerformLongBackgroundTasksAsync(CancellationToken.None).ToBlockingEnumerable(CancellationToken.None));
+                        await Task.WhenAll(batchScheduler.PerformLongBackgroundTasksAsync(CancellationToken.None).ToBlockingEnumerable(CancellationToken.None));
                         await timer.WaitForNextTickAsync(cancellationToken.Token);
                     }
                     catch (OperationCanceledException)
@@ -1662,7 +1664,7 @@ namespace TesApi.Tests
                 }
             }
 
-            public readonly async ValueTask DisposeAsync()
+            readonly async ValueTask IAsyncDisposable.DisposeAsync()
             {
                 cancellationToken.Cancel();
                 await task;

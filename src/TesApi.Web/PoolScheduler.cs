@@ -59,9 +59,9 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc />
-        protected override ValueTask ExecuteCoreAsync(CancellationToken cancellationToken)
+        protected override async ValueTask ExecuteCoreAsync(CancellationToken cancellationToken)
         {
-            return ExecuteActionOnIntervalAsync(
+            await ExecuteActionOnIntervalAsync(
                 RunInterval,
                 async token => await ExecuteActionOnPoolsAsync(
                     async (pool, token) =>
@@ -97,6 +97,10 @@ namespace TesApi.Web
                 try
                 {
                     await action(pool, token);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch (Exception exc)
                 {
@@ -353,7 +357,7 @@ namespace TesApi.Web
 
             static IEnumerable<T> RepeatUntil<T>(Func<T> func, Predicate<T> stop)
             {
-                do
+                while (true)
                 {
                     var t = func();
 
@@ -364,7 +368,6 @@ namespace TesApi.Web
 
                     yield return t;
                 }
-                while (true);
             }
         }
 

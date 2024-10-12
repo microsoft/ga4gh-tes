@@ -30,7 +30,8 @@ namespace TesApi.Web
     {
         private static readonly TimeSpan blobRunInterval = TimeSpan.FromSeconds(15);
         internal static readonly TimeSpan BatchRunInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs appears to use a 30 second polling interval
-        private static readonly TimeSpan backgroundRunInterval = TimeSpan.FromSeconds(1);
+        private static readonly TimeSpan shortBackgroundRunInterval = TimeSpan.FromSeconds(1);
+        private static readonly TimeSpan longBackgroundRunInterval = TimeSpan.FromSeconds(1);
         private readonly RunnerEventsProcessor nodeEventProcessor = nodeEventProcessor;
 
         /// <inheritdoc />
@@ -52,7 +53,8 @@ namespace TesApi.Web
         protected override async ValueTask ExecuteCoreAsync(CancellationToken cancellationToken)
         {
             await Task.WhenAll(
-                ExecuteBackgroundTasksAsync(cancellationToken),
+                ExecuteShortBackgroundTasksAsync(cancellationToken),
+                ExecuteLongBackgroundTasksAsync(cancellationToken),
                 ExecuteCancelledTesTasksOnBatchAsync(cancellationToken),
                 ExecuteQueuedTesTasksOnBatchAsync(cancellationToken),
                 ExecuteUpdateTesTaskFromEventBlobAsync(cancellationToken));
@@ -62,15 +64,15 @@ namespace TesApi.Web
         /// Retrieves all queued TES tasks from the database, performs an action in the batch system, and updates the resultant state
         /// </summary>
         /// <returns></returns>
-        private async Task ExecuteQueuedTesTasksOnBatchAsync(CancellationToken cancellationToken)
+        private Task ExecuteQueuedTesTasksOnBatchAsync(CancellationToken cancellationToken)
         {
-            var query = new Func<CancellationToken, ValueTask<IEnumerable<TesTask>>>(
+            Func<CancellationToken, ValueTask<IEnumerable<TesTask>>> query = new(
                 async token => (await Repository.GetItemsAsync(
                     predicate: t => t.State == TesState.QUEUED,
                     cancellationToken: token))
                 .OrderBy(t => t.CreationTime));
 
-            await ExecuteActionOnIntervalAsync(BatchRunInterval,
+            return ExecuteActionOnIntervalAsync(BatchRunInterval,
                 async cancellation =>
                 {
                     await Parallel.ForEachAsync(
@@ -88,9 +90,21 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="cancellationToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
         /// <returns></returns>
-        private async Task ExecuteBackgroundTasksAsync(CancellationToken cancellationToken)
+        private Task ExecuteShortBackgroundTasksAsync(CancellationToken cancellationToken)
         {
-            await ExecuteActionOnIntervalAsync(backgroundRunInterval, BatchScheduler.PerformBackgroundTasksAsync, cancellationToken);
+            return ExecuteActionOnIntervalAsync(shortBackgroundRunInterval, BatchScheduler.PerformShortBackgroundTasksAsync, cancellationToken);
+        }
+
+        /// <summary>
+        /// Retrieves all event blobs from storage and updates the resultant state.
+        /// </summary>
+        /// <param name="cancellationToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
+        /// <returns></returns>
+        private async Task ExecuteLongBackgroundTasksAsync(CancellationToken cancellationToken)
+        {
+            await ExecuteActionOnIntervalAsync(longBackgroundRunInterval,
+                async token => await Task.WhenAll(BatchScheduler.PerformLongBackgroundTasksAsync(token).ToBlockingEnumerable(token)),
+                cancellationToken);
         }
 
         /// <summary>
@@ -98,16 +112,16 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="cancellationToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
         /// <returns></returns>
-        private async Task ExecuteCancelledTesTasksOnBatchAsync(CancellationToken cancellationToken)
+        private Task ExecuteCancelledTesTasksOnBatchAsync(CancellationToken cancellationToken)
         {
-            var query = new Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>>(
+            Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>> query = new(
                 async token => (await Repository.GetItemsAsync(
                     predicate: t => t.State == TesState.CANCELING,
                     cancellationToken: token))
                 .OrderByDescending(t => t.CreationTime)
                 .ToAsyncEnumerable());
 
-            await ExecuteActionOnIntervalAsync(BatchRunInterval,
+            return ExecuteActionOnIntervalAsync(BatchRunInterval,
                 token => OrchestrateTesTasksOnBatchAsync(
                     "Cancelled",
                     query,
@@ -124,9 +138,9 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="cancellationToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
         /// <returns></returns>
-        private async Task ExecuteUpdateTesTaskFromEventBlobAsync(CancellationToken cancellationToken)
+        private Task ExecuteUpdateTesTaskFromEventBlobAsync(CancellationToken cancellationToken)
         {
-            await ExecuteActionOnIntervalAsync(blobRunInterval,
+            return ExecuteActionOnIntervalAsync(blobRunInterval,
                 async token =>
                     await UpdateTesTasksFromAvailableEventsAsync(
                         await ParseAvailableEvents(token),
@@ -159,6 +173,10 @@ namespace TesApi.Web
                     eventMessage = await nodeEventProcessor.DownloadAndValidateMessageContentAsync(eventMessage, token);
                     var state = await nodeEventProcessor.GetMessageBatchStateAsync(eventMessage, tesTask, token);
                     messages.Add((eventMessage, tesTask, state, ct => nodeEventProcessor.MarkMessageProcessedAsync(eventMessage, ct)));
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch (ArgumentException ex)
                 {
@@ -239,6 +257,10 @@ namespace TesApi.Web
                 try
                 {
                     await markEventProcessed(token);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {

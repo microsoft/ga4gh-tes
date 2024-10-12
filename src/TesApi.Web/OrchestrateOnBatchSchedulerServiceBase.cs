@@ -101,7 +101,7 @@ namespace TesApi.Web
         /// <param name="action">Action to repeatedly run.</param>
         /// <param name="cancellationToken">Triggered when <see cref="IHostedService.StopAsync(CancellationToken)"/> is called.</param>
         /// <returns>A <see cref="ValueTask"/> that represents this method's operations.</returns>
-        protected async ValueTask ExecuteActionOnIntervalAsync(TimeSpan runInterval, Func<CancellationToken, ValueTask> action, CancellationToken cancellationToken)
+        protected async Task ExecuteActionOnIntervalAsync(TimeSpan runInterval, Func<CancellationToken, ValueTask> action, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(action);
 
@@ -148,6 +148,10 @@ namespace TesApi.Web
                 try
                 {
                     isModified = await task;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch (Exception exc)
                 {
@@ -271,6 +275,10 @@ namespace TesApi.Web
                     // Consider retrying repository.UpdateItemAsync() if this exception was thrown from 'await rce.Task'
                     Logger.LogError(exc, "Updating TES Task '{TesTask}' threw {ExceptionType}: '{ExceptionMessage}'. Stack trace: {ExceptionStackTrace}", tesTask.Id, exc.GetType().FullName, exc.Message, exc.StackTrace);
                 }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception exc)
             {

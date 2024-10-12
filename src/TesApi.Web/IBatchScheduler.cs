@@ -113,11 +113,18 @@ namespace TesApi.Web
         IAsyncEnumerable<Events.RunnerEventsMessage> GetEventMessagesAsync(CancellationToken cancellationToken, string @event = default);
 
         /// <summary>
-        /// Performs background tasks.
+        /// Performs background tasks expected to complete in less than a second in aggregate.
         /// </summary>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        ValueTask PerformBackgroundTasksAsync(CancellationToken cancellationToken);
+        ValueTask PerformShortBackgroundTasksAsync(CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Performs background tasks expected to take longer than a second.
+        /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        IAsyncEnumerable<Task> PerformLongBackgroundTasksAsync(CancellationToken cancellationToken);
 
         /// <summary>
         /// Identifies an azure cloud task.

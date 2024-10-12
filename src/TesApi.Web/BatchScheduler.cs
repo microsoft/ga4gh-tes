@@ -547,12 +547,7 @@ namespace TesApi.Web
             return separatorIndex == -1 ? cloudTaskId : cloudTaskId[..separatorIndex];
         }
 
-        // Collections and records managing the processing of TesTasks in Queued status
-        private record struct PendingCloudTask(CloudTask CloudTask, TaskCompletionSource TaskCompletion);
-        private record struct PendingPoolRequest(string PoolKey, VirtualMachineInformationWithDataDisks VirtualMachineInfo, IList<string> Identities, string PoolDisplayName, TaskCompletionSource<string> TaskCompletion);
-        private record struct PendingPool(string PoolKey, VirtualMachineInformationWithDataDisks VirtualMachineInfo, IList<string> Identities, string PoolDisplayName, int InitialTarget, IEnumerable<TaskCompletionSource<string>> TaskCompletions);
-        private record struct ImmutableQueueWithTimer<T>(Timer Timer, ImmutableQueue<T> Queue);
-
+        // Collections managing the processing of TesTasks in Queued status
         private readonly ConcurrentDictionary<string, ImmutableQueueWithTimer<PendingCloudTask>> _queuedTesTaskPendingTasksByJob = new();
         private readonly ConcurrentDictionary<string, ImmutableQueueWithTimer<PendingPoolRequest>> _queuedTesTaskPendingPoolsByKey = new();
         private readonly ConcurrentQueue<(string JobId, IList<PendingCloudTask> Tasks)> _queuedTesTaskPendingJobBatches = new();
@@ -591,16 +586,22 @@ namespace TesApi.Web
                 logger.LogDebug(@"Checking quota for {TesTask}.", tesTask.Id);
 
                 var virtualMachineInfo = await GetVmSizeAsync(tesTask, cancellationToken);
-                (poolKey, var displayName) = GetPoolKey(tesTask, virtualMachineInfo, identities);
+                virtualMachineInfo.Identities = identities;
+                poolKey = GetPoolKey(tesTask, ref virtualMachineInfo);
+
                 await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo.VM, needPoolOrJobQuotaCheck: !IsPoolAvailable(poolKey), cancellationToken: cancellationToken);
 
                 // double await because the method call returns a System.Task. When that Task returns, the TesTask has been queued to a job and a pool exists to run that job's tasks
-                await await AttachQueuedTesTaskToBatchPoolAsync(poolKey, tesTask, virtualMachineInfo, identities, displayName, cancellationToken);
+                await await AttachQueuedTesTaskToBatchPoolAsync(poolKey, tesTask, virtualMachineInfo, cancellationToken);
 
                 var tesTaskLog = tesTask.GetOrAddTesTaskLog();
                 tesTaskLog.StartTime = DateTimeOffset.UtcNow;
                 tesTask.State = TesState.INITIALIZING;
                 return true;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (AggregateException aggregateException)
             {
@@ -644,7 +645,7 @@ namespace TesApi.Web
             }
         }
 
-        private async ValueTask<Task> AttachQueuedTesTaskToBatchPoolAsync(string poolKey, TesTask tesTask, VirtualMachineInformationWithDataDisks virtualMachineInfo, IList<string> identities, string poolDisplayName, CancellationToken cancellationToken)
+        private async ValueTask<Task> AttachQueuedTesTaskToBatchPoolAsync(string poolKey, TesTask tesTask, VirtualMachineInformationWithDataDisks virtualMachineInfo, CancellationToken cancellationToken)
         {
             TaskCompletionSource taskCompletion = new(); // This provides the System.Task this method returns
 
@@ -657,9 +658,9 @@ namespace TesApi.Web
                     TaskCompletionSource<string> poolCompletion = new(); // This provides the poolId of the pool provided for the task
                     AddTValueToCollectorQueue(
                         key: poolKey,
-                        value: new PendingPoolRequest(poolKey, virtualMachineInfo, identities, poolDisplayName, poolCompletion),
+                        value: new PendingPoolRequest(poolKey, virtualMachineInfo, poolCompletion),
                         dictionary: _queuedTesTaskPendingPoolsByKey,
-                        enqueue: (key, tasks) => _queuedTesTaskPendingPoolQuotas.Enqueue(new(key, tasks.First().VirtualMachineInfo, tasks.First().Identities, tasks.First().PoolDisplayName, tasks.Count, tasks.Select(t => t.TaskCompletion))),
+                        enqueue: (key, tasks) => _queuedTesTaskPendingPoolQuotas.Enqueue(new(key, tasks.First().VirtualMachineInfo, tasks.Count, tasks.Select(t => t.TaskCompletion))),
                         groupGatherWindow: QueuedTesTaskPoolGroupGatherWindow,
                         maxCount: int.MaxValue);
 
@@ -675,7 +676,7 @@ namespace TesApi.Web
                 tesTaskLog.VirtualMachineInfo = virtualMachineInfo.VM;
                 var cloudTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
                 tesTask.PoolId = pool.PoolId;
-                var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(cloudTaskId, tesTask, identities.Last(), virtualMachineInfo.VM.VmFamily, cancellationToken);
+                var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(cloudTaskId, tesTask, virtualMachineInfo.Identities.Last(), virtualMachineInfo.VM.VmFamily, cancellationToken);
 
                 logger.LogInformation(@"Creating batch task for TES task {TesTaskId}. Using VM size {VmSize}.", tesTask.Id, virtualMachineInfo.VM.VmSize);
 
@@ -687,9 +688,13 @@ namespace TesApi.Web
                     groupGatherWindow: QueuedTesTaskTaskGroupGatherWindow,
                     maxCount: 100);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                _ = taskCompletion.TrySetCanceled(cancellationToken);
+            }
             catch (Exception exception)
             {
-                taskCompletion.SetException(exception);
+                _ = taskCompletion.TrySetException(exception);
             }
 
             return taskCompletion.Task;
@@ -757,18 +762,16 @@ namespace TesApi.Web
                 tasks.Add(task);
             }
 
-            enqueue(key, tasks);
-
-            // Remove enqueued entries from directory without leaving empty entries. This is a loop because we are using ConcurrentDirectory
-            for (;
-                !(queue.IsEmpty switch
+            for (enqueue(key, tasks); // Add tasks to the outside "queue" (this happens only once)
+                // Remove enqueued entries from directory without leaving empty entries. This is a loop because we are using ConcurrentDirectory
+                !(queue.IsEmpty switch // The for loop ends when TryRemove or TryUpdate return true.
                 {
-                    true => dictionary.TryRemove(new(key, refValue)),
-                    false => dictionary.TryUpdate(key, new(timer, queue), refValue),
+                    true => dictionary.TryRemove(new(key, refValue)), // Attempt queue removal from dictionary
+                    false => dictionary.TryUpdate(key, new(timer, queue), refValue), // Attempt dictionary update with items remaining in the queue
                 });
-                queue = ImmutableQueue.CreateRange(refValue.Queue.WhereNot(tasks.Contains)))
+                queue = ImmutableQueue.CreateRange(refValue.Queue.WhereNot(tasks.Contains))) // get the list of items that were not "enqueued"
             {
-                refValue = dictionary[key];
+                refValue = dictionary[key]; // get the current dictionary value for the key
             }
 
             if (queue.IsEmpty)
@@ -784,7 +787,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async ValueTask PerformBackgroundTasksAsync(CancellationToken cancellationToken)
+        public async ValueTask PerformShortBackgroundTasksAsync(CancellationToken cancellationToken)
         {
             // Add a batch of tasks to a job
             if (_queuedTesTaskPendingJobBatches.TryDequeue(out var jobBatch))
@@ -796,69 +799,168 @@ namespace TesApi.Web
                     taskCompletions: tasks.Select(task => task.TaskCompletion),
                     cancellationToken: cancellationToken);
             }
+        }
+
+        private static async Task PerformTaskAsync(Func<CancellationToken, ValueTask> method, IEnumerable<TaskCompletionSource> taskCompletions, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await method(cancellationToken);
+                taskCompletions?.ForEach(completion => completion.SetResult());
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                taskCompletions?.ForEach(completion => _ = completion.TrySetCanceled(cancellationToken));
+                throw;
+            }
+            catch (Exception exception)
+            {
+                taskCompletions = (taskCompletions ?? []).ToList();
+
+                if (taskCompletions.Any())
+                {
+                    taskCompletions.ForEach(completion => _ = completion.TrySetException(new AggregateException(Enumerable.Empty<Exception>().Append(exception))));
+                }
+                else
+                {
+                    throw;
+                }
+            }
+        }
+
+        private static async Task PerformTaskOfTAsync<T>(Func<CancellationToken, ValueTask<T>> method, IEnumerable<TaskCompletionSource<T>> taskCompletions, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var result = await method(cancellationToken);
+                taskCompletions?.ForEach(completion => completion.SetResult(result));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                taskCompletions?.ForEach(completion => _ = completion.TrySetCanceled(cancellationToken));
+                throw;
+            }
+            catch (Exception exception)
+            {
+                taskCompletions = (taskCompletions ?? []).ToList();
+
+                if (taskCompletions.Any())
+                {
+                    taskCompletions.ForEach(completion => _ = completion.TrySetException(new AggregateException(Enumerable.Empty<Exception>().Append(exception))));
+                }
+                else
+                {
+                    throw;
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public IAsyncEnumerable<Task> PerformLongBackgroundTasksAsync(CancellationToken cancellationToken)
+        {
+            List<Task> tasks = [];
 
             // Apply Pool and Job Quota limits
             {
-                Dictionary<string, PendingPool> pools = [];
+                Dictionary<string, List<PendingPool>> poolsByKey = [];
 
                 while (_queuedTesTaskPendingPoolQuotas.TryDequeue(out var pendingPool))
                 {
-                    pools.Add(pendingPool.PoolKey, pendingPool);
+                    if (!poolsByKey.TryAdd(pendingPool.PoolKey, [pendingPool]))
+                    {
+                        poolsByKey[pendingPool.PoolKey].Add(pendingPool);
+                    }
                 }
 
-                if (pools.Count != 0)
+                var existingPools = poolsByKey.Keys.Where(IsPoolAvailable).ToList();
+
+                foreach (var key in existingPools)
                 {
-                    // Determine how many new pools/jobs we need now
-                    var requiredNewPools = pools.Keys.WhereNot(IsPoolAvailable).ToList();
-
-                    // Revisit pool/job quotas (the task quota analysis already dealt with the possibility of needing just one more pool or job).
-                    if (requiredNewPools.Skip(1).Any())
+                    if (poolsByKey.Remove(key, out var pools))
                     {
-                        // This will remove pool keys we cannot accommodate due to quota, along with all of their associated tasks, from being queued into Batch.
-                        logger.LogDebug(@"Checking pools and jobs quota to accommodate {NeededPools} additional pools.", requiredNewPools.Count);
-
-                        var (exceededQuantity, exception) = await quotaVerifier.CheckBatchAccountPoolAndJobQuotasAsync(requiredNewPools.Count, cancellationToken);
-
-                        foreach (var task in ((IEnumerable<string>)requiredNewPools)
-                            .Reverse()
-                            .SelectWhere<string, PendingPool>(TryRemovePool)
-                            .Take(exceededQuantity)
-                            .SelectMany(t => t.TaskCompletions))
-                        {
-                            task.SetException(exception);
-                        }
-
-                        bool TryRemovePool(string key, out PendingPool result)
-                        {
-                            logger.LogDebug(@"Due to quotas, unable to accommodate {PoolKey} batch pools.", key);
-                            result = pools[key];
-                            pools.Remove(key);
-                            return true;
-                        }
+                        pools.ForEach(_queuedTesTaskPendingPools.Enqueue);
                     }
+                }
 
-                    logger.LogDebug(@"Obtaining {NewPools} batch pools.", pools.Count);
+                // Determine how many new pools/jobs we need now (the task quota analysis already dealt with the possibility of needing just one more pool or job)
+                switch (poolsByKey.Count)
+                {
+                    case 0:
+                        break;
 
-                    foreach (var poolToCreate in pools)
-                    {
-                        _queuedTesTaskPendingPools.Enqueue(poolToCreate.Value);
-                    }
+                    case 1:
+                        poolsByKey.First().Value.ForEach(_queuedTesTaskPendingPools.Enqueue);
+                        break;
+
+                    default:
+                        // Revisit pool/job quotas.
+                        tasks.Add(PerformTaskAsync(
+                                method: async token =>
+                                {
+                                    // This will remove pool keys we cannot accommodate due to quota, along with all of their associated tasks, from being queued into Batch.
+                                    logger.LogDebug(@"Checking pools and jobs quota to accommodate {NeededPools} additional pools.", poolsByKey.Count);
+
+                                    var (exceededQuantity, exception) = await quotaVerifier.CheckBatchAccountPoolAndJobQuotasAsync(poolsByKey.Count, token);
+
+                                    foreach (var task in poolsByKey.Keys
+                                        .Reverse()
+                                        .SelectWhere<string, IEnumerable<PendingPool>>(TryRemovePool)
+                                        .Take(exceededQuantity)
+                                        .SelectMany(pools => pools)
+                                        .SelectMany(pool => pool.TaskCompletions))
+                                    {
+                                        _ = task.TrySetException(exception);
+                                    }
+
+                                    bool TryRemovePool(string key, out IEnumerable<PendingPool> result)
+                                    {
+                                        logger.LogDebug(@"Due to quotas, unable to accommodate adding batch pool for key: {PoolKey}.", key);
+                                        result = poolsByKey[key];
+                                        poolsByKey.Remove(key);
+                                        return true;
+                                    }
+
+                                    logger.LogDebug(@"Obtaining {NewPools} batch pools.", poolsByKey.Count);
+
+                                    foreach (var poolToCreate in poolsByKey.Values.SelectMany(pools => pools))
+                                    {
+                                        _queuedTesTaskPendingPools.Enqueue(poolToCreate);
+                                    }
+                                },
+                                taskCompletions: default,
+                                cancellationToken: cancellationToken)
+                            .ContinueWith(task =>
+                            {
+                                var tasks = poolsByKey.Values.SelectMany(pools => pools.Select(pool => pool.TaskCompletions)).SelectMany(source => source);
+
+                                if (task.IsFaulted)
+                                {
+                                    var exception = task.Exception;
+                                    tasks.ForEach(task => _ = task.TrySetException(exception));
+                                }
+                                else // task is cancelled
+                                {
+                                    tasks.ForEach(task => _ = task.TrySetCanceled());
+                                }
+                            },
+                            TaskContinuationOptions.NotOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously));
+                        break;
                 }
             }
 
-            // Create a batch pool
-            if (_queuedTesTaskPendingPools.TryDequeue(out var pool))
+            // Create batch pools
+            while (_queuedTesTaskPendingPools.TryDequeue(out var pool))
             {
                 logger.LogDebug(@"Creating pool for {PoolKey}.", pool.PoolKey);
                 var useGen2 = pool.VirtualMachineInfo.VM.HyperVGenerations?.Contains("V2", StringComparer.OrdinalIgnoreCase);
-                await PerformTaskOfTAsync(
+                tasks.Add(PerformTaskOfTAsync(
                     method: async token => (await GetOrAddPoolAsync(
                             key: pool.PoolKey,
                             isPreemptable: pool.VirtualMachineInfo.VM.LowPriority,
                             modelPoolFactory: async (id, ct) => await GetPoolSpecification(
                                 name: id,
-                                displayName: pool.PoolDisplayName,
-                                poolIdentity: GetBatchPoolIdentity(pool.Identities.WhereNot(string.IsNullOrWhiteSpace).ToList()),
+                                displayName: pool.VirtualMachineInfo.PoolDisplayName,
+                                poolIdentity: GetBatchPoolIdentity(pool.VirtualMachineInfo.Identities.WhereNot(string.IsNullOrWhiteSpace).ToList()),
                                 vmInfo: pool.VirtualMachineInfo,
                                 initialTarget: pool.InitialTarget,
                                 nodeInfo: (useGen2 ?? false) ? gen2BatchNodeInfo : gen1BatchNodeInfo,
@@ -866,34 +968,10 @@ namespace TesApi.Web
                             cancellationToken: token))
                         .PoolId,
                     taskCompletions: pool.TaskCompletions,
-                    cancellationToken: cancellationToken);
+                    cancellationToken: cancellationToken));
             }
 
-            async static ValueTask PerformTaskAsync(Func<CancellationToken, ValueTask> method, IEnumerable<TaskCompletionSource> taskCompletions, CancellationToken cancellationToken)
-            {
-                try
-                {
-                    await method(cancellationToken);
-                    taskCompletions.ForEach(completion => completion.SetResult());
-                }
-                catch (Exception exception)
-                {
-                    taskCompletions.ForEach(completion => completion.SetException(new AggregateException(Enumerable.Empty<Exception>().Append(exception))));
-                }
-            }
-
-            async static ValueTask PerformTaskOfTAsync<T>(Func<CancellationToken, ValueTask<T>> method, IEnumerable<TaskCompletionSource<T>> taskCompletions, CancellationToken cancellationToken)
-            {
-                try
-                {
-                    var result = await method(cancellationToken);
-                    taskCompletions.ForEach(completion => completion.SetResult(result));
-                }
-                catch (Exception exception)
-                {
-                    taskCompletions.ForEach(completion => completion.SetException(new AggregateException(Enumerable.Empty<Exception>().Append(exception))));
-                }
-            }
+            return tasks.Where(task => !task.IsCanceled).WhenEach(cancellationToken).Where(task => !task.IsCanceled);
         }
 
         Task<bool> QueuedTesTaskHandleExceptionAsync(Exception exception, string poolKey, TesTask tesTask)
@@ -1738,8 +1816,21 @@ namespace TesApi.Web
             public string AlternateSystemLogItem { get; set; }
         }
 
+        // Records managing the processing of TesTasks in Queued status
+        private record struct PendingCloudTask(CloudTask CloudTask, TaskCompletionSource TaskCompletion);
+        private record struct PendingPoolRequest(string PoolKey, VirtualMachineInformationWithDataDisks VirtualMachineInfo, TaskCompletionSource<string> TaskCompletion);
+        private record struct PendingPool(string PoolKey, VirtualMachineInformationWithDataDisks VirtualMachineInfo, int InitialTarget, IEnumerable<TaskCompletionSource<string>> TaskCompletions);
+        private record struct ImmutableQueueWithTimer<T>(Timer Timer, ImmutableQueue<T> Queue);
+
         internal record class VirtualMachineInformationWithDataDisks(VirtualMachineInformation VM, IList<Tes.Models.VmDataDisks> DataDisks)
         {
+            /// <summary>
+            /// Azure User Assigned Managed Identities
+            /// </summary>
+            public IList<string> Identities { get; set; }
+
+            public string PoolDisplayName { get; set; }
+
             /// <summary>
             /// Converts <see cref="Tes.Models.VmDataDisks"/> to <see cref="BatchModels.BatchVmDataDisk"/>.
             /// </summary>

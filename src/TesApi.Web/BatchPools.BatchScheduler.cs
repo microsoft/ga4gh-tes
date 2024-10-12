@@ -26,10 +26,10 @@ namespace TesApi.Web
 
         internal delegate ValueTask<BatchAccountPoolData> ModelPoolFactory(string poolId, CancellationToken cancellationToken);
 
-        private (string PoolKey, string DisplayName) GetPoolKey(Tes.Models.TesTask tesTask, VirtualMachineInformationWithDataDisks virtualMachineInformation, List<string> identities)
+        private string GetPoolKey(Tes.Models.TesTask tesTask, ref VirtualMachineInformationWithDataDisks virtualMachineInformation)
         {
-            var identityResourceIds = identities is not null && identities.Count > 0
-                ? string.Join(";", identities)
+            var identityResourceIds = virtualMachineInformation.Identities is not null && virtualMachineInformation.Identities.Count > 0
+                ? string.Join(";", virtualMachineInformation.Identities)
                 : "<none>";
 
             var executorImage = tesTask.Executors.First().Image;
@@ -56,7 +56,7 @@ namespace TesApi.Web
             if (displayName.Length > 1024)
             {
                 // Remove "paths" of identityResourceId
-                displayName = displayName[..^identityResourceIds.Length] + string.Join(";", identities.Select(x => x[(x.LastIndexOf('/') + 1)..]));
+                displayName = displayName[..^identityResourceIds.Length] + string.Join(";", virtualMachineInformation.Identities.Select(x => x[(x.LastIndexOf('/') + 1)..]));
 
                 if (displayName.Length > 1024)
                 {
@@ -65,7 +65,8 @@ namespace TesApi.Web
                 }
             }
 
-            return (name, displayName);
+            virtualMachineInformation.PoolDisplayName = displayName;
+            return name;
 
             static string LimitVmSize(string vmSize, int limit)
             {
@@ -249,6 +250,8 @@ namespace TesApi.Web
 
         internal sealed class BatchPools : KeyedCollection<string, PoolSet>
         {
+            private readonly object _lock = new(); // TODO: replace object with Lock in .NET 9/10
+
             public BatchPools()
                 : base(StringComparer.OrdinalIgnoreCase)
             { }
@@ -267,9 +270,12 @@ namespace TesApi.Web
 
             public bool Add(IBatchPool pool)
             {
-                return TryGetValue(GetKeyForItem(pool), out var poolSet)
-                    ? poolSet.Add(pool)
-                    : AddSet();
+                lock (_lock)
+                {
+                    return TryGetValue(GetKeyForItem(pool), out var poolSet)
+                        ? poolSet.Add(pool)
+                        : AddSet();
+                }
 
                 bool AddSet()
                 {
@@ -280,23 +286,26 @@ namespace TesApi.Web
 
             public bool Remove(IBatchPool pool)
             {
-                if (TryGetValue(GetKeyForItem(pool), out var poolSet))
+                lock (_lock)
                 {
-                    if (poolSet.Remove(pool))
+                    if (TryGetValue(GetKeyForItem(pool), out var poolSet))
                     {
-                        if (0 == poolSet.Count)
+                        if (poolSet.Remove(pool))
                         {
-                            if (!Remove(poolSet))
+                            if (0 == poolSet.Count)
                             {
-                                throw new InvalidOperationException();
+                                if (!Remove(poolSet))
+                                {
+                                    throw new InvalidOperationException();
+                                }
                             }
+
+                            return true;
                         }
-
-                        return true;
                     }
-                }
 
-                return false;
+                    return false;
+                }
             }
 
             internal IEnumerable<string> GetPoolKeys()
