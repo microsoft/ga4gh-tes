@@ -762,8 +762,8 @@ namespace TesApi.Web
                 tasks.Add(task);
             }
 
+            // Remove enqueued entries from directory without leaving empty entries. This is a loop because we are using ConcurrentDirectory
             for (enqueue(key, tasks); // Add tasks to the outside "queue" (this happens only once)
-                // Remove enqueued entries from directory without leaving empty entries. This is a loop because we are using ConcurrentDirectory
                 !(queue.IsEmpty switch // The for loop ends when TryRemove or TryUpdate return true.
                 {
                     true => dictionary.TryRemove(new(key, refValue)), // Attempt queue removal from dictionary
