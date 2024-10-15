@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -88,6 +89,11 @@ namespace TesApi.Web
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         ValueTask<DateTime> GetAllocationStateTransitionTimeAsync(CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// TesTasks associated with pool.
+        /// </summary>
+        ConcurrentDictionary<string, string> AssociatedTesTasks { get; }
 
         /// <summary>
         /// A <see cref="CloudTask"/> with a compute node id.

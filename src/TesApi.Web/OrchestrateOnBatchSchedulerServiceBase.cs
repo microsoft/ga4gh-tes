@@ -307,7 +307,13 @@ namespace TesApi.Web
         /// <param name="unitsLabel">Tag to indicate the underlying unit quantity of items processed in log messages.</param>
         /// <param name="needPoolFlush">True to process <see cref="IBatchScheduler.NeedPoolFlush"/> even if there are no tasks processed.</param>
         /// <returns>A <see cref="ValueTask"/> that represents this method's operations.</returns>
-        protected async ValueTask OrchestrateTesTasksOnBatchAsync(string pollName, Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>> tesTaskGetter, Func<TesTask[], CancellationToken, IAsyncEnumerable<RelatedTask<TesTask, bool>>> tesTaskProcessor, CancellationToken cancellationToken, string unitsLabel = "tasks", bool needPoolFlush = false)
+        protected async ValueTask OrchestrateTesTasksOnBatchAsync(
+            string pollName,
+            Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>> tesTaskGetter,
+            Func<TesTask[], CancellationToken, IAsyncEnumerable<RelatedTask<TesTask, bool>>> tesTaskProcessor,
+            CancellationToken cancellationToken,
+            string unitsLabel = "tasks",
+            bool needPoolFlush = false)
         {
             var tesTasks = await (await tesTaskGetter(cancellationToken)).ToArrayAsync(cancellationToken);
             var noTasks = tesTasks.All(task => task is null);

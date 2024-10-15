@@ -102,7 +102,6 @@ namespace Tes.Repository
         {
             var dataSource = NpgsqlDataSourceFunc(ConnectionStringUtility.GetPostgresConnectionString(options)); // The datasource itself must be essentially a singleton.
             CreateDbContext = Initialize(() => new TesDbContext(dataSource, NpgsqlDbContextOptionsBuilder));
-            WarmCacheAsync(CancellationToken.None).GetAwaiter().GetResult();
         }
 
         /// <summary>
@@ -120,42 +119,6 @@ namespace Tes.Repository
             using var dbContext = createDbContext();
             dbContext.Database.MigrateAsync(CancellationToken.None).GetAwaiter().GetResult();
             return createDbContext;
-        }
-
-        private async Task WarmCacheAsync(CancellationToken cancellationToken)
-        {
-            if (Cache is null)
-            {
-                Logger?.LogWarning("Cache is null for TesTaskPostgreSqlRepository; no caching will be used.");
-                return;
-            }
-
-            var sw = Stopwatch.StartNew();
-            Logger?.LogInformation("Warming cache...");
-
-            // Don't allow the state of the system to change until the cache and system are consistent;
-            // this is a fast PostgreSQL query even for 1 million items
-            await Policy
-                .Handle<Exception>()
-                .WaitAndRetryAsync(3,
-                    retryAttempt =>
-                    {
-                        Logger?.LogWarning("Warming cache retry attempt #{RetryAttempt}", retryAttempt);
-                        return TimeSpan.FromSeconds(10);
-                    },
-                    (ex, ts) =>
-                    {
-                        Logger?.LogCritical(ex, "Couldn't warm cache, is the database online?");
-                    })
-                .ExecuteAsync(async ct =>
-                {
-                    var activeTasksCount = (await InternalGetItemsAsync(
-                            ct,
-                            orderBy: q => q.OrderBy(t => t.Json.CreationTime),
-                            efPredicates: Enumerable.Empty<Expression<Func<TesTask, bool>>>().Append(task => !TesTask.TerminalStates.Contains(task.State))))
-                        .Count();
-                    Logger?.LogInformation("Cache warmed successfully in {TotalSeconds:n3} seconds. Added {TasksAddedCount:n0} items to the cache.", sw.Elapsed.TotalSeconds, activeTasksCount);
-                }, cancellationToken);
         }
 
 

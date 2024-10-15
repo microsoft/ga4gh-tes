@@ -6,6 +6,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Tes.Models;
@@ -18,7 +19,7 @@ namespace TesApi.Web
     /// <summary>
     /// An interface for scheduling <see cref="TesTask"/>s.
     /// </summary>
-    internal interface ITaskScheduler
+    public interface ITaskScheduler
     {
 
         /// <summary>
@@ -26,8 +27,7 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="tesTask">A <see cref="TesTask"/> to schedule on the batch system.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>True to persist the <see cref="TesTask"/>, otherwise False.</returns>
-        Task<bool> ProcessQueuedTesTaskAsync(TesTask tesTask, CancellationToken cancellationToken);
+        Task ProcessQueuedTesTaskAsync(TesTask tesTask, CancellationToken cancellationToken);
 
         /// <summary>
         /// Updates <see cref="TesTask"/>s with task-related state
@@ -50,13 +50,24 @@ namespace TesApi.Web
     /// <param name="batchScheduler">The batch scheduler implementation.</param>
     /// <param name="taskSchedulerLogger">The logger instance.</param>
     internal class TaskScheduler(RunnerEventsProcessor nodeEventProcessor, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<TaskScheduler> taskSchedulerLogger)
-        : OrchestrateOnBatchSchedulerServiceBase(hostApplicationLifetime, repository, batchScheduler, taskSchedulerLogger), ITaskScheduler
+        : OrchestrateOnBatchSchedulerServiceBase(hostApplicationLifetime, repository, batchScheduler, taskSchedulerLogger)
+        , ITaskScheduler
     {
         private static readonly TimeSpan blobRunInterval = TimeSpan.FromSeconds(15);
         internal static readonly TimeSpan BatchRunInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs appears to use a 30 second polling interval
         private static readonly TimeSpan shortBackgroundRunInterval = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan longBackgroundRunInterval = TimeSpan.FromSeconds(1);
         private readonly RunnerEventsProcessor nodeEventProcessor = nodeEventProcessor;
+
+        /// <summary>
+        /// Checks to see if the hosted service is running.
+        /// </summary>
+        /// <value>False if the service hasn't started up yet, True if it has started, throws TaskCanceledException if service is/has shutdown.</value>
+        private bool IsRunning => stoppingToken is not null && (stoppingToken.Value.IsCancellationRequested ? throw new TaskCanceledException() : true);
+
+        private CancellationToken? stoppingToken = null;
+        private readonly ConcurrentQueue<TesTask> queuedTesTasks = [];
+        private readonly ConcurrentQueue<(TesTask[] TesTasks, AzureBatchTaskState[] TaskStates, ChannelWriter<RelatedTask<TesTask, bool>> Channel)> tesTaskBatchStates = [];
 
         /// <inheritdoc />
         protected override async ValueTask ExecuteSetupAsync(CancellationToken cancellationToken)
@@ -65,48 +76,87 @@ namespace TesApi.Web
             {
                 // Delay "starting" TaskScheduler until this completes to finish initializing BatchScheduler.
                 await BatchScheduler.UploadTaskRunnerIfNeededAsync(cancellationToken);
+                // Ensure BatchScheduler has loaded existing pools before "starting".
+                await BatchScheduler.LoadExistingPoolsAsync(cancellationToken);
             }
             catch (Exception exc)
             {
                 Logger.LogError(exc, @"Checking/storing the node task runner binary failed with {Message}", exc.Message);
                 throw;
             }
+
+            foreach (var tesTask in
+                (await Repository.GetItemsAsync(
+                    predicate: t => t.IsActiveState(false), // TODO: preemptedIsTerminal
+                    cancellationToken: cancellationToken))
+                .OrderBy(t => t.CreationTime))
+            {
+                try
+                {
+                    if (TesState.QUEUED.Equals(tesTask.State) && string.IsNullOrWhiteSpace(tesTask.PoolId))
+                    {
+                        queuedTesTasks.Enqueue(tesTask);
+                    }
+                    else
+                    {
+                        var pool = BatchScheduler.GetPools().SingleOrDefault(pool => tesTask.PoolId.Equals(pool.PoolId, StringComparison.OrdinalIgnoreCase));
+
+                        if (pool is null)
+                        {
+                            queuedTesTasks.Enqueue(tesTask); // TODO: is there a better way to treat tasks that are not "queued" that are also not associated with any known pool?
+                        }
+                        else
+                        {
+                            _ = pool.AssociatedTesTasks.AddOrUpdate(tesTask.Id, key => null, (key, value) => value);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    await ProcessOrchestratedTesTaskAsync("Initialization", new(Task.FromException<bool>(ex), tesTask), cancellationToken);
+                }
+            }
         }
 
         /// <inheritdoc />
         protected override async ValueTask ExecuteCoreAsync(CancellationToken cancellationToken)
         {
-            await Task.WhenAll(
-                ExecuteShortBackgroundTasksAsync(cancellationToken),
-                ExecuteLongBackgroundTasksAsync(cancellationToken),
-                ExecuteCancelledTesTasksOnBatchAsync(cancellationToken),
-                ExecuteQueuedTesTasksOnBatchAsync(cancellationToken),
-                ExecuteUpdateTesTaskFromEventBlobAsync(cancellationToken));
+            stoppingToken = cancellationToken;
+            List<Task> queuedTasks = [];
+
+            while (queuedTesTasks.TryDequeue(out var tesTask))
+            {
+                queuedTasks.Add(((ITaskScheduler)this).ProcessQueuedTesTaskAsync(tesTask, cancellationToken));
+            }
+
+            while (tesTaskBatchStates.TryDequeue(out var result))
+            {
+                queuedTasks.Add(ProcessQueuedTesTaskStatesRequestAsync(result.TesTasks, result.TaskStates, result.Channel, cancellationToken));
+            }
+
+            queuedTasks.Add(ExecuteShortBackgroundTasksAsync(cancellationToken));
+            queuedTasks.Add(ExecuteLongBackgroundTasksAsync(cancellationToken));
+            queuedTasks.Add(ExecuteCancelledTesTasksOnBatchAsync(cancellationToken));
+            queuedTasks.Add(ExecuteUpdateTesTaskFromEventBlobAsync(cancellationToken));
+
+            await Task.WhenAll(queuedTasks);
         }
 
-        /// <summary>
-        /// Retrieves all queued TES tasks from the database, performs an action in the batch system, and updates the resultant state
-        /// </summary>
-        /// <returns></returns>
-        private Task ExecuteQueuedTesTasksOnBatchAsync(CancellationToken cancellationToken)
+        private async Task ProcessQueuedTesTaskStatesRequestAsync(TesTask[] tesTasks, AzureBatchTaskState[] taskStates, ChannelWriter<RelatedTask<TesTask, bool>> channel, CancellationToken cancellationToken)
         {
-            Func<CancellationToken, ValueTask<IEnumerable<TesTask>>> query = new(
-                async token => (await Repository.GetItemsAsync(
-                    predicate: t => t.State == TesState.QUEUED,
-                    cancellationToken: token))
-                .OrderBy(t => t.CreationTime));
-
-            return ExecuteActionOnIntervalAsync(BatchRunInterval,
-                async cancellation =>
+            try
+            {
+                await foreach (var relatedTask in ((ITaskScheduler)this).ProcessTesTaskBatchStatesAsync(tesTasks, taskStates, cancellationToken))
                 {
-                    await Parallel.ForEachAsync(
-                        (await query(cancellation))
-                            .Select(task => new RelatedTask<TesTask, bool>(BatchScheduler.ProcessQueuedTesTaskAsync(task, cancellation), task))
-                            .WhenEach(cancellation, task => task.Task),
-                        cancellation,
-                        (task, token) => ProcessOrchestratedTesTaskAsync("Queued", task, token));
-                },
-                cancellationToken);
+                    await channel.WriteAsync(relatedTask, cancellationToken);
+                }
+
+                channel.Complete();
+            }
+            catch (Exception ex)
+            {
+                channel.Complete(ex);
+            }
         }
 
         /// <summary>
@@ -294,9 +344,16 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        Task<bool> ITaskScheduler.ProcessQueuedTesTaskAsync(TesTask tesTask, CancellationToken cancellationToken)
+        async Task ITaskScheduler.ProcessQueuedTesTaskAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
-            return BatchScheduler.ProcessQueuedTesTaskAsync(tesTask, cancellationToken);
+            if (IsRunning)
+            {
+                await ProcessOrchestratedTesTaskAsync("Queued", new(BatchScheduler.ProcessQueuedTesTaskAsync(tesTask, cancellationToken), tesTask), cancellationToken);
+            }
+            else
+            {
+                queuedTesTasks.Enqueue(tesTask);
+            }
         }
 
         /// <inheritdoc/>
@@ -305,14 +362,23 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(tesTasks);
             ArgumentNullException.ThrowIfNull(taskStates);
 
-            return taskStates.Zip(tesTasks, (TaskState, TesTask) => (TaskState, TesTask))
-                .Select(entry => new RelatedTask<TesTask, bool>(entry.TesTask?.IsActiveState() ?? false // Removes already terminal (and null) TesTasks from being further processed.
-                    ? WrapHandleTesTaskTransitionAsync(entry.TesTask, entry.TaskState, cancellationToken)
-                    : Task.FromResult(false), entry.TesTask))
-                .WhenEach(cancellationToken, tesTaskTask => tesTaskTask.Task);
+            if (IsRunning)
+            {
+                return taskStates.Zip(tesTasks, (TaskState, TesTask) => (TaskState, TesTask))
+                    .Select(entry => new RelatedTask<TesTask, bool>(entry.TesTask?.IsActiveState() ?? false // Removes already terminal (and null) TesTasks from being further processed.
+                        ? WrapHandleTesTaskTransitionAsync(entry.TesTask, entry.TaskState, cancellationToken)
+                        : Task.FromResult(false), entry.TesTask))
+                    .WhenEach(cancellationToken, tesTaskTask => tesTaskTask.Task);
 
-            async Task<bool> WrapHandleTesTaskTransitionAsync(TesTask tesTask, AzureBatchTaskState azureBatchTaskState, CancellationToken cancellationToken)
-                => await BatchScheduler.ProcessTesTaskBatchStateAsync(tesTask, azureBatchTaskState, cancellationToken);
+                async Task<bool> WrapHandleTesTaskTransitionAsync(TesTask tesTask, AzureBatchTaskState azureBatchTaskState, CancellationToken cancellationToken)
+                    => await BatchScheduler.ProcessTesTaskBatchStateAsync(tesTask, azureBatchTaskState, cancellationToken);
+            }
+            else
+            {
+                var channel = Channel.CreateBounded<RelatedTask<TesTask, bool>>(new BoundedChannelOptions(taskStates.Length) { SingleReader = true, SingleWriter = true });
+                tesTaskBatchStates.Enqueue((tesTasks.ToArray(), taskStates, channel.Writer));
+                return channel.Reader.ReadAllAsync(cancellationToken);
+            }
         }
     }
 }

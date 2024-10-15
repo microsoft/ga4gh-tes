@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -490,6 +491,9 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public Queue<ResizeError> ResizeErrors { get; } = new();
+
+        /// <inheritdoc/>
+        public ConcurrentDictionary<string, string> AssociatedTesTasks { get; } = [];
 
         /// <inheritdoc/>
         public async ValueTask<bool> CanBeDeletedAsync(CancellationToken cancellationToken = default)

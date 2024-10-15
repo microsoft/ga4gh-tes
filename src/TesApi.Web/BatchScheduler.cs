@@ -450,8 +450,16 @@ namespace TesApi.Web
         private IAsyncEnumerable<CloudPool> GetCloudPools(CancellationToken cancellationToken)
             => azureProxy.GetActivePoolsAsync(batchPrefix);
 
+        private Lazy<Task> _loadExistingPools = null;
+
         /// <inheritdoc/>
-        public async Task LoadExistingPoolsAsync(CancellationToken cancellationToken)
+        public Task LoadExistingPoolsAsync(CancellationToken cancellationToken)
+        {
+            _ = Interlocked.CompareExchange(ref _loadExistingPools, new(() => LoadExistingPoolsImplAsync(cancellationToken)), null);
+            return _loadExistingPools.Value;
+        }
+
+        private async Task LoadExistingPoolsImplAsync(CancellationToken cancellationToken)
         {
             await foreach (var cloudPool in GetCloudPools(cancellationToken).WithCancellation(cancellationToken))
             {
@@ -656,7 +664,7 @@ namespace TesApi.Web
 
                 if (pool is null)
                 {
-                    TaskCompletionSource<string> poolCompletion = new(); // This provides the poolId of the pool provided for the task
+                    TaskCompletionSource<IBatchPool> poolCompletion = new(); // This provides the poolId of the pool provided for the task
                     AddTValueToCollectorQueue(
                         key: poolKey,
                         value: new PendingPoolRequest(poolKey, virtualMachineInfo, poolCompletion),
@@ -665,12 +673,7 @@ namespace TesApi.Web
                         groupGatherWindow: QueuedTesTaskPoolGroupGatherWindow,
                         maxCount: int.MaxValue);
 
-                    pool = batchPools.GetPoolOrDefault(await poolCompletion.Task); // This ensures that the pool is managed by this BatchScheduler
-
-                    if (pool is null)
-                    {
-                        throw new System.Diagnostics.UnreachableException("Pool should have been obtained by this point.");
-                    }
+                    pool = await poolCompletion.Task;
                 }
 
                 var tesTaskLog = tesTask.AddTesTaskLog();
@@ -678,6 +681,7 @@ namespace TesApi.Web
                 var cloudTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
                 tesTask.PoolId = pool.PoolId;
                 var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(cloudTaskId, tesTask, virtualMachineInfo.Identities.Last(), virtualMachineInfo.VM.VmFamily, cancellationToken);
+                _ = pool.AssociatedTesTasks.AddOrUpdate(tesTask.Id, key => cloudTask.Id, (key, value) => cloudTask.Id);
 
                 logger.LogInformation(@"Creating batch task for TES task {TesTaskId}. Using VM size {VmSize}.", tesTask.Id, virtualMachineInfo.VM.VmSize);
 
@@ -820,7 +824,7 @@ namespace TesApi.Web
 
                 if (taskCompletions.Any())
                 {
-                    taskCompletions.ForEach(completion => _ = completion.TrySetException(new AggregateException(Enumerable.Empty<Exception>().Append(exception))));
+                    taskCompletions.ForEach(completion => _ = completion.TrySetException(exception));
                 }
                 else
                 {
@@ -847,7 +851,7 @@ namespace TesApi.Web
 
                 if (taskCompletions.Any())
                 {
-                    taskCompletions.ForEach(completion => _ = completion.TrySetException(new AggregateException(Enumerable.Empty<Exception>().Append(exception))));
+                    taskCompletions.ForEach(completion => _ = completion.TrySetException(exception));
                 }
                 else
                 {
@@ -949,7 +953,7 @@ namespace TesApi.Web
                 }
             }
 
-            // Create batch pools
+            // Obtain batch pools
             while (_queuedTesTaskPendingPools.TryDequeue(out var pool))
             {
                 logger.LogDebug(@"Creating pool for {PoolKey}.", pool.PoolKey);
@@ -966,8 +970,7 @@ namespace TesApi.Web
                                 initialTarget: pool.InitialTarget,
                                 nodeInfo: (useGen2 ?? false) ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                                 cancellationToken: ct),
-                            cancellationToken: token))
-                        .PoolId,
+                            cancellationToken: token)),
                     taskCompletions: pool.TaskCompletions,
                     cancellationToken: cancellationToken));
             }
@@ -1807,8 +1810,8 @@ namespace TesApi.Web
 
         // Records managing the processing of TesTasks in Queued status
         private record struct PendingCloudTask(CloudTask CloudTask, TaskCompletionSource TaskCompletion);
-        private record struct PendingPoolRequest(string PoolKey, VirtualMachineInformationWithDataDisks VirtualMachineInfo, TaskCompletionSource<string> TaskCompletion);
-        private record struct PendingPool(string PoolKey, VirtualMachineInformationWithDataDisks VirtualMachineInfo, int InitialTarget, IEnumerable<TaskCompletionSource<string>> TaskCompletions);
+        private record struct PendingPoolRequest(string PoolKey, VirtualMachineInformationWithDataDisks VirtualMachineInfo, TaskCompletionSource<IBatchPool> TaskCompletion);
+        private record struct PendingPool(string PoolKey, VirtualMachineInformationWithDataDisks VirtualMachineInfo, int InitialTarget, IEnumerable<TaskCompletionSource<IBatchPool>> TaskCompletions);
         private record struct ImmutableQueueWithTimer<T>(Timer Timer, ImmutableQueue<T> Queue);
 
         internal record class VirtualMachineInformationWithDataDisks(VirtualMachineInformation VM, IList<Tes.Models.VmDataDisks> DataDisks)

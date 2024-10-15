@@ -102,9 +102,9 @@ namespace Tes.Models
         /// True if task should be kept in the cache.
         /// </summary>
         /// <returns></returns>
-        public bool IsActiveState(bool includePreempted = false) // TODO: consider using TesResources.BackendParameters to signal whether PREEMPTEDEnum is considered a terminal state
+        public bool IsActiveState(bool preemptedIsTerminal = false) // TODO: consider using TesResources.BackendParameters to signal whether PREEMPTEDEnum is considered a terminal state
         {
-            return !(includePreempted ? TerminalStatesWithPreempted : TerminalStates).Contains(this.State);
+            return !(preemptedIsTerminal ? TerminalStatesWithPreempted : TerminalStates).Contains(this.State);
         }
 
         /// <summary>

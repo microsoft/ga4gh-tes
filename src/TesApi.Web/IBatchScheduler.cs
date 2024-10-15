@@ -84,7 +84,7 @@ namespace TesApi.Web
         bool RemovePoolFromList(IBatchPool pool);
 
         /// <summary>
-        /// Flushes empty pools to accomodate pool quota limits.
+        /// Flushes empty pools to accommodate pool quota limits.
         /// </summary>
         /// <param name="assignedPools">Pool Ids of pools connected to active TES Tasks. Used to prevent accidentally removing active pools.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
