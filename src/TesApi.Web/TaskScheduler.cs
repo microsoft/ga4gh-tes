@@ -77,13 +77,15 @@ namespace TesApi.Web
                 // Delay "starting" TaskScheduler until this completes to finish initializing BatchScheduler.
                 await BatchScheduler.UploadTaskRunnerIfNeededAsync(cancellationToken);
                 // Ensure BatchScheduler has loaded existing pools before "starting".
-                await BatchScheduler.LoadExistingPoolsAsync(cancellationToken);
+                //await BatchScheduler.LoadExistingPoolsAsync(cancellationToken);
             }
             catch (Exception exc)
             {
                 Logger.LogError(exc, @"Checking/storing the node task runner binary failed with {Message}", exc.Message);
                 throw;
             }
+
+            Logger.LogDebug(@"Querying active tasks");
 
             foreach (var tesTask in
                 (await Repository.GetItemsAsync(
@@ -95,6 +97,7 @@ namespace TesApi.Web
                 {
                     if (TesState.QUEUED.Equals(tesTask.State) && string.IsNullOrWhiteSpace(tesTask.PoolId))
                     {
+                        Logger.LogDebug(@"Adding queued task from repository");
                         queuedTesTasks.Enqueue(tesTask);
                     }
                     else
@@ -103,10 +106,12 @@ namespace TesApi.Web
 
                         if (pool is null)
                         {
+                            Logger.LogDebug(@"Adding task w/o pool id from repository");
                             queuedTesTasks.Enqueue(tesTask); // TODO: is there a better way to treat tasks that are not "queued" that are also not associated with any known pool?
                         }
                         else
                         {
+                            Logger.LogDebug(@"Adding task to pool w/o cloudtask");
                             _ = pool.AssociatedTesTasks.AddOrUpdate(tesTask.Id, key => null, (key, value) => value);
                         }
                     }
@@ -138,6 +143,8 @@ namespace TesApi.Web
             queuedTasks.Add(ExecuteLongBackgroundTasksAsync(cancellationToken));
             queuedTasks.Add(ExecuteCancelledTesTasksOnBatchAsync(cancellationToken));
             queuedTasks.Add(ExecuteUpdateTesTaskFromEventBlobAsync(cancellationToken));
+
+            Logger.LogDebug(@"Task load: {TaskCount}", queuedTasks.Count);
 
             await Task.WhenAll(queuedTasks);
         }
