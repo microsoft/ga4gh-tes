@@ -119,6 +119,8 @@ namespace TesApi.Web
                     .AddSingleton(CreateActionIdentityProvider)
                     .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                     .AddSingleton<IBatchScheduler, BatchScheduler>()
+                    .AddSingleton<TaskScheduler>()
+                    .AddSingleton<ITaskScheduler>(s => s.GetRequiredService<TaskScheduler>())
                     .AddSingleton<PriceApiClient>()
                     .AddSingleton<IBatchSkuInformationProvider>(s => ActivatorUtilities.CreateInstance<PriceApiBatchSkuInformationProvider>(s, TerraOptionsAreConfigured(s)))
                     .AddSingleton(CreateBatchAccountResourceInformation)
@@ -299,7 +301,7 @@ namespace TesApi.Web
                     // Order is important for hosted services
                     .AddHostedService(sp => (AllowedVmSizesService)sp.GetRequiredService(typeof(IAllowedVmSizesService)))
                     .AddHostedService<PoolScheduler>()
-                    .AddHostedService<TaskScheduler>();
+                    .AddHostedService(s => s.GetRequiredService<TaskScheduler>());
             }
             catch (Exception exc)
             {

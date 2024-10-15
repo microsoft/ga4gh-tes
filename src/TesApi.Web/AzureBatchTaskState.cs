@@ -17,12 +17,12 @@ namespace TesApi.Web
     /// <param name="Failure">Failure information.</param>
     /// <param name="CloudTaskCreationTime"><see cref="Microsoft.Azure.Batch.CloudTask.CreationTime"/>.</param>
     /// <param name="BatchTaskStartTime"><see cref="Microsoft.Azure.Batch.TaskExecutionInformation.StartTime"/>.</param>
-    /// <param name="ExecutorStartTime"></param>
-    /// <param name="ExecutorEndTime"></param>
-    /// <param name="ExecutorExitCode"></param>
+    /// <param name="ExecutorStartTime"><see cref="TesExecutorLog.StartTime"/>.</param>
+    /// <param name="ExecutorEndTime"><see cref="TesExecutorLog.EndTime"/>.</param>
+    /// <param name="ExecutorExitCode"><see cref="TesExecutorLog.ExitCode"/>.</param>
     /// <param name="BatchTaskEndTime"><see cref="Microsoft.Azure.Batch.TaskExecutionInformation.EndTime"/>.</param>
     /// <param name="BatchTaskExitCode"><see cref="Microsoft.Azure.Batch.TaskExecutionInformation.ExitCode"/>.</param>
-    /// <param name="Warning">Warning. First item in enumeration is the Warning code, rest of items are additional system log entries.</param>
+    /// <param name="Warning">Warning. First item in enumeration is the Warning code, rest of items are related system log entries.</param>
     public record class AzureBatchTaskState(
         TaskState State,
         IEnumerable<OutputFileLog> OutputFileLogs = default,
