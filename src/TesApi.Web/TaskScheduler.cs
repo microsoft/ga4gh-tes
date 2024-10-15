@@ -16,6 +16,30 @@ using TesApi.Web.Extensions;
 namespace TesApi.Web
 {
     /// <summary>
+    /// An interface for scheduling <see cref="TesTask"/>s.
+    /// </summary>
+    internal interface ITaskScheduler
+    {
+
+        /// <summary>
+        /// Schedules a <see cref="TesTask"/>
+        /// </summary>
+        /// <param name="tesTask">A <see cref="TesTask"/> to schedule on the batch system.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns>True to persist the <see cref="TesTask"/>, otherwise False.</returns>
+        Task<bool> ProcessQueuedTesTaskAsync(TesTask tesTask, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Updates <see cref="TesTask"/>s with task-related state
+        /// </summary>
+        /// <param name="tesTasks"><see cref="TesTask"/>s to schedule on the batch system.</param>
+        /// <param name="taskStates"><see cref="AzureBatchTaskState"/>s corresponding to each <seealso cref="TesTask"/>.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns>True for each corresponding <see cref="TesTask"/> that needs to be persisted.</returns>
+        IAsyncEnumerable<RelatedTask<TesTask, bool>> ProcessTesTaskBatchStatesAsync(IEnumerable<TesTask> tesTasks, AzureBatchTaskState[] taskStates, CancellationToken cancellationToken);
+    }
+
+    /// <summary>
     /// A background service that schedules <see cref="TesTask"/>s in the batch system, orchestrates their lifecycle, and updates their state.
     /// This should only be used as a system-wide singleton service.  This class does not support scale-out on multiple machines,
     /// nor does it implement a leasing mechanism.  In the future, consider using the Lease Blob operation.
@@ -26,7 +50,7 @@ namespace TesApi.Web
     /// <param name="batchScheduler">The batch scheduler implementation.</param>
     /// <param name="taskSchedulerLogger">The logger instance.</param>
     internal class TaskScheduler(RunnerEventsProcessor nodeEventProcessor, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<TaskScheduler> taskSchedulerLogger)
-        : OrchestrateOnBatchSchedulerServiceBase(hostApplicationLifetime, repository, batchScheduler, taskSchedulerLogger)
+        : OrchestrateOnBatchSchedulerServiceBase(hostApplicationLifetime, repository, batchScheduler, taskSchedulerLogger), ITaskScheduler
     {
         private static readonly TimeSpan blobRunInterval = TimeSpan.FromSeconds(15);
         internal static readonly TimeSpan BatchRunInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs appears to use a 30 second polling interval
@@ -125,7 +149,7 @@ namespace TesApi.Web
                 token => OrchestrateTesTasksOnBatchAsync(
                     "Cancelled",
                     query,
-                    (tasks, ct) => BatchScheduler.ProcessTesTaskBatchStatesAsync(
+                    (tasks, ct) => ((ITaskScheduler)this).ProcessTesTaskBatchStatesAsync(
                         tasks,
                         Enumerable.Repeat<AzureBatchTaskState>(new(AzureBatchTaskState.TaskState.CancellationRequested), tasks.Length).ToArray(),
                         ct),
@@ -248,7 +272,7 @@ namespace TesApi.Web
             await OrchestrateTesTasksOnBatchAsync(
                 "NodeEvent",
                 _ => ValueTask.FromResult(eventStates.Select(@event => @event.Task).ToAsyncEnumerable()),
-                (tesTasks, token) => BatchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, eventStates.Select(@event => @event.State).ToArray(), token),
+                (tesTasks, token) => ((ITaskScheduler)this).ProcessTesTaskBatchStatesAsync(tesTasks, eventStates.Select(@event => @event.State).ToArray(), token),
                 cancellationToken,
                 "events");
 
@@ -267,6 +291,28 @@ namespace TesApi.Web
                     Logger.LogError(ex, @"Failed to tag event as processed.");
                 }
             });
+        }
+
+        /// <inheritdoc/>
+        Task<bool> ITaskScheduler.ProcessQueuedTesTaskAsync(TesTask tesTask, CancellationToken cancellationToken)
+        {
+            return BatchScheduler.ProcessQueuedTesTaskAsync(tesTask, cancellationToken);
+        }
+
+        /// <inheritdoc/>
+        IAsyncEnumerable<RelatedTask<TesTask, bool>> ITaskScheduler.ProcessTesTaskBatchStatesAsync(IEnumerable<TesTask> tesTasks, AzureBatchTaskState[] taskStates, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(tesTasks);
+            ArgumentNullException.ThrowIfNull(taskStates);
+
+            return taskStates.Zip(tesTasks, (TaskState, TesTask) => (TaskState, TesTask))
+                .Select(entry => new RelatedTask<TesTask, bool>(entry.TesTask?.IsActiveState() ?? false // Removes already terminal (and null) TesTasks from being further processed.
+                    ? WrapHandleTesTaskTransitionAsync(entry.TesTask, entry.TaskState, cancellationToken)
+                    : Task.FromResult(false), entry.TesTask))
+                .WhenEach(cancellationToken, tesTaskTask => tesTaskTask.Task);
+
+            async Task<bool> WrapHandleTesTaskTransitionAsync(TesTask tesTask, AzureBatchTaskState azureBatchTaskState, CancellationToken cancellationToken)
+                => await BatchScheduler.ProcessTesTaskBatchStateAsync(tesTask, azureBatchTaskState, cancellationToken);
         }
     }
 }

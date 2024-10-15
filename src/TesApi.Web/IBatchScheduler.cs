@@ -3,6 +3,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
@@ -37,13 +39,13 @@ namespace TesApi.Web
         Task UploadTaskRunnerIfNeededAsync(CancellationToken cancellationToken);
 
         /// <summary>
-        /// Updates <see cref="TesTask"/>s with task-related state on a batch system
+        /// Updates the <see cref="TesTask"/> with task-related state on a batch system
         /// </summary>
-        /// <param name="tesTasks"><see cref="TesTask"/>s to schedule on the batch system.</param>
-        /// <param name="taskStates"><see cref="AzureBatchTaskState"/>s corresponding to each <seealso cref="TesTask"/>.</param>
+        /// <param name="tesTask">The TES task</param>
+        /// <param name="taskState">Current Azure Batch task state info</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>True for each corresponding <see cref="TesTask"/> that needs to be persisted.</returns>
-        IAsyncEnumerable<RelatedTask<TesTask, bool>> ProcessTesTaskBatchStatesAsync(IEnumerable<TesTask> tesTasks, AzureBatchTaskState[] taskStates, CancellationToken cancellationToken);
+        /// <returns>True if the TES task was changed.</returns>
+        ValueTask<bool> ProcessTesTaskBatchStateAsync(TesTask tesTask, AzureBatchTaskState taskState, CancellationToken cancellationToken);
 
         /// <summary>
         /// Schedules a <see cref="TesTask"/>s on a batch system
@@ -137,17 +139,18 @@ namespace TesApi.Web
         /// <summary>
         /// TES metadata carried in the batch pool.
         /// </summary>
-        /// <param name="HostName"></param>
-        /// <param name="IsDedicated"></param>
-        /// <param name="RunnerMD5"></param>
-        record struct PoolMetadata(string HostName, bool IsDedicated, string RunnerMD5)
+        /// <param name="HostName"><see cref="Options.BatchSchedulingOptions.Prefix"/>.</param>
+        /// <param name="IsDedicated">Compute nodes in pool are not preemptible.</param>
+        /// <param name="RunnerMD5">NodeTaskRunner hash.</param>
+        /// <param name="EventsVersion"><see cref="Events.RunnerEventsMessage.EventsVersion"/>.</param>
+        record struct PoolMetadata(string HostName, bool IsDedicated, string RunnerMD5, IDictionary<string, object> EventsVersion)
         {
-            private static readonly System.Text.Json.JsonSerializerOptions Options = new(System.Text.Json.JsonSerializerDefaults.Web);
+            private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
 
             /// <inheritdoc/>
             public override readonly string ToString()
             {
-                return System.Text.Json.JsonSerializer.Serialize(this, Options);
+                return JsonSerializer.Serialize(this, Options);
             }
 
             /// <summary>
@@ -157,12 +160,35 @@ namespace TesApi.Web
             /// <returns><see cref="PoolMetadata"/>.</returns>
             public static PoolMetadata Create(string value)
             {
-                return System.Text.Json.JsonSerializer.Deserialize<PoolMetadata>(value, Options);
+                return JsonSerializer.Deserialize<PoolMetadata>(value, Options);
             }
 
-            internal readonly bool Validate()
+            internal readonly bool Validate(bool validateEventsVersion)
             {
-                return !(string.IsNullOrWhiteSpace(HostName) || string.IsNullOrWhiteSpace(RunnerMD5));
+                if (string.IsNullOrWhiteSpace(HostName) || string.IsNullOrWhiteSpace(RunnerMD5))
+                {
+                    return false;
+                }
+
+                return validateEventsVersion
+                    ? !NormalizeForValidation(Events.RunnerEventsMessage.EventsVersion).OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                        .SequenceEqual(NormalizeForValidation(EventsVersion).OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase))
+                    : Events.RunnerEventsMessage.EventsVersion.Keys.Order(StringComparer.OrdinalIgnoreCase)
+                        .SequenceEqual(EventsVersion.Keys.Order(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+            }
+
+            static Dictionary<string, object> NormalizeForValidation(IDictionary<string, object> value)
+            {
+                return value
+                    .OrderBy(pair => pair.Key)
+                    .Select(static pair => new KeyValuePair<string, object>(pair.Key.ToUpperInvariant(), pair.Value switch
+                    {
+                        JsonElement element when JsonValueKind.Number.Equals(element.ValueKind) => new Version(element.ToString()),
+                        JsonElement element when JsonValueKind.String.Equals(element.ValueKind) => new Version(element.ToString()),
+                        string stringValue => new Version(stringValue),
+                        _ => pair.Value
+                    }))
+                    .ToDictionary();
             }
         }
     }

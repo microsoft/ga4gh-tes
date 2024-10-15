@@ -103,7 +103,7 @@ namespace TesApi.Web.Events
             try
             {
                 var messageText = await azureProxy.DownloadBlobAsync(message.BlobUri, cancellationToken);
-                content = System.Text.Json.JsonSerializer.Deserialize<Tes.Runner.Events.EventMessage>(messageText)
+                content = System.Text.Json.JsonSerializer.Deserialize(messageText, Tes.Runner.Events.EventMessageContext.Default.EventMessage)
                     ?? throw new DownloadOrParseException("Deserialize() returned null.");
             }
             catch (Exception ex)
@@ -116,9 +116,9 @@ namespace TesApi.Web.Events
             // Validate content
             Validate(Guid.TryParse(content.Id, out _),
                 $"{nameof(content.Id)}('{content.Id}')  is malformed.");
-            Validate(Tes.Runner.Events.EventsPublisher.EventVersion.Equals(content.EventVersion, StringComparison.Ordinal),
+            Validate(Tes.Runner.Events.EventsPublisher.EventVersion.Equals(content.EventVersion),
                 $"{nameof(content.EventVersion)}('{content.EventVersion}')  is not recognized.");
-            Validate(Tes.Runner.Events.EventsPublisher.EventDataVersion.Equals(content.EventDataVersion, StringComparison.Ordinal),
+            Validate(Tes.Runner.Events.EventsPublisher.EventDataVersion.Equals(content.EventDataVersion),
                 $"{nameof(content.EventDataVersion)}('{content.EventDataVersion}')  is not recognized.");
             Validate(Tes.Runner.Events.EventsPublisher.TesTaskRunnerEntityType.Equals(content.EntityType, StringComparison.Ordinal),
                 $"{nameof(content.EntityType)}('{content.EntityType}')  is not recognized.");

@@ -479,18 +479,19 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public IAsyncEnumerable<RelatedTask<TesTask, bool>> ProcessTesTaskBatchStatesAsync(IEnumerable<TesTask> tesTasks, AzureBatchTaskState[] taskStates, CancellationToken cancellationToken)
+        public ValueTask<bool> ProcessTesTaskBatchStateAsync(TesTask tesTask, AzureBatchTaskState taskState, CancellationToken cancellationToken)
         {
-            ArgumentNullException.ThrowIfNull(tesTasks);
-            ArgumentNullException.ThrowIfNull(taskStates);
+            ArgumentNullException.ThrowIfNull(tesTask);
+            ArgumentNullException.ThrowIfNull(taskState);
 
-            return taskStates.Zip(tesTasks, (TaskState, TesTask) => (TaskState, TesTask))
-                .Where(entry => entry.TesTask?.IsActiveState() ?? false) // Removes already terminal (and null) TesTasks from being further processed.
-                .Select(entry => new RelatedTask<TesTask, bool>(WrapHandleTesTaskTransitionAsync(entry.TesTask, entry.TaskState, cancellationToken), entry.TesTask))
-                .WhenEach(cancellationToken, tesTaskTask => tesTaskTask.Task);
+            if (!tesTask.IsActiveState()) // Ignore this state
+            {
+                return ValueTask.FromResult(false);
+            }
 
-            async Task<bool> WrapHandleTesTaskTransitionAsync(TesTask tesTask, AzureBatchTaskState azureBatchTaskState, CancellationToken cancellationToken)
-                => await HandleTesTaskTransitionAsync(tesTask, azureBatchTaskState, cancellationToken);
+            return tesTaskStateTransitions
+                .FirstOrDefault(m => (m.Condition is null || m.Condition(tesTask)) && (m.CurrentBatchTaskState is null || m.CurrentBatchTaskState == taskState.State))
+                .ActionAsync(tesTask, taskState, cancellationToken);
         }
 
         /// <inheritdoc/>
@@ -1058,18 +1059,6 @@ namespace TesApi.Web
 
             return Task.FromResult(true);
         }
-
-        /// <summary>
-        /// Transitions the <see cref="TesTask"/> to the new state, based on the rules defined in the tesTaskStateTransitions list.
-        /// </summary>
-        /// <param name="tesTask">TES task</param>
-        /// <param name="azureBatchTaskState">Current Azure Batch task info</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>True if the TES task was changed.</returns>
-        private ValueTask<bool> HandleTesTaskTransitionAsync(TesTask tesTask, AzureBatchTaskState azureBatchTaskState, CancellationToken cancellationToken)
-            => tesTaskStateTransitions
-                .FirstOrDefault(m => (m.Condition is null || m.Condition(tesTask)) && (m.CurrentBatchTaskState is null || m.CurrentBatchTaskState == azureBatchTaskState.State))
-                .ActionAsync(tesTask, azureBatchTaskState, cancellationToken);
 
         private async Task<CloudTask> ConvertTesTaskToBatchTaskUsingRunnerAsync(string taskId, TesTask task, string acrPullIdentity, string vmFamily,
             CancellationToken cancellationToken)

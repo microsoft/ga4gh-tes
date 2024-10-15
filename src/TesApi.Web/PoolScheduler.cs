@@ -24,11 +24,14 @@ namespace TesApi.Web
     /// <param name="hostApplicationLifetime">Used for requesting termination of the current application during initialization.</param>
     /// <param name="repository">The main TES task database repository implementation.</param>
     /// <param name="batchScheduler">The batch scheduler implementation.</param>
+    /// <param name="taskScheduler">The batch scheduler implementation.</param>
     /// <param name="logger">The logger instance.</param>
     /// <exception cref="ArgumentNullException"></exception>
-    internal class PoolScheduler(Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<PoolScheduler> logger)
+    internal class PoolScheduler(Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ITaskScheduler taskScheduler, ILogger<PoolScheduler> logger)
         : OrchestrateOnBatchSchedulerServiceBase(hostApplicationLifetime, repository, batchScheduler, logger)
     {
+        private readonly ITaskScheduler TaskScheduler = taskScheduler;
+
         /// <summary>
         /// Interval between each call to <see cref="IBatchPool.ServicePoolAsync(CancellationToken)"/>.
         /// </summary>
@@ -55,7 +58,7 @@ namespace TesApi.Web
         /// <inheritdoc />
         protected override void ExecuteSetup(CancellationToken cancellationToken)
         {
-            BatchScheduler.LoadExistingPoolsAsync(cancellationToken).Wait(cancellationToken); // Delay starting TaskScheduler until this completes to finish initializing the shared parts of BatchScheduler.
+            BatchScheduler.LoadExistingPoolsAsync(cancellationToken).Wait(cancellationToken); // Delay starting PoolScheduler until this completes to finish initializing the shared parts of BatchScheduler.
         }
 
         /// <inheritdoc />
@@ -176,7 +179,7 @@ namespace TesApi.Web
                 await OrchestrateTesTasksOnBatchAsync(
                     $"NodeState ({poolId})",
                     _ => ValueTask.FromResult(list.Select(t => t.TesTask).ToAsyncEnumerable()),
-                    (tesTasks, token) => BatchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, list.Select(t => t.State).ToArray(), token),
+                    (tesTasks, token) => TaskScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, list.Select(t => t.State).ToArray(), token),
                     cancellationToken);
             }
             else

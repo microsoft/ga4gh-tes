@@ -16,6 +16,16 @@ namespace TesApi.Web.Events
     public record struct RunnerEventsMessage(Uri BlobUri, IDictionary<string, string> Tags, string Event, Tes.Runner.Events.EventMessage RunnerEventMessage = default)
     {
         /// <summary>
+        /// Task runner events version.
+        /// </summary>
+        internal static readonly IDictionary<string, object> EventsVersion = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+        {
+            { nameof(Tes.Runner.Events.EventsPublisher.EventVersion), Tes.Runner.Events.EventsPublisher.EventVersion},
+            { nameof(Tes.Runner.Events.EventsPublisher.TesTaskRunnerEntityType), Tes.Runner.Events.EventsPublisher.TesTaskRunnerEntityType },
+            { nameof(Tes.Runner.Events.EventsPublisher.EventDataVersion), Tes.Runner.Events.EventsPublisher.EventDataVersion }
+        };
+
+        /// <summary>
         /// Copy constructor replacing <see cref="RunnerEventMessage"/>.
         /// </summary>
         /// <param name="original"><see cref="RunnerEventsMessage"/>.</param>

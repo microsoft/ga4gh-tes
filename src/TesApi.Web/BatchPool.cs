@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
@@ -29,7 +30,7 @@ namespace TesApi.Web
         public const string CloudPoolSelectClause = "creationTime,id,identity,metadata";
 
         /// <summary>
-        /// Autoscale evalutation interval
+        /// Autoscale evaluation interval
         /// </summary>
         public static TimeSpan AutoScaleEvaluationInterval { get; } = TimeSpan.FromMinutes(5);
 
@@ -131,7 +132,7 @@ namespace TesApi.Web
             /// Reset state to <see cref="AutoScaleEnabled"/>.
             /// </summary>
             /// <remarks>
-            /// This state exists to eliminate premature redisabling of autoscale mode.
+            /// This state exists to prevent premature re-disabling of autoscale mode.
             /// </remarks>
             SettingAutoScale
         }
@@ -153,15 +154,15 @@ namespace TesApi.Web
              * If the the scaling mode does not correspond to the actual state of autoscale enablement, this method guides us towards the desired state.
              *
              * Barring outside intervention, at each and every time this method is called, the following should always hold true:
-             * |------------------|---------------------|-------------------------|-------------------------|
-             * | autoScaleEnabled |     ScalingMode     |       Last action       |       Next action       |
-             * |------------------|---------------------|-------------------------|-------------------------|
-             * |       true       |   AutoScaleEnabled  | Normal long-term state  |Change for select errrors|
-             * |       false      |  AutoScaleDisabled  |  Recently disabled AS   |  Perform needed actions |
-             * |       false      | RemovingFailedNodes | Manual resizing actions | Reenable autoscale mode |
-             * |       true       | WaitingForAutoScale | Ensure autoscale works  | Delay and re-assess     |
-             * |       true       |   SettingAutoScale  |  Assess pool response   | Restore normal long-term|
-             * |------------------|---------------------|-------------------------|-------------------------|
+             * |------------------|---------------------|-------------------------|--------------------------|
+             * | autoScaleEnabled |     ScalingMode     |       Last action       |        Next action       |
+             * |------------------|---------------------|-------------------------|--------------------------|
+             * |       true       |   AutoScaleEnabled  | Normal long-term state  | Change for select errors |
+             * |       false      |  AutoScaleDisabled  |  Recently disabled AS   |  Perform needed actions  |
+             * |       false      | RemovingFailedNodes | Manual resizing actions | Reenable autoscale mode  |
+             * |       true       | WaitingForAutoScale | Ensure autoscale works  |   Delay and re-assess    |
+             * |       true       |   SettingAutoScale  |  Assess pool response   | Restore normal long-term |
+             * |------------------|---------------------|-------------------------|--------------------------|
              *
              * The first time this method is called, ScalingMode will be Unknown. Initialize it to an appropriate value to initialize the state machine's state.
              * If autoScaleEnabled is null, don't change anything.
@@ -274,7 +275,7 @@ namespace TesApi.Web
           Notes on the formula:
               Reference: https://docs.microsoft.com/en-us/azure/batch/batch-automatic-scaling
 
-          In order to avoid confusion, some of the builtin variable names in batch's autoscale formulas are named in a way that may not initially appear intuitive:
+          In order to avoid confusion, some of the built-in variable names in batch's autoscale formulas are named in a way that may not initially appear intuitive:
               Running tasks are named RunningTasks, which is fine
               Queued tasks are named ActiveTasks, which matches the same value of the "state" property
               The sum of running & queued tasks (what I would have named TotalTasks) is named PendingTasks
@@ -286,7 +287,7 @@ namespace TesApi.Web
           Whenever autoscaling is turned on, whether or not the pool was just created, there are no sampled metrics available. Thus, we need to prevent the
           expected errors that would result from trying to extract the samples. Later on, if recent samples aren't available, we prefer that the formula fails
           (firstly, so we can potentially capture that, and secondly, so that we don't suddenly try to remove all nodes from the pool when there's still demand)
-          so we use a timed scheme to substitue an "initial value" (aka initialTarget).
+          so we use a timed scheme to substitute an "initial value" (aka initialTarget).
 
           We set NodeDeallocationOption to taskcompletion to prevent wasting time/money by stopping a running task, only to requeue it onto another node, or worse,
           fail it, just because batch's last sample was taken longer ago than a task's assignment was made to a node, because the formula evaluations intervals are not coordinated
@@ -787,7 +788,7 @@ namespace TesApi.Web
             try
             {
                 broken |= !pool.Metadata.Any(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)) ||
-                    !IBatchScheduler.PoolMetadata.Create(pool.Metadata.Single(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)).Value).Validate();
+                    !IBatchScheduler.PoolMetadata.Create(pool.Metadata.Single(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)).Value).Validate(validateEventsVersion: false);
             }
             catch (InvalidOperationException)
             {
@@ -801,7 +802,7 @@ namespace TesApi.Web
             {
                 broken = true;
             }
-            catch (System.Text.Json.JsonException)
+            catch (JsonException)
             {
                 broken = true;
             }
@@ -825,9 +826,22 @@ namespace TesApi.Web
         {
             ArgumentNullException.ThrowIfNull(pool);
 
+            var metadata = IBatchScheduler.PoolMetadata.Create(pool.Metadata.First(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)).Value);
+
             PoolId = pool.Id;
+
+            var eventVersionsMatch = Tes.Runner.Events.EventsPublisher.EventVersion.Equals(GetVersion(metadata.EventsVersion[nameof(Tes.Runner.Events.EventsPublisher.EventVersion)])) &&
+                Tes.Runner.Events.EventsPublisher.EventDataVersion.Equals(GetVersion(metadata.EventsVersion[nameof(Tes.Runner.Events.EventsPublisher.EventDataVersion)]));
+
             IsAvailable = !forceRemove && DetermineIsAvailable(pool.CreationTime) &&
-                runnerMD5.Equals(IBatchScheduler.PoolMetadata.Create(pool.Metadata.Single(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)).Value).RunnerMD5, StringComparison.OrdinalIgnoreCase);
+                runnerMD5.Equals(metadata.RunnerMD5, StringComparison.OrdinalIgnoreCase) &&
+                eventVersionsMatch;
+
+            if (!eventVersionsMatch)
+            {
+                //
+            }
+
             //IReadOnlyDictionary<string, string> Identity = pool.Identity.UserAssignedIdentities.ToDictionary(identity => identity.ResourceId, identity => identity.ClientId, StringComparer.OrdinalIgnoreCase).AsReadOnly();
 
             if (IsAvailable)
@@ -835,8 +849,18 @@ namespace TesApi.Web
                 Creation = pool.CreationTime.Value;
             }
 
-            IsDedicated = IBatchScheduler.PoolMetadata.Create(pool.Metadata.First(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)).Value).IsDedicated;
+            IsDedicated = metadata.IsDedicated;
             _ = _batchPools.AddPool(this);
+
+            static Version GetVersion(object value)
+                => value switch
+                {
+                    JsonElement jsonElement when JsonValueKind.String.Equals(jsonElement.ValueKind) => new(jsonElement.ToString()),
+                    JsonElement jsonElement when JsonValueKind.Number.Equals(jsonElement.ValueKind) => new(jsonElement.ToString()),
+                    Version versionValue => versionValue,
+                    string stringValue => new(stringValue),
+                    _ => (Version)Convert.ChangeType(value, typeof(Version)),
+                };
         }
 
         /// <inheritdoc/>

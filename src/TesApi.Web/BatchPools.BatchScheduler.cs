@@ -149,7 +149,7 @@ namespace TesApi.Web
                 RandomNumberGenerator.Fill(uniquifier);
                 var poolId = $"{key}-{uniquifier.ConvertToBase32().TrimEnd('=').ToLowerInvariant()}"; // embedded '-' is required by GetKeyFromPoolId()
                 var modelPool = await modelPoolFactory(poolId, cancellationToken);
-                modelPool.Metadata.Add(new(PoolMetadata, new IBatchScheduler.PoolMetadata(this.batchPrefix, !isPreemptable, this.runnerMD5).ToString()));
+                modelPool.Metadata.Add(new(PoolMetadata, new IBatchScheduler.PoolMetadata(this.batchPrefix, !isPreemptable, this.runnerMD5, Events.RunnerEventsMessage.EventsVersion).ToString()));
                 pool = batchPoolFactory();
                 await pool.CreatePoolAndJobAsync(modelPool, isPreemptable, runnerMD5, cancellationToken);
             }

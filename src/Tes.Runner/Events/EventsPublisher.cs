@@ -11,8 +11,8 @@ namespace Tes.Runner.Events;
 
 public class EventsPublisher : IAsyncDisposable
 {
-    public const string EventVersion = "1.0";
-    public const string EventDataVersion = "1.0";
+    public static readonly Version EventVersion = new(1, 0);
+    public static readonly Version EventDataVersion = new(1, 0);
     public const string TesTaskRunnerEntityType = "TesRunnerTask";
     public const string DownloadStartEvent = "downloadStart";
     public const string DownloadEndEvent = "downloadEnd";

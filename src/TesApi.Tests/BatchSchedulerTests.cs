@@ -1363,7 +1363,7 @@ namespace TesApi.Tests
             }
             else
             {
-                await foreach (var _ in batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, Enumerable.Repeat(azureProxyReturnValues.BatchTaskState, tesTasks.Length).ToArray(), CancellationToken.None)) { }
+                await Parallel.ForEachAsync(tesTasks, async (task, token) => _ = await batchScheduler.ProcessTesTaskBatchStateAsync(task, azureProxyReturnValues.BatchTaskState, token));
             }
 
             var createBatchPoolAsyncInvocation = serviceProvider.BatchPoolManager.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IBatchPoolManager.CreateBatchPoolAsync));
