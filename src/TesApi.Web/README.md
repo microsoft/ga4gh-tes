@@ -1,3 +1,30 @@
+## Ideas
+
+* Startup:
+  * Remove "cache" warmup from repository. Instead query every active task and sort into the following buckets:
+    * Queued w/o pool key into a "pool creation batch" (note that pool id includes pool key)
+    * Queued w/ pool key added to that pool key
+    * Initialized & Running with pool id added to that pool
+    * All others error out with a retriable error
+  * Load up all batch pools and all batch jobs
+    * Delete those with prefix without pairs
+    * Send tasks from all pool keys without associated pool/job pairs to pool creation.
+* New task: Send to pool creation batch queue right after adding to repository before returning Id
+* Pool creation (this retains the per-key holding queue):
+  * Get pool specification and pool key, add task (and spec if applicable) to pool key
+  * Create pool as needed
+  * If or when pool is created, create batch tasks for every task associated with the key's queue
+* Bad pool handling:
+  * Kill pool, create new pool by adding all tasks to queue. Attach old job to new pool.
+* Event processing: as is today, except as described below
+* Except for pool and task creation, remove arrays of tasks and as many timers as possible. Instead:
+  * Everything is either an async fifo queue or an unbounded channel in (with multiple readers)
+  * Everything is an unbounded channel out (possibly multiple writers and possibly multiple readers)
+  * If a task is added to the fifo queue but is already on the in-flight list, add it to a secondary bag that is checked right after sending in-flight items on to the channel
+
+* Needs
+  * Create and possibly run lots of task when processing lots of tasks.
+
 # ASP.NET Core Docker Production Sample
 
 This ASP.NET Core Docker sample demonstrates a best practice pattern for building Docker images for ASP.NET Core apps for production. The sample works with both Linux and Windows containers.
