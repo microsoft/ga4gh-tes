@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using CommonUtilities.Options;
 using Microsoft.Extensions.Options;
 using Polly;
-using Polly.Retry;
 using Tes.Repository;
 
 namespace TesApi.Web
@@ -21,23 +20,23 @@ namespace TesApi.Web
     public sealed class RepositoryRetryHandler<T> : IRepository<T> where T : RepositoryItem<T>
     {
         private readonly IRepository<T> _repository;
-        private readonly AsyncRetryPolicy _asyncRetryPolicy;
+        private readonly IAsyncPolicy _asyncRetryPolicy;
 
         /// <summary>
         /// Constructor for <see cref="RepositoryRetryHandler{T}"/>.
         /// </summary>
         /// <param name="repository">The <see cref="IRepository{T}"/> to wrap.</param>
         /// <param name="retryPolicyOptions">The <see cref="RetryPolicyOptions"/> to use. Note that we will quadruple the max retry count set in options.</param>
-        public RepositoryRetryHandler(IRepository<T> repository, IOptions<RetryPolicyOptions> retryPolicyOptions)
+        /// <param name="logger">An instance used to perform logging.</param>
+        public RepositoryRetryHandler(IRepository<T> repository, IOptions<RetryPolicyOptions> retryPolicyOptions, Microsoft.Extensions.Logging.ILogger<RepositoryRetryHandler<T>> logger)
         {
             ArgumentNullException.ThrowIfNull(repository);
             ArgumentNullException.ThrowIfNull(retryPolicyOptions);
 
-            _asyncRetryPolicy = Policy
-                .Handle<Exception>()
-                .WaitAndRetryAsync(retryPolicyOptions.Value.MaxRetryCount * 4,
-                    (attempt) => TimeSpan.FromSeconds(Math.Pow(retryPolicyOptions.Value.ExponentialBackOffExponent,
-                        attempt)));
+            _asyncRetryPolicy = new CommonUtilities.RetryPolicyBuilder(retryPolicyOptions)
+                .DefaultRetryPolicyBuilder()
+                .SetOnRetryBehavior(logger)
+                .AsyncBuildPolicy();
             _repository = repository;
         }
 
