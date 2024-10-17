@@ -121,6 +121,8 @@ namespace TesApi.Web
                     await ProcessOrchestratedTesTaskAsync("Initialization", new(Task.FromException<bool>(ex), tesTask), cancellationToken);
                 }
             }
+
+            Logger.LogDebug(@"Active tasks processed");
         }
 
         /// <inheritdoc />

@@ -5,7 +5,6 @@ namespace Tes.Repository
 {
     using System;
     using System.Collections.Generic;
-    using System.Diagnostics;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Reflection;
@@ -18,7 +17,6 @@ namespace Tes.Repository
     using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Options;
     using Npgsql;
-    using Polly;
     using Tes.Models;
     using Tes.Utilities;
 
@@ -140,6 +138,7 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, CancellationToken cancellationToken)
         {
+            Logger.LogWarning(@"TesTaskPostgreSqlRepository::GetItemsAsync called"); // TODO: remove this log
             return (await InternalGetItemsAsync(cancellationToken, efPredicates: [predicate])).Select(t => t.TesTask);
         }
 

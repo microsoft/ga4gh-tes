@@ -479,10 +479,14 @@ namespace TesApi.Web
         public async Task UploadTaskRunnerIfNeededAsync(CancellationToken cancellationToken)
         {
             var blobUri = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, storageAccessProvider.BlobPermissionsWithWrite, cancellationToken);
+            logger.LogDebug(@"NodeTaskRunner Uri: {NodeTaskRunnerUri}", new BlobUriBuilder(blobUri) { Sas = null }.ToUri().AbsoluteUri);
             var blobProperties = await azureProxy.GetBlobPropertiesAsync(blobUri, cancellationToken);
+            logger.LogDebug(@"NodeTaskRunner MD5: {NodeTaskRunnerMD5}", Convert.ToBase64String(blobProperties?.ContentHash ?? []));
             if (!runnerMD5.Equals(Convert.ToBase64String(blobProperties?.ContentHash ?? []), StringComparison.OrdinalIgnoreCase))
             {
+                logger.LogInformation(@"Uploading NodeTaskRunner");
                 await azureProxy.UploadBlobFromFileAsync(blobUri, $"scripts/{NodeTaskRunnerFilename}", cancellationToken);
+                logger.LogInformation(@"Uploaded NodeTaskRunner");
             }
         }
 
