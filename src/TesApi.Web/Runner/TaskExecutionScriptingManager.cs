@@ -66,7 +66,7 @@ namespace TesApi.Web.Runner
         {
             try
             {
-                await TryUploadServerTesTask(tesTask, cancellationToken);
+                await TryUploadServerTesTask(tesTask, "server-tes-task.json", cancellationToken);
 
                 var nodeTaskUrl = await CreateAndUploadNodeTaskAsync(tesTask, nodeTaskConversionOptions, cancellationToken);
 
@@ -85,13 +85,13 @@ namespace TesApi.Web.Runner
             }
         }
 
-        private async Task TryUploadServerTesTask(TesTask tesTask, CancellationToken cancellationToken)
+        private async Task TryUploadServerTesTask(TesTask tesTask, string blobName, CancellationToken cancellationToken)
         {
             try
             {
                 var severTesTaskContent = JsonConvert.SerializeObject(tesTask, IndentedSerializerSettings);
 
-                await UploadContentAsBlobToInternalTesLocationAsync(tesTask, severTesTaskContent, "server-tes-task.json",
+                await UploadContentAsBlobToInternalTesLocationAsync(tesTask, severTesTaskContent, blobName,
                     cancellationToken);
             }
             catch (Exception e)
@@ -136,7 +136,7 @@ namespace TesApi.Web.Runner
             string content, string fileName, CancellationToken cancellationToken)
         {
             var blobUrl =
-                await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, fileName, cancellationToken);
+                await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, fileName, storageAccessProvider.BlobPermissionsWithWrite, cancellationToken);
 
             await storageAccessProvider.UploadBlobAsync(blobUrl, content, cancellationToken);
             return blobUrl;

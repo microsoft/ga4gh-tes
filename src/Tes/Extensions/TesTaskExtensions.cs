@@ -115,9 +115,11 @@ namespace Tes.Extensions
         /// <returns>Last <see cref="TesTaskLog"/></returns>
         public static TesTaskLog GetOrAddTesTaskLog(this TesTask tesTask)
         {
-            if (tesTask.Logs is null || !tesTask.Logs.Any())
+            if ((tesTask.Logs?.Count ?? 0) == 0)
             {
-                tesTask.Logs = [new()];
+                TesTaskLog log = new();
+                tesTask.Logs = [log];
+                return log;
             }
 
             return tesTask.Logs.Last();
@@ -130,10 +132,11 @@ namespace Tes.Extensions
         /// <returns>Last <see cref="TesTaskLog"/></returns>
         public static TesTaskLog AddTesTaskLog(this TesTask tesTask)
         {
+            TesTaskLog log = new();
             tesTask.Logs ??= [];
-            tesTask.Logs.Add(new());
+            tesTask.Logs.Add(log);
 
-            return tesTask.Logs.Last();
+            return log;
         }
 
         /// <summary>
@@ -150,7 +153,7 @@ namespace Tes.Extensions
         /// <param name="tesTaskLog"><see cref="TesTaskLog"/></param>
         /// <returns>Initialized Metadata property</returns>
         public static Dictionary<string, string> GetOrAddMetadata(this TesTaskLog tesTaskLog)
-            => tesTaskLog.Metadata ??= new();
+            => tesTaskLog.Metadata ??= [];
 
         /// <summary>
         /// Returns the last <see cref="TesExecutorLog"/>. Adds it if none exist.
@@ -159,9 +162,11 @@ namespace Tes.Extensions
         /// <returns>Initialized <see cref="TesExecutorLog"/></returns>
         public static TesExecutorLog GetOrAddExecutorLog(this TesTaskLog tesTaskLog)
         {
-            if (tesTaskLog.Logs is null || !tesTaskLog.Logs.Any())
+            if ((tesTaskLog.Logs?.Count ?? 0) == 0)
             {
-                tesTaskLog.Logs = [new()];
+                TesExecutorLog log = new();
+                tesTaskLog.Logs = [log];
+                return log;
             }
 
             return tesTaskLog.Logs.Last();

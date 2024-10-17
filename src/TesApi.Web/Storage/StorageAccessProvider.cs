@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Storage.Sas;
 using Microsoft.Extensions.Logging;
 using Tes.Models;
 
@@ -45,7 +46,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// </summary>
     /// <param name="logger">Logger <see cref="ILogger"/></param>
     /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
-    public StorageAccessProvider(ILogger logger, IAzureProxy azureProxy)
+    protected StorageAccessProvider(ILogger logger, IAzureProxy azureProxy)
     {
         this.Logger = logger;
         this.AzureProxy = azureProxy;
@@ -54,7 +55,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <inheritdoc />
     public async Task<string> DownloadBlobAsync(string blobRelativePath, CancellationToken cancellationToken)
     {
-        var blobUrl = await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken);
+        var blobUrl = await MapLocalPathToSasUrlAsync(blobRelativePath, BlobSasPermissions.Read, cancellationToken, sasTokenDuration: default);
 
         if (blobUrl is null)
         {
@@ -94,31 +95,19 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
 
     /// <inheritdoc/>
     public async Task<IList<Uri>> GetBlobUrlsAsync(Uri blobVirtualDirectory, CancellationToken cancellationToken)
-    {
-        Azure.Storage.Blobs.BlobUriBuilder blobBuilder = new(blobVirtualDirectory) { Sas = null };
-        return (await AzureProxy.ListBlobsAsync(blobVirtualDirectory, cancellationToken)).Select(GetBlobUri).ToList();
-
-        Uri GetBlobUri(Azure.Storage.Blobs.Models.BlobItem blob)
-        {
-            // This implementation reuses the BlobUriBuilder in the parent method, so GetBlobUri cannot be called in parallel with the same instance of BlobUriBuilder.
-            // It is safe for concurrent instances of GetBlobUrlsAsync to run simultaneously, however.
-            // Refactor if the ListBlobsAsync enumeration is ever parallelized at the stage of calling this converter method.
-            blobBuilder.BlobName = blob.Name;
-            return blobBuilder.ToUri();
-        }
-    }
+        => await AzureProxy.ListBlobsAsync(blobVirtualDirectory, cancellationToken).Select(blob => blob.BlobUri).ToListAsync(cancellationToken);
 
     /// <inheritdoc />
     public abstract Task<bool> IsPublicHttpUrlAsync(string uriString, CancellationToken cancellationToken);
 
     /// <inheritdoc />
-    public abstract Task<Uri> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, TimeSpan? sasTokenDuration = default, bool getContainerSas = false);
+    public abstract Task<Uri> MapLocalPathToSasUrlAsync(string path, BlobSasPermissions sasPermissions, CancellationToken cancellationToken, TimeSpan? sasTokenDuration);
 
     /// <inheritdoc />
-    public abstract Task<Uri> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken);
+    public abstract Task<Uri> GetInternalTesBlobUrlAsync(string blobPath, BlobSasPermissions sasPermissions, CancellationToken cancellationToken);
 
     /// <inheritdoc />
-    public abstract Task<Uri> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken);
+    public abstract Task<Uri> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, BlobSasPermissions sasPermissions, CancellationToken cancellationToken);
 
     /// <inheritdoc />
     public abstract Uri GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath);
