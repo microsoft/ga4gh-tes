@@ -270,7 +270,7 @@ namespace Tes.Repository
                 using var dbContext = CreateDbContext();
 
                 // Search for Id within the JSON
-                item = await ExecuteNpgsqlActionAsync(async () => await asyncPolicy.ExecuteAsync(ct => dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id, ct), cancellationToken));
+                item = await ExecuteNpgsqlActionAsync(async () => await asyncPolicy.ExecuteWithRetryAsync(ct => dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id, ct), cancellationToken));
 
                 if (throwIfNotFound && item is null)
                 {

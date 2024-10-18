@@ -61,12 +61,11 @@ namespace TesApi.Web
             {
                 Logger.LogCritical(ex, "Service {ServiceName} was unable to initialize due to '{Message}'.", GetType().Name, ex.Message);
                 hostApplicationLifetime?.StopApplication();
+                return;
             }
 
             Logger.LogInformation(MarkLogMessage("started."));
-
             await ExecuteCoreAsync(stoppingToken);
-
             Logger.LogInformation(MarkLogMessage("gracefully stopped."));
         }
 

@@ -105,7 +105,6 @@ public static class RetryHandler
         /// <remarks>For mocking</remarks>
         public AsyncRetryHandlerPolicy() { }
 
-
         /// <summary>
         /// Executes a delegate with the configured async policy.
         /// </summary>
@@ -160,6 +159,20 @@ public static class RetryHandler
             ArgumentNullException.ThrowIfNull(action);
 
             return retryPolicy.ExecuteAsync((_, ct) => action(ct), PrepareContext(caller), cancellationToken);
+        }
+
+        /// <summary>
+        /// Executes the specified asynchronous action within the policy and returns the captured result.
+        /// </summary>
+        /// <param name="action">The action to perform.</param>
+        /// <param name="cancellationToken">A cancellation token which can be used to cancel the action.  When a retry policy in use, also cancels any further retries.</param>
+        /// <param name="caller">Name of method originating the retriable operation.</param>
+        /// <returns>The captured result.</returns>
+        public virtual Task<PolicyResult> ExecuteAndCaptureAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+
+            return retryPolicy.ExecuteAndCaptureAsync((_, token) => action(token), PrepareContext(caller), cancellationToken);
         }
     }
 
@@ -282,6 +295,6 @@ public static class RetryHandler
 
     public static Context PrepareContext(string? caller) => new()
     {
-        [CallerMemberNameKey] = caller
+        [CallerMemberNameKey] = caller ?? throw new ArgumentNullException(nameof(caller))
     };
 }

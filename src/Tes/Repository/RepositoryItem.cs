@@ -10,7 +10,7 @@ using Newtonsoft.Json;
 namespace Tes.Repository
 {
     /// <summary>
-    /// Base class for items stored in <see cref="IRepository{T}"/>. The type must contain a property named "id".
+    /// Base class for items stored in IRepository{T}. The type must contain a property named "id".
     /// </summary>
     /// <typeparam name="T">Type of the item</typeparam>
     [DataContract]

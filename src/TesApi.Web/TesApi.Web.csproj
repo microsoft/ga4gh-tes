@@ -79,11 +79,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\CommonUtilities\CommonUtilities.csproj" />
     <ProjectReference Include="..\Tes.ApiClients\Tes.ApiClients.csproj" />
     <ProjectReference Include="..\Tes.Runner\Tes.Runner.csproj" />
     <ProjectReference Include="..\Tes.SDK\Tes.SDK.csproj" />
-    <ProjectReference Include="..\Tes\Tes.csproj" />
+    <ProjectReference Include="..\Tes.Repository\Tes.Repository.csproj" />
   </ItemGroup>
 
 </Project>

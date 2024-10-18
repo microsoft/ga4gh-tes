@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using TesApi.Web.Management.Models.Quotas;
-using static TesApi.Web.Management.IBatchQuotaProvider;
 
 namespace TesApi.Web.Management;
 

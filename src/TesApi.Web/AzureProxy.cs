@@ -20,7 +20,6 @@ using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Rest;
-using Polly;
 using TesApi.Web.Extensions;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Configuration;
@@ -84,13 +83,13 @@ namespace TesApi.Web
             }
 
             batchRetryPolicyWhenJobNotFound = retryHandler.PolicyBuilder
-                .OpinionatedRetryPolicy(Policy.Handle<BatchException>(ex => BatchErrorCodeStrings.JobNotFound.Equals(ex.RequestInformation.BatchError.Code, StringComparison.OrdinalIgnoreCase)))
+                .OpinionatedRetryPolicy(Polly.Policy.Handle<BatchException>(ex => BatchErrorCodeStrings.JobNotFound.Equals(ex.RequestInformation.BatchError.Code, StringComparison.OrdinalIgnoreCase)))
                 .WithExceptionBasedWaitWithRetryPolicyOptionsBackup((attempt, exception) => (exception as BatchException)?.RequestInformation?.RetryAfter)
                 .SetOnRetryBehavior(onRetry: LogRetryErrorOnRetryHandler())
                 .AsyncBuild();
 
             batchRetryPolicyWhenNodeNotReady = retryHandler.PolicyBuilder
-                .OpinionatedRetryPolicy(Policy.Handle<BatchException>(ex => "NodeNotReady".Equals(ex.RequestInformation.BatchError.Code, StringComparison.OrdinalIgnoreCase)))
+                .OpinionatedRetryPolicy(Polly.Policy.Handle<BatchException>(ex => "NodeNotReady".Equals(ex.RequestInformation.BatchError.Code, StringComparison.OrdinalIgnoreCase)))
                 .WithExceptionBasedWaitWithRetryPolicyOptionsBackup((attempt, exception) => (exception as BatchException)?.RequestInformation?.RetryAfter)
                 .SetOnRetryBehavior(onRetry: LogRetryErrorOnRetryHandler())
                 .AsyncBuild();

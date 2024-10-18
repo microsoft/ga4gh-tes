@@ -9,9 +9,10 @@ using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using CommonUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Polly;
+using static CommonUtilities.RetryHandler;
 
 namespace Tes.Repository
 {
@@ -25,9 +26,11 @@ namespace Tes.Repository
         private const int BatchSize = 1000;
         private static readonly TimeSpan defaultCompletedTaskCacheExpiration = TimeSpan.FromDays(1);
 
-        protected readonly AsyncPolicy asyncPolicy = Policy
-            .Handle<Npgsql.NpgsqlException>(e => e.IsTransient)
-            .WaitAndRetryAsync(10, i => TimeSpan.FromSeconds(Math.Pow(2, i)));
+        protected readonly AsyncRetryHandlerPolicy asyncPolicy = new RetryPolicyBuilder(Microsoft.Extensions.Options.Options.Create(new CommonUtilities.Options.RetryPolicyOptions() { ExponentialBackOffExponent = 2, MaxRetryCount = 10 }))
+            .PolicyBuilder.OpinionatedRetryPolicy(Polly.Policy.Handle<Npgsql.NpgsqlException>(e => e.IsTransient))
+            .WithRetryPolicyOptionsWait()
+            .SetOnRetryBehavior()
+            .AsyncBuild();
 
         private record struct WriteItem(TDbItem DbItem, WriteAction Action, TaskCompletionSource<TDbItem> TaskSource);
         private readonly Channel<WriteItem> itemsToWrite = Channel.CreateUnbounded<WriteItem>(new() { SingleReader = true });
@@ -135,7 +138,7 @@ namespace Tes.Repository
             //var sqlQuery = query.ToQueryString();
             //System.Diagnostics.Debugger.Break();
 
-            return await asyncPolicy.ExecuteAsync(query.ToListAsync, cancellationToken);
+            return await asyncPolicy.ExecuteWithRetryAsync(query.ToListAsync, cancellationToken);
         }
 
         /// <summary>
@@ -220,7 +223,7 @@ namespace Tes.Repository
                 dbContext.AddRange(dbItems.Where(e => WriteAction.Add.Equals(e.Action)).Select(e => e.DbItem));
                 dbContext.UpdateRange(dbItems.Where(e => WriteAction.Update.Equals(e.Action)).Select(e => e.DbItem));
                 dbContext.RemoveRange(dbItems.Where(e => WriteAction.Delete.Equals(e.Action)).Select(e => e.DbItem));
-                await asyncPolicy.ExecuteAsync(dbContext.SaveChangesAsync, cancellationToken);
+                await asyncPolicy.ExecuteWithRetryAsync(dbContext.SaveChangesAsync, cancellationToken);
                 OperateOnAll(dbItems, ActionOnSuccess());
             }
             catch (Exception ex)

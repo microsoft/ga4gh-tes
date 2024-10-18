@@ -85,6 +85,11 @@ namespace TesApi.Web
                 throw;
             }
 
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
             Logger.LogDebug(@"Querying active tasks");
 
             foreach (var tesTask in
@@ -131,14 +136,19 @@ namespace TesApi.Web
             stoppingToken = cancellationToken;
             List<Task> queuedTasks = [];
 
-            while (queuedTesTasks.TryDequeue(out var tesTask))
+            while (!cancellationToken.IsCancellationRequested && queuedTesTasks.TryDequeue(out var tesTask))
             {
                 queuedTasks.Add(((ITaskScheduler)this).ProcessQueuedTesTaskAsync(tesTask, cancellationToken));
             }
 
-            while (tesTaskBatchStates.TryDequeue(out var result))
+            while (!cancellationToken.IsCancellationRequested && tesTaskBatchStates.TryDequeue(out var result))
             {
                 queuedTasks.Add(ProcessQueuedTesTaskStatesRequestAsync(result.TesTasks, result.TaskStates, result.Channel, cancellationToken));
+            }
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
             }
 
             queuedTasks.Add(ExecuteShortBackgroundTasksAsync(cancellationToken));
@@ -146,8 +156,12 @@ namespace TesApi.Web
             queuedTasks.Add(ExecuteCancelledTesTasksOnBatchAsync(cancellationToken));
             queuedTasks.Add(ExecuteUpdateTesTaskFromEventBlobAsync(cancellationToken));
 
-            Logger.LogDebug(@"Task load: {TaskCount}", queuedTasks.Count);
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
 
+            Logger.LogDebug(@"Task load: {TaskCount}", queuedTasks.Count);
             await Task.WhenAll(queuedTasks);
         }
 

@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using Tes.Models;
@@ -32,31 +31,6 @@ namespace Tes.Extensions
         public static CromwellTaskSubmitter GetCromwellMetadata(this TesTask tesTask)
         {
             return tesTask.TaskSubmitter as CromwellTaskSubmitter;
-        }
-
-        /// <summary>
-        /// Visits each value in an enumeration with an action.
-        /// </summary>
-        /// <typeparam name="T">Type of enumerated items.</typeparam>
-        /// <param name="values">Enumeration on which to visit each item.</param>
-        /// <param name="action">Action to invoke with each item.</param>
-        internal static void ForEach<T>(this IEnumerable<T> values, Action<T> action)
-        {
-            foreach (var value in values)
-            {
-                action(value);
-            }
-        }
-
-        /// <summary>
-        /// Adds a range of items to an <see cref="IList{T}"/>.
-        /// </summary>
-        /// <typeparam name="T">Type of enumerated items.</typeparam>
-        /// <param name="list">List to add <paramref name="items"/> to.</param>
-        /// <param name="items">Items to add to <paramref name="list"/>.</param>
-        public static void AddRange<T>(this IList<T> list, IEnumerable<T> items)
-        {
-            items.ForEach(list.Add);
         }
 
         /// <summary>

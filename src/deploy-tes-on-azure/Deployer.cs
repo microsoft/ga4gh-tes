@@ -45,14 +45,11 @@ using Azure.Storage.Blobs.Specialized;
 using CommonUtilities;
 using CommonUtilities.AzureCloud;
 using k8s;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Graph;
 using Newtonsoft.Json;
-using Polly;
-using Polly.Retry;
-using Tes.Extensions;
 using Tes.Models;
 using Tes.SDK;
+using static CommonUtilities.RetryHandler;
 using Batch = Azure.ResourceManager.Batch.Models;
 using Storage = Azure.ResourceManager.Storage.Models;
 
@@ -60,26 +57,34 @@ namespace TesDeployer
 {
     public class Deployer(Configuration configuration)
     {
-        private static readonly AsyncRetryPolicy roleAssignmentHashConflictRetryPolicy = Policy
-            .Handle<RequestFailedException>(requestFailedException =>
-                "HashConflictOnDifferentRoleAssignmentIds".Equals(requestFailedException.ErrorCode))
-            .RetryAsync();
+        private static readonly AsyncRetryHandlerPolicy roleAssignmentHashConflictRetryPolicy = new RetryPolicyBuilder(Microsoft.Extensions.Options.Options.Create(new CommonUtilities.Options.RetryPolicyOptions()))
+            .PolicyBuilder.OpinionatedRetryPolicy(Polly.Policy.Handle<RequestFailedException>(requestFailedException =>
+                "HashConflictOnDifferentRoleAssignmentIds".Equals(requestFailedException.ErrorCode)))
+            .WithCustomizedRetryPolicyOptionsWait(int.MaxValue, (_, _) => TimeSpan.Zero)
+            .SetOnRetryBehavior()
+            .AsyncBuild();
 
-        private static readonly AsyncRetryPolicy operationNotAllowedConflictRetryPolicy = Policy
-            .Handle<RequestFailedException>(azureException =>
+        private static readonly AsyncRetryHandlerPolicy operationNotAllowedConflictRetryPolicy = new RetryPolicyBuilder(Microsoft.Extensions.Options.Options.Create(new CommonUtilities.Options.RetryPolicyOptions()))
+            .PolicyBuilder.OpinionatedRetryPolicy(Polly.Policy.Handle<RequestFailedException>(azureException =>
                 (int)HttpStatusCode.Conflict == azureException.Status &&
-                "OperationNotAllowed".Equals(azureException.ErrorCode))
-            .WaitAndRetryAsync(30, retryAttempt => TimeSpan.FromSeconds(10));
+                "OperationNotAllowed".Equals(azureException.ErrorCode)))
+            .WithCustomizedRetryPolicyOptionsWait(30, (_, _) => TimeSpan.FromSeconds(10))
+            .SetOnRetryBehavior()
+            .AsyncBuild();
 
-        private static readonly AsyncRetryPolicy generalRetryPolicy = Policy
-            .Handle<Exception>()
-            .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(1));
+        private static readonly AsyncRetryHandlerPolicy generalRetryPolicy = new RetryPolicyBuilder(Microsoft.Extensions.Options.Options.Create(new CommonUtilities.Options.RetryPolicyOptions()))
+            .PolicyBuilder.OpinionatedRetryPolicy()
+            .WithCustomizedRetryPolicyOptionsWait(3, (_, _) => TimeSpan.FromSeconds(1))
+            .SetOnRetryBehavior()
+            .AsyncBuild();
 
-        private static readonly AsyncRetryPolicy internalServerErrorRetryPolicy = Policy
-            .Handle<RequestFailedException>(azureException =>
+        private static readonly AsyncRetryHandlerPolicy internalServerErrorRetryPolicy = new RetryPolicyBuilder(Microsoft.Extensions.Options.Options.Create(new CommonUtilities.Options.RetryPolicyOptions()))
+            .PolicyBuilder.OpinionatedRetryPolicy(Polly.Policy.Handle<RequestFailedException>(azureException =>
                 (int)HttpStatusCode.OK == azureException.Status &&
-                "InternalServerError".Equals(azureException.ErrorCode))
-            .WaitAndRetryAsync(3, retryAttempt => longRetryWaitTime);
+                "InternalServerError".Equals(azureException.ErrorCode)))
+            .WithCustomizedRetryPolicyOptionsWait(3, (_, _) => longRetryWaitTime)
+            .SetOnRetryBehavior()
+            .AsyncBuild();
 
         private static readonly TimeSpan longRetryWaitTime = TimeSpan.FromSeconds(15);
 
@@ -383,7 +388,7 @@ namespace TesDeployer
 
                     if (installedVersion is null || installedVersion < new Version(5, 2, 2))
                     {
-                        await operationNotAllowedConflictRetryPolicy.ExecuteAsync(() => EnableWorkloadIdentity(aksCluster, managedIdentity, resourceGroup));
+                        await operationNotAllowedConflictRetryPolicy.ExecuteWithRetryAsync(() => EnableWorkloadIdentity(aksCluster, managedIdentity, resourceGroup));
                         await kubernetesManager.RemovePodAadChart();
                     }
 
@@ -1630,7 +1635,7 @@ namespace TesDeployer
 
             var server = await Execute(
                 $"Creating Azure Flexible Server for PostgreSQL: {configuration.PostgreSqlServerName}...",
-                async () => (await internalServerErrorRetryPolicy.ExecuteAsync(token => resourceGroup.GetPostgreSqlFlexibleServers().CreateOrUpdateAsync(WaitUntil.Completed, configuration.PostgreSqlServerName, data, token), cts.Token)).Value);
+                async () => (await internalServerErrorRetryPolicy.ExecuteWithRetryAsync(token => resourceGroup.GetPostgreSqlFlexibleServers().CreateOrUpdateAsync(WaitUntil.Completed, configuration.PostgreSqlServerName, data, token), cts.Token)).Value);
 
             await Execute(
                 $"Creating PostgreSQL tes database: {configuration.PostgreSqlTesDatabaseName}...",
@@ -1686,7 +1691,7 @@ namespace TesDeployer
                 return false;
             }
 
-            await Execute(message, () => roleAssignmentHashConflictRetryPolicy.ExecuteAsync(token =>
+            await Execute(message, () => roleAssignmentHashConflictRetryPolicy.ExecuteWithRetryAsync(token =>
                 (Task)resource.GetRoleAssignments().CreateOrUpdateAsync(WaitUntil.Completed, Guid.NewGuid().ToString(),
                     new(roleDefinitionId, managedIdentity.Data.PrincipalId.Value)
                     {
@@ -2274,7 +2279,7 @@ namespace TesDeployer
 
         private async Task ValidateVmAsync()
         {
-            var computeSkus = await generalRetryPolicy.ExecuteAsync(async ct =>
+            var computeSkus = await generalRetryPolicy.ExecuteWithRetryAsync(async ct =>
                     await armSubscription.GetComputeResourceSkusAsync(
                         filter: $"location eq '{configuration.RegionName}'",
                         cancellationToken: ct)

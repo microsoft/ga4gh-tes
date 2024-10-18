@@ -7,13 +7,13 @@ using System.Net.Sockets;
 using System.Text;
 using Azure.Storage.Blobs;
 using Microsoft.Extensions.Logging;
-using Polly.Retry;
+using static CommonUtilities.RetryHandler;
 
 namespace Tes.Runner.Transfer;
 /// <summary>
 /// A class containing the logic to create and make the HTTP requests for the blob block API.
 /// </summary>
-public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolicy)
+public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryHandlerPolicy retryPolicy)
 {
     //https://learn.microsoft.com/en-us/rest/api/storageservices/understanding-block-blobs--append-blobs--and-page-blobs
     public const string DefaultApiVersion = "2023-05-03";
@@ -22,7 +22,7 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolic
 
     private readonly HttpClient httpClient = httpClient;
     private static readonly ILogger Logger = PipelineLoggerFactory.Create<BlobApiHttpUtils>();
-    private readonly AsyncRetryPolicy retryPolicy = retryPolicy;
+    private readonly AsyncRetryHandlerPolicy retryPolicy = retryPolicy;
 
 
     public const string RootHashMetadataName = "md5_4mib_hashlist_root_hash";
@@ -167,7 +167,7 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolic
 
     public async Task<HttpResponseMessage> ExecuteHttpRequestAsync(Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken = default)
     {
-        return await retryPolicy.ExecuteAsync(ct => ExecuteHttpRequestImplAsync(requestFactory, ct), cancellationToken);
+        return await retryPolicy.ExecuteWithRetryAsync(ct => ExecuteHttpRequestImplAsync(requestFactory, ct), cancellationToken);
     }
 
     public static bool UrlContainsSasToken(string sourceUrl)
@@ -239,7 +239,7 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolic
     public async Task<int> ExecuteHttpRequestAndReadBodyResponseAsync(PipelineBuffer buffer,
         Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken = default)
     {
-        return await retryPolicy.ExecuteAsync(ct => ExecuteHttpRequestAndReadBodyResponseImplAsync(buffer, requestFactory, ct), cancellationToken);
+        return await retryPolicy.ExecuteWithRetryAsync(ct => ExecuteHttpRequestAndReadBodyResponseImplAsync(buffer, requestFactory, ct), cancellationToken);
     }
 
     private static bool ContainsRetriableException(Exception? ex)
