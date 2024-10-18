@@ -3,5 +3,5 @@
 
 namespace Tes.Runner.Transfer
 {
-    public record UploadInfo(string FullFilePath, Uri TargetUri);
+    public record UploadInfo(string FullFilePath, Uri TargetUri, string? MountParentDirectory = null);
 }
