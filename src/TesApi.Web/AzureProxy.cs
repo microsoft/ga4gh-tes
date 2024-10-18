@@ -7,7 +7,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Core;
-using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Storage;
@@ -28,13 +27,8 @@ using TesApi.Web.Management.Configuration;
 using TesApi.Web.Storage;
 using static CommonUtilities.RetryHandler;
 using BatchProtocol = Microsoft.Azure.Batch.Protocol;
-using BlobModels = Azure.Storage.Blobs.Models;
 using CloudTask = Microsoft.Azure.Batch.CloudTask;
-using ComputeNodeState = Microsoft.Azure.Batch.Common.ComputeNodeState;
-using JobState = Microsoft.Azure.Batch.Common.JobState;
 using OnAllTasksComplete = Microsoft.Azure.Batch.Common.OnAllTasksComplete;
-using TaskExecutionInformation = Microsoft.Azure.Batch.TaskExecutionInformation;
-using TaskState = Microsoft.Azure.Batch.Common.TaskState;
 
 namespace TesApi.Web
 {
@@ -91,13 +85,13 @@ namespace TesApi.Web
 
             batchRetryPolicyWhenJobNotFound = retryHandler.PolicyBuilder
                 .OpinionatedRetryPolicy(Policy.Handle<BatchException>(ex => BatchErrorCodeStrings.JobNotFound.Equals(ex.RequestInformation.BatchError.Code, StringComparison.OrdinalIgnoreCase)))
-                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup((attempt, exception) => (exception as BatchException)?.RequestInformation?.RetryAfter, backupSkipProvidedIncrements: true)
+                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup((attempt, exception) => (exception as BatchException)?.RequestInformation?.RetryAfter)
                 .SetOnRetryBehavior(onRetry: LogRetryErrorOnRetryHandler())
                 .AsyncBuild();
 
             batchRetryPolicyWhenNodeNotReady = retryHandler.PolicyBuilder
                 .OpinionatedRetryPolicy(Policy.Handle<BatchException>(ex => "NodeNotReady".Equals(ex.RequestInformation.BatchError.Code, StringComparison.OrdinalIgnoreCase)))
-                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup((attempt, exception) => (exception as BatchException)?.RequestInformation?.RetryAfter, backupSkipProvidedIncrements: true)
+                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup((attempt, exception) => (exception as BatchException)?.RequestInformation?.RetryAfter)
                 .SetOnRetryBehavior(onRetry: LogRetryErrorOnRetryHandler())
                 .AsyncBuild();
 
