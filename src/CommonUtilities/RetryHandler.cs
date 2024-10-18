@@ -14,10 +14,15 @@ public static class RetryHandler
     /// Polly Context key for caller method name
     /// </summary>
     public const string CallerMemberNameKey = $"Tes.ApiClients.{nameof(RetryHandler)}.CallerMemberName";
+
     /// <summary>
     /// Polly Context key for backup skip increment setting
     /// </summary>
     public const string BackupSkipProvidedIncrementKey = $"Tes.ApiClients.{nameof(RetryHandler)}.BackupSkipProvidedIncrementCount";
+
+    /// Polly Context key combined sleep method and enumerable duration policies
+    /// </summary>
+    public const string CombineSleepDurationsKey = $"Tes.ApiClients.{nameof(RetryHandler)}.CombineSleepDurations";
 
     #region RetryHandlerPolicies
     /// <summary>
