@@ -576,7 +576,7 @@ public class RetryPolicyBuilder
                 {
                     List<Func<TimeSpan, TimeSpan>> stored;
 
-                    if(attempt == 1)
+                    if (attempt == 1)
                     {
                         context[RetryHandler.CombineSleepDurationsKey] = stored = combined;
                     }
