@@ -94,7 +94,7 @@ namespace TesApi.Web
 
             foreach (var tesTask in
                 (await Repository.GetItemsAsync(
-                    predicate: t => t.IsActiveState(false), // TODO: preemptedIsTerminal
+                    predicate: t => !TesTask.TerminalStates.Contains(t.State),
                     cancellationToken: cancellationToken))
                 .OrderBy(t => t.CreationTime))
             {
