@@ -73,6 +73,13 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
             new AccountQuota(batchQuota.ActiveJobAndJobScheduleQuota, batchQuota.PoolQuota, batchQuota.DedicatedCoreQuota, batchQuota.LowPriorityCoreQuota));
     }
 
+    /// <inheritdoc />
+    public async Task<PoolAndJobQuota> GetPoolAndJobQuotaAsync(CancellationToken cancellationToken)
+    {
+        var quotas = await GetBatchAccountQuotasAsync(cancellationToken);
+        return new(quotas.PoolQuota, quotas.ActiveJobAndJobScheduleQuota);
+    }
+
     /// <summary>
     /// Getting the batch account quota.
     /// </summary>

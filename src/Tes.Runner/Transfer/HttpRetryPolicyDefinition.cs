@@ -1,9 +1,9 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using CommonUtilities;
 using Microsoft.Extensions.Logging;
-using Polly;
-using Polly.Retry;
+using static CommonUtilities.RetryHandler;
 
 namespace Tes.Runner.Transfer
 {
@@ -13,20 +13,13 @@ namespace Tes.Runner.Transfer
         public const int RetryExponent = 2;
         private static readonly ILogger Logger = PipelineLoggerFactory.Create<HttpRetryPolicyDefinition>();
 
-        public static AsyncRetryPolicy DefaultAsyncRetryPolicy(int maxRetryCount = DefaultMaxRetryCount)
+        public static AsyncRetryHandlerPolicy DefaultAsyncRetryPolicy(int maxRetryCount = DefaultMaxRetryCount)
         {
-            return Policy
-                .Handle<RetriableException>()
-                .WaitAndRetryAsync(maxRetryCount, retryAttempt =>
-                    {
-                        return TimeSpan.FromSeconds(Math.Pow(RetryExponent, retryAttempt));
-                    },
-                    onRetryAsync:
-                    (exception, _, retryCount, _) =>
-                    {
-                        Logger.LogError(exception, "Retrying failed request. Retry count: {retryCount}", retryCount);
-                        return Task.CompletedTask;
-                    });
+            return new RetryPolicyBuilder(Microsoft.Extensions.Options.Options.Create(new CommonUtilities.Options.RetryPolicyOptions() { MaxRetryCount = maxRetryCount, ExponentialBackOffExponent = RetryExponent }))
+                .PolicyBuilder.OpinionatedRetryPolicy(Polly.Policy.Handle<RetriableException>())
+                .WithRetryPolicyOptionsWait()
+                .SetOnRetryBehavior(Logger)
+                .AsyncBuild();
         }
     }
 }

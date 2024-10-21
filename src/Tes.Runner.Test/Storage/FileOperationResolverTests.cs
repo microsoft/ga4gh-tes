@@ -22,7 +22,7 @@ namespace Tes.Runner.Test.Storage
         [TestInitialize]
         public void SetUp()
         {
-            resolutionPolicyHandler = new(new(), BlobPipelineOptions.DefaultApiVersion);
+            resolutionPolicyHandler = new(new() { MountParentDirectoryPath = Environment.CurrentDirectory }, BlobPipelineOptions.DefaultApiVersion);
 
             singleFileInput = new()
             {
