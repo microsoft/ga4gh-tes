@@ -28,7 +28,6 @@ using Tes.Repository;
 using Tes.TaskSubmitters;
 using TesApi.Attributes;
 using TesApi.Web;
-using TesApi.Web.Storage;
 
 namespace TesApi.Controllers
 {
@@ -36,19 +35,17 @@ namespace TesApi.Controllers
     /// API endpoints for <see cref="TesTask"/>s.
     /// </summary>
     /// <remarks>
-    /// Contruct a <see cref="TaskServiceApiController"/>
+    /// Construct a <see cref="TaskServiceApiController"/>
     /// </remarks>
     /// <param name="repository">The main <see cref="TesTask"/> database repository</param>
-    /// <param name="storageAccessProvider">The storage access provider</param>
     /// <param name="taskScheduler">The task scheduler</param>
-    /// <param name="logger">The logger instance</param>
     /// <param name="serviceInfo">The GA4GH TES service information</param>
-    public class TaskServiceApiController(IRepository<TesTask> repository, IStorageAccessProvider storageAccessProvider, ITaskScheduler taskScheduler, ILogger<TaskServiceApiController> logger, TesServiceInfo serviceInfo)
+    /// <param name="logger">The logger instance</param>
+    public class TaskServiceApiController(IRepository<TesTask> repository, ITaskScheduler taskScheduler, TesServiceInfo serviceInfo, ILogger<TaskServiceApiController> logger)
         : ControllerBase
     {
         //private const string rootExecutionPath = "/cromwell-executions";
         private readonly IRepository<TesTask> repository = repository;
-        private readonly IStorageAccessProvider storageAccessProvider = storageAccessProvider;
         private readonly ITaskScheduler taskScheduler = taskScheduler;
         private readonly ILogger<TaskServiceApiController> logger = logger;
         private readonly TesServiceInfo serviceInfo = serviceInfo;
@@ -268,7 +265,7 @@ namespace TesApi.Controllers
             }
 
             logger.LogDebug("Creating task with id {TesTask} state {TesTaskState}", tesTask.Id, tesTask.State);
-            await repository.CreateItemAsync(tesTask, cancellationToken);
+            tesTask = await repository.CreateItemAsync(tesTask, cancellationToken);
             await taskScheduler.ProcessQueuedTesTaskAsync(tesTask, cancellationToken);
             return StatusCode(200, new TesCreateTaskResponse { Id = tesTask.Id });
         }

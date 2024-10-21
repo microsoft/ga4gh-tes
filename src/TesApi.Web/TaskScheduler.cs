@@ -54,6 +54,7 @@ namespace TesApi.Web
         , ITaskScheduler
     {
         private static readonly TimeSpan blobRunInterval = TimeSpan.FromSeconds(15);
+        private static readonly TimeSpan queuedRunInterval = TimeSpan.FromMilliseconds(100);
         internal static readonly TimeSpan BatchRunInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs appears to use a 30 second polling interval
         private static readonly TimeSpan shortBackgroundRunInterval = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan longBackgroundRunInterval = TimeSpan.FromSeconds(1);
@@ -136,11 +137,6 @@ namespace TesApi.Web
             stoppingToken = cancellationToken;
             List<Task> queuedTasks = [];
 
-            while (!cancellationToken.IsCancellationRequested && queuedTesTasks.TryDequeue(out var tesTask))
-            {
-                queuedTasks.Add(((ITaskScheduler)this).ProcessQueuedTesTaskAsync(tesTask, cancellationToken));
-            }
-
             while (!cancellationToken.IsCancellationRequested && tesTaskBatchStates.TryDequeue(out var result))
             {
                 queuedTasks.Add(ProcessQueuedTesTaskStatesRequestAsync(result.TesTasks, result.TaskStates, result.Channel, cancellationToken));
@@ -153,6 +149,7 @@ namespace TesApi.Web
 
             queuedTasks.Add(ExecuteShortBackgroundTasksAsync(cancellationToken));
             queuedTasks.Add(ExecuteLongBackgroundTasksAsync(cancellationToken));
+            queuedTasks.Add(ExecuteQueuedTesTasksOnBatchAsync(cancellationToken));
             queuedTasks.Add(ExecuteCancelledTesTasksOnBatchAsync(cancellationToken));
             queuedTasks.Add(ExecuteUpdateTesTaskFromEventBlobAsync(cancellationToken));
 
@@ -179,6 +176,29 @@ namespace TesApi.Web
             catch (Exception ex)
             {
                 channel.Complete(ex);
+            }
+        }
+
+        /// <summary>
+        /// Retrieves TesTasks queued via ProcessQueuedTesTaskAsync and schedules them for execution.
+        /// </summary>
+        /// <param name="cancellationToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
+        /// <returns></returns>
+        private Task ExecuteQueuedTesTasksOnBatchAsync(CancellationToken cancellationToken)
+        {
+            return ExecuteActionOnIntervalAsync(queuedRunInterval, ProcessQueuedTesTasksAsync, cancellationToken);
+        }
+
+        /// <summary>
+        /// Schedules queued TesTasks via !BatchScheduler.ProcessQueuedTesTaskAsync.
+        /// </summary>
+        /// <param name="cancellationToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
+        /// <returns></returns>
+        private async ValueTask ProcessQueuedTesTasksAsync(CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested && queuedTesTasks.TryDequeue(out var tesTask))
+            {
+                await ProcessOrchestratedTesTaskAsync("Queued", new(BatchScheduler.ProcessQueuedTesTaskAsync(tesTask, cancellationToken), tesTask), cancellationToken);
             }
         }
 
@@ -367,16 +387,10 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        async Task ITaskScheduler.ProcessQueuedTesTaskAsync(TesTask tesTask, CancellationToken cancellationToken)
+        Task ITaskScheduler.ProcessQueuedTesTaskAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
-            if (IsRunning)
-            {
-                await ProcessOrchestratedTesTaskAsync("Queued", new(BatchScheduler.ProcessQueuedTesTaskAsync(tesTask, cancellationToken), tesTask), cancellationToken);
-            }
-            else
-            {
-                queuedTesTasks.Enqueue(tesTask);
-            }
+            queuedTesTasks.Enqueue(tesTask);
+            return Task.CompletedTask;
         }
 
         /// <inheritdoc/>
