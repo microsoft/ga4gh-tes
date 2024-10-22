@@ -33,7 +33,7 @@ namespace TES.SDK.Examples
             var tesCredentials = TesCredentials.Deserialize(File.Open(tesCredentialsPath, FileMode.Open));
             var tesExamples = new TesExamples(tesCredentials, storageAccountName);
 
-            string command = args[0].ToLowerInvariant();
+            string? command = args.FirstOrDefault()?.ToLowerInvariant();
 
             switch (command)
             {
