@@ -13,7 +13,7 @@ namespace TES.SDK.Examples
         // 1.  Create a new User Secrets file with the following properties:
         //     TesCredentialsPath = path to TesCredentials.json (created during deployment)
         //     StorageAccountName = Name of your storage account in your TES deployment (to save the output file)
-        private static async Task Main()
+        private static async Task Main(string[] args)
         {
             var builder = new ConfigurationBuilder()
                 .AddUserSecrets<Program>();
@@ -33,7 +33,20 @@ namespace TES.SDK.Examples
             var tesCredentials = TesCredentials.Deserialize(File.Open(tesCredentialsPath, FileMode.Open));
             var tesExamples = new TesExamples(tesCredentials, storageAccountName);
 
-            await tesExamples.RunPrimeSieveAsync();
+            string command = args[0].ToLowerInvariant();
+
+            switch (command)
+            {
+                case "primesieve":
+                    await tesExamples.RunPrimeSieveAsync();
+                    break;
+                case "bwa":
+                    await tesExamples.RunBwaMemAsync();
+                    break;
+                default:
+                    Console.WriteLine("Unknown command. Please use 'prime' for RunPrimeSieveAsync or 'bwa' for RunBwaMemAsync.");
+                    break;
+            }
         }
     }
 }
