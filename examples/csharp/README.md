@@ -1,5 +1,5 @@
 # TES C# SDK Demonstration
-We recommend opening the TES solution via the solution file in this repo ([Microsoft.GA4GH.TES.sln](https://github.com/microsoft/ga4gh-tes/blob/main/Microsoft.GA4GH.TES.sln) in [Visual Studio](https://visualstudio.microsoft.com/).  This example uses the [TES.SDK.Examples](https://github.com/microsoft/ga4gh-tes/tree/main/src/Tes.SDK.Examples) console app project in the solution. 
+We recommend using [Visual Studio](https://visualstudio.microsoft.com/) and opening the TES solution via the solution file [Microsoft.GA4GH.TES.sln](https://github.com/microsoft/ga4gh-tes/blob/main/Microsoft.GA4GH.TES.sln).  This example uses the [TES.SDK.Examples](https://github.com/microsoft/ga4gh-tes/tree/main/src/Tes.SDK.Examples) console app project in the solution. 
 
 ## Client Requirements
 
