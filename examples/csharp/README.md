@@ -38,7 +38,7 @@ Make sure you have the following requirements in place to run the TES SDK exampl
 To package the demo application as a single file executable for Linux, run the following command:
 
 ```bash
-dotnet publish --configuration Release --output ./publish --self-contained --runtime linux-x64 /p:PublishSingleFile=true /p:PublishTrimmed=true
+dotnet publish --configuration Release --output ./publish --self-contained --runtime linux-x64 /p:PublishSingleFile=true
 ```
 
 ### For Windows
@@ -46,7 +46,7 @@ dotnet publish --configuration Release --output ./publish --self-contained --run
 To build the demo application as a single file executable for Windows, use this command:
 
 ```bash
-dotnet publish --configuration Release --output ./publish --self-contained --runtime win-x64 /p:PublishSingleFile=true /p:PublishTrimmed=true
+dotnet publish --configuration Release --output ./publish --self-contained --runtime win-x64 /p:PublishSingleFile=true
 ```
 
 - Replace `linux-x64` or `win-x64` with your target runtime if you're building for another platform (e.g., `osx-x64` for macOS).
