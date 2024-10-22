@@ -9,11 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="Azure.Containers.ContainerRegistry" Version="1.1.1" />
-<<<<<<< HEAD
-    <PackageReference Include="Azure.Storage.Blobs" Version="12.22.1" />
-=======
     <PackageReference Include="Azure.Storage.Blobs" Version="12.22.2" />
->>>>>>> origin/main
     <PackageReference Include="Docker.DotNet" Version="3.125.15" />
     <PackageReference Include="Polly.Extensions.Http" Version="3.0.0" />
     <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
