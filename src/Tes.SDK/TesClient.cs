@@ -4,8 +4,11 @@
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
+using Azure.Identity;
+using Azure.Storage.Blobs;
 using Newtonsoft.Json;
 using Polly;
+using Polly.Retry;
 using Tes.Models;
 
 namespace Tes.SDK
@@ -23,6 +26,10 @@ namespace Tes.SDK
         private readonly Uri _baseUrl;
         private readonly string? _username;
         private readonly string? _password;
+        private readonly AsyncRetryPolicy getTaskRetryPolicy = Policy
+                .Handle<Exception>()
+                .WaitAndRetryAsync(60, _ => TimeSpan.FromSeconds(15));
+
         private bool disposedValue;
 
         private static StringContent Serialize<T>(T obj)
@@ -176,25 +183,62 @@ namespace Tes.SDK
             } while (pageToken != null && !cancellationToken.IsCancellationRequested);
         }
 
+        public async Task<List<TesTask>> CreateAndWaitTilDoneAsync(IEnumerable<TesTask> tesTasks, CancellationToken cancellationToken = default)
+        {
+            var runningTasks = new Dictionary<string, TesTask>();
+
+            foreach (var tesTask in tesTasks)
+            {
+                var taskId = await CreateTaskAsync(tesTask, cancellationToken);
+                runningTasks.Add(taskId, tesTask);
+            }
+
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                foreach (var taskId in runningTasks.Keys)
+                {
+                    var task = await getTaskRetryPolicy.ExecuteAsync(() => GetTaskAsync(taskId, TesView.MINIMAL, cancellationToken));
+                    runningTasks[taskId] = task;
+                }
+
+                if (runningTasks.Values.All(t => !t.IsActiveState()))
+                {
+                    // All tasks are done; now get their FULL metadata
+                    var completedTasks = new List<TesTask>();
+
+                    foreach (var kvp in runningTasks)
+                    {
+                        var completedTask = await GetTaskAsync(kvp.Key, TesView.FULL, cancellationToken);
+                        completedTasks.Add(completedTask);
+                    }
+
+                    return completedTasks;
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+            }
+
+            throw new TaskCanceledException();
+        }
+
         /// <inheritdoc/>
-        public async Task<TesTask> CreateAndWaitTilDoneAsync(TesTask tesTask, CancellationToken cancellationToken)
+        public async Task<TesTask> CreateAndWaitTilDoneAsync(TesTask tesTask, CancellationToken cancellationToken = default)
         {
             var taskId = await CreateTaskAsync(tesTask, cancellationToken);
-            var retryPolicy = Policy
-                .Handle<Exception>()
-                .WaitAndRetryAsync(60, _ => TimeSpan.FromSeconds(15));
 
-            while (true)
+            while (!cancellationToken.IsCancellationRequested)
             {
-                var task = await retryPolicy.ExecuteAsync(() => GetTaskAsync(taskId, TesView.MINIMAL, cancellationToken));
+                var task = await getTaskRetryPolicy.ExecuteAsync(() => GetTaskAsync(taskId, TesView.MINIMAL, cancellationToken));
 
                 if (!task.IsActiveState())
                 {
                     return await GetTaskAsync(taskId, TesView.FULL, cancellationToken);
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
             }
+
+            throw new TaskCanceledException();
         }
 
         private static string GetQuery(TaskQueryOptions options, string? pageToken)
