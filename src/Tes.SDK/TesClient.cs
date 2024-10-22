@@ -199,20 +199,20 @@ namespace Tes.SDK
                 {
                     var task = await getTaskRetryPolicy.ExecuteAsync(() => GetTaskAsync(taskId, TesView.MINIMAL, cancellationToken));
                     runningTasks[taskId] = task;
+                }
 
-                    if (runningTasks.Values.All(t => !t.IsActiveState()))
+                if (runningTasks.Values.All(t => !t.IsActiveState()))
+                {
+                    // All tasks are done; now get their FULL metadata
+                    var completedTasks = new List<TesTask>();
+
+                    foreach (var kvp in runningTasks)
                     {
-                        // All tasks are done; now get their FULL metadata
-                        var completedTasks = new List<TesTask>();
-
-                        foreach (var kvp in runningTasks)
-                        {
-                            var completedTask = await GetTaskAsync(kvp.Key, TesView.FULL, cancellationToken);
-                            completedTasks.Add(completedTask);
-                        }
-
-                        return completedTasks;
+                        var completedTask = await GetTaskAsync(kvp.Key, TesView.FULL, cancellationToken);
+                        completedTasks.Add(completedTask);
                     }
+
+                    return completedTasks;
                 }
 
                 await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
