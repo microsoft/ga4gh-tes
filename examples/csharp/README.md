@@ -5,9 +5,9 @@
 Make sure you have the following requirements in place to run the TES SDK examples:
 
 1. **.NET 8.0 SDK or higher**: Install the .NET SDK to build and run the C# examples.
-   
+
    [Download .NET SDK](https://dotnet.microsoft.com/download/dotnet)
-   
+
 2. **Azure CLI**: Install and configure Azure CLI for accessing Azure Blob Storage.
 
    You can log in to Azure using the following command, which uses device authentication:
@@ -31,23 +31,45 @@ Make sure you have the following requirements in place to run the TES SDK exampl
    dotnet user-secrets set "StorageAccountName" "your_storage_account_name"
    ```
 
+## Building the Single File Executable
+
+### For Linux
+
+To package the demo application as a single file executable for Linux, run the following command:
+
+```bash
+dotnet publish --configuration Release --output ./publish --self-contained --runtime linux-x64 /p:PublishSingleFile=true /p:PublishTrimmed=true
+```
+
+### For Windows
+
+To build the demo application as a single file executable for Windows, use this command:
+
+```bash
+dotnet publish --configuration Release --output ./publish --self-contained --runtime win-x64 /p:PublishSingleFile=true /p:PublishTrimmed=true
+```
+
+- Replace `linux-x64` or `win-x64` with your target runtime if you're building for another platform (e.g., `osx-x64` for macOS).
+- This command will create a single-file executable in the `./publish` directory.
+
 ## Running the Demo
 
-To run the TES SDK examples, execute the following commands based on which example you want to run:
+After building the single file executable, you can run the TES SDK examples with the following commands based on the example you want to execute:
 
 1. **Prime Sieve Example**:
 
    This example submits tasks to calculate prime numbers in a specified range.
 
    ```bash
-   dotnet run --project TesExamples -- primesieve [taskCount]
+   ./Tes.SDK.Examples primesieve [taskCount]
    ```
 
    - `taskCount`: (Optional) Number of tasks to run. Each task processes a range of 1,000,000 numbers. If omitted, defaults to 1.
 
    Example:
+
    ```bash
-   dotnet run --project TesExamples -- primesieve 10
+   ./Tes.SDK.Examples primesieve 10
    ```
 
 2. **BWA Mem Example**:
@@ -55,7 +77,7 @@ To run the TES SDK examples, execute the following commands based on which examp
    This example submits a task to run the BWA Mem algorithm for aligning sequence reads to a reference genome.
 
    ```bash
-   dotnet run --project TesExamples -- bwa
+   ./Tes.SDK.Examples bwa
    ```
 
    The outputs will be saved in the specified Azure Blob Storage account.
@@ -68,4 +90,4 @@ Once the tasks are completed:
   
 - **BWA Mem**: The output BAM file (`H06HDADXX130110.1.ATCACGAT.20k.bam`) will be stored in the `outputs` container of your Azure Blob Storage.
 
-In addition, all output files will be downloaded locally to the temporary directory (`/tmp`) specified in the script, and the download paths will be logged in the console.
+In addition, all output files will be downloaded locally to the temporary directory (`/tmp` or `%TEMP%` on Windows) specified in the script, and the download paths will be logged in the console.
