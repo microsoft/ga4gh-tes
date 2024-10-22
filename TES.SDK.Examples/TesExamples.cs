@@ -22,7 +22,7 @@ namespace TES.SDK.Examples
         public async Task RunPrimeSieveAsync(int taskCount = 1)
         {
             const long rangePerTask = 1_000_000; // Each machine will cover a range of 1 million numbers
-            List<TesTask> tasks = new();
+            var tasks = new List<TesTask>();
 
             for (int i = 0; i < taskCount; i++)
             {
@@ -57,33 +57,7 @@ namespace TES.SDK.Examples
                 tasks.Add(task);
             }
 
-            // Submit all tasks
-
-            using ITesClient tesClient = new TesClient(_tesCredentials);
-            Console.WriteLine($"Submitting {tasks.Count} tasks and waiting til done...");
-            var completedTasks = await tesClient.CreateAndWaitTilDoneAsync(tasks);
-
-            foreach (var completedTask in completedTasks)
-            {
-                if (completedTask.State == TesState.COMPLETE)
-                {
-                    string outputFileName = completedTask.Outputs.First().Path.Split('/').Last();
-                    var outputPath = Path.Join(Path.GetTempPath(), outputFileName);
-                    var client = new BlobClient(new Uri(completedTask.Outputs.First().Url), new AzureCliCredential());
-                    await client.DownloadToAsync(outputPath);
-                    Console.WriteLine($"Output file downloaded to: {outputPath}");
-                }
-                else
-                {
-                    Console.WriteLine($"Failure reason: {completedTask.FailureReason}");
-                    var paths = await DownloadTaskFilesAsync(completedTask, _storageAccountName, CancellationToken.None);
-
-                    foreach (var path in paths)
-                    {
-                        Console.WriteLine($"Task file downloaded to: {path}");
-                    }
-                }
-            }
+            await RunTasks(tasks);
         }
 
         public async Task RunBwaMemAsync()
@@ -143,26 +117,34 @@ namespace TES.SDK.Examples
                 }
             };
 
-            // Submit the task
-            using ITesClient tesClient = new TesClient(_tesCredentials);
-            var completedTask = await tesClient.CreateAndWaitTilDoneAsync(task);
-            Console.WriteLine($"TES Task State: {completedTask.State}");
+            await RunTasks(new List<TesTask> { task });
+        }
 
-            // If task is successful, download the output
-            if (completedTask.State == TesState.COMPLETE)
+        private async Task RunTasks(List<TesTask> tasks)
+        {
+            using ITesClient tesClient = new TesClient(_tesCredentials);
+            Console.WriteLine($"Submitting {tasks.Count} task(s) and waiting til done...");
+            var completedTasks = await tesClient.CreateAndWaitTilDoneAsync(tasks);
+
+            foreach (var completedTask in completedTasks)
             {
-                var outputPath = Path.Join(Path.GetTempPath(), outputFileName);
-                var client = new BlobClient(new Uri(task.Outputs.First().Url), new AzureCliCredential());
-                await client.DownloadToAsync(outputPath);
-                Console.WriteLine($"Output file downloaded to: {outputPath}");
-            }
-            else
-            {
-                Console.WriteLine($"Task failed. Reason: {completedTask.FailureReason}");
-                var paths = await DownloadTaskFilesAsync(completedTask, _storageAccountName, CancellationToken.None);
-                foreach (var path in paths)
+                if (completedTask.State == TesState.COMPLETE)
                 {
-                    Console.WriteLine($"Task file downloaded to: {path}");
+                    string outputFileName = completedTask.Outputs.First().Path.Split('/').Last();
+                    var outputPath = Path.Join(Path.GetTempPath(), outputFileName);
+                    var client = new BlobClient(new Uri(completedTask.Outputs.First().Url), new AzureCliCredential());
+                    await client.DownloadToAsync(outputPath);
+                    Console.WriteLine($"Output file downloaded to: {outputPath}");
+                }
+                else
+                {
+                    Console.WriteLine($"Failure reason: {completedTask.FailureReason}");
+                    var paths = await DownloadTaskFilesAsync(completedTask, _storageAccountName, CancellationToken.None);
+
+                    foreach (var path in paths)
+                    {
+                        Console.WriteLine($"Task file downloaded to: {path}");
+                    }
                 }
             }
         }
