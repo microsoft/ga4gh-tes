@@ -72,7 +72,8 @@ namespace TES.SDK.Examples
 
         public async Task RunBwaMemAsync()
         {
-            // Create a TES task
+            const string outputFileName = "H06HDADXX130110.1.ATCACGAT.20k.bam";
+
             TesTask task = new()
             {
                 Resources = new TesResources
@@ -85,9 +86,10 @@ namespace TES.SDK.Examples
                     new TesExecutor
                     {
                         Image = "quay.io/biocontainers/bwa:0.7.18--he4a0461_1",
-                        Command = new[]
+                        Command = new List<string> 
                         {
-                            "/bin/sh", "-c",
+                            "/bin/sh", 
+                            "-c",
                             "bwa index /data/Homo_sapiens_assembly38.fasta && bwa mem -t 16 /data/Homo_sapiens_assembly38.fasta /data/H06HDADXX130110.1.ATCACGAT.20k_reads_1.fastq /data/H06HDADXX130110.1.ATCACGAT.20k_reads_2.fastq > /data/H06HDADXX130110.1.ATCACGAT.20k.bam"
                         },
                         Workdir = "/data"
@@ -118,9 +120,9 @@ namespace TES.SDK.Examples
                 {
                     new TesOutput
                     {
-                        Name = "H06HDADXX130110.1.ATCACGAT.20k.bam",
-                        Path = "/data/H06HDADXX130110.1.ATCACGAT.20k.bam",
-                        Url = $"https://{_storageAccountName}.blob.core.windows.net/outputs/H06HDADXX130110.1.ATCACGAT.20k.bam"
+                        Name = outputFileName,
+                        Path = $"/data/{outputFileName}",
+                        Url = $"https://{_storageAccountName}.blob.core.windows.net/outputs/{outputFileName}"
                     }
                 }
             };
@@ -133,7 +135,7 @@ namespace TES.SDK.Examples
             // If task is successful, download the output
             if (completedTask.State == TesState.COMPLETE)
             {
-                var outputPath = Path.Join(Path.GetTempPath(), "H06HDADXX130110.1.ATCACGAT.20k.bam");
+                var outputPath = Path.Join(Path.GetTempPath(), outputFileName);
                 var client = new BlobClient(new Uri(task.Outputs.First().Url), new AzureCliCredential());
                 await client.DownloadToAsync(outputPath);
                 Console.WriteLine($"Output file downloaded to: {outputPath}");
