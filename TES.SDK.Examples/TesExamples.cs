@@ -78,7 +78,7 @@ namespace TES.SDK.Examples
                     {
                         Image = "quay.io/biocontainers/bwa:0.7.18--he4a0461_1",
                         Command = new List<string> {
-                            "/bin/sh", 
+                            "/bin/sh",
                             "-c",
                             $"bwa index /data/Homo_sapiens_assembly38.fasta && bwa mem -t 16 /data/Homo_sapiens_assembly38.fasta /data/H06HDADXX130110.1.ATCACGAT.20k_reads_1.fastq /data/H06HDADXX130110.1.ATCACGAT.20k_reads_2.fastq > /data/{outputFileName}"
                         },
