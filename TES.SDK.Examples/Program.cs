@@ -25,7 +25,6 @@ namespace TES.SDK.Examples
 
             if (string.IsNullOrEmpty(tesCredentialsPath) || string.IsNullOrEmpty(storageAccountName))
             {
-                
                 Console.WriteLine("Please set the TesCredentialsPath and StorageAccountName in your User Secrets.");
                 return;
             }

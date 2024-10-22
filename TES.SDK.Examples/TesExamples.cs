@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Diagnostics;
 using Azure.Identity;
 using Azure.Storage.Blobs;
 using Tes.Models;
@@ -122,6 +123,7 @@ namespace TES.SDK.Examples
 
         private async Task RunTasks(List<TesTask> tasks)
         {
+            var sw = Stopwatch.StartNew();
             using ITesClient tesClient = new TesClient(_tesCredentials);
             Console.WriteLine($"Submitting {tasks.Count} task(s) and waiting til done...");
             var completedTasks = await tesClient.CreateAndWaitTilDoneAsync(tasks);
@@ -147,6 +149,8 @@ namespace TES.SDK.Examples
                     }
                 }
             }
+
+            Console.WriteLine($"All tasks completed in {sw.Elapsed}");
         }
 
         public async Task<List<string>> DownloadTaskFilesAsync(TesTask tesTask, string storageAccountName, CancellationToken cancellationToken)
