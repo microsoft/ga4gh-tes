@@ -15,7 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\src\Tes.SDK\Tes.SDK.csproj" />
+    <ProjectReference Include="..\Tes.SDK\Tes.SDK.csproj" />
   </ItemGroup>
 
 </Project>
