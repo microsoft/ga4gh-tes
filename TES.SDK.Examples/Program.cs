@@ -38,7 +38,8 @@ namespace TES.SDK.Examples
             switch (command)
             {
                 case "primesieve":
-                    await tesExamples.RunPrimeSieveAsync();
+                    int taskCount = args.Length > 1 ? int.Parse(args[1]) : 1;
+                    await tesExamples.RunPrimeSieveAsync(taskCount);
                     break;
                 case "bwa":
                     await tesExamples.RunBwaMemAsync();

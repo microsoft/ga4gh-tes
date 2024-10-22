@@ -178,15 +178,48 @@ namespace Tes.SDK
             } while (pageToken != null && !cancellationToken.IsCancellationRequested);
         }
 
+        public async Task<List<TesTask>> CreateAndWaitTilDoneAsync(IEnumerable<TesTask> tesTasks, CancellationToken cancellationToken = default)
+        {
+            var runningTasks = new Dictionary<string, TesTask>();
+
+            foreach (var tesTask in tesTasks)
+            {
+                var taskId = await CreateTaskAsync(tesTask, cancellationToken);
+                runningTasks.Add(taskId, tesTask);
+            }
+
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                foreach (var taskId in runningTasks.Keys)
+                {
+                    var retryPolicy = Policy
+                        .Handle<Exception>()
+                        .WaitAndRetryAsync(60, _ => TimeSpan.FromSeconds(15));
+
+                    var task = await retryPolicy.ExecuteAsync(() => GetTaskAsync(taskId, TesView.MINIMAL, cancellationToken));
+                    runningTasks[taskId] = task;
+
+                    if (runningTasks.Values.All(t => !t.IsActiveState()))
+                    {
+                        return runningTasks.Values.ToList();
+                    }
+
+                    await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+                }
+            }
+
+            throw new TaskCanceledException();
+        }
+
         /// <inheritdoc/>
-        public async Task<TesTask> CreateAndWaitTilDoneAsync(TesTask tesTask, CancellationToken cancellationToken)
+        public async Task<TesTask> CreateAndWaitTilDoneAsync(TesTask tesTask, CancellationToken cancellationToken = default)
         {
             var taskId = await CreateTaskAsync(tesTask, cancellationToken);
             var retryPolicy = Policy
                 .Handle<Exception>()
                 .WaitAndRetryAsync(60, _ => TimeSpan.FromSeconds(15));
 
-            while (true)
+            while (!cancellationToken.IsCancellationRequested)
             {
                 var task = await retryPolicy.ExecuteAsync(() => GetTaskAsync(taskId, TesView.MINIMAL, cancellationToken));
                 // TODO support DI ILogger for TesClient
@@ -199,6 +232,8 @@ namespace Tes.SDK
 
                 await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
             }
+
+            throw new TaskCanceledException();
         }
 
         private static string GetQuery(TaskQueryOptions options, string? pageToken)

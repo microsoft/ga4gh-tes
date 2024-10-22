@@ -19,53 +19,68 @@ namespace TES.SDK.Examples
             _storageAccountName = storageAccountName;
         }
 
-        public async Task RunPrimeSieveAsync()
+        public async Task RunPrimeSieveAsync(int taskCount = 1)
         {
-            TesTask task = new();
-            task.Resources.Preemptible = true;
-            task.Resources.CpuCores = 1;
-            task.Resources.RamGb = 1;
-            task.Resources.DiskGb = 1;
+            const long rangePerTask = 1_000_000; // Each machine will cover a range of 1 million numbers
+            List<TesTask> tasks = new();
 
-            const long maxPrimes = 1_000_000;
-            string outputFileName = $"primes-2-{maxPrimes}.txt";
-            string command = $"apt-get update && apt-get install -y primesieve && primesieve {maxPrimes} -p > /tmp/{outputFileName}";
-
-            task.Executors.Add(new()
+            for (int i = 0; i < taskCount; i++)
             {
-                Image = "ubuntu:22.04",
-                Command = [ 
-                    "/bin/sh",
-                    "-c",
-                    $"chmod 1777 /tmp && {command}"
-                ]
-            });
+                long rangeStart = i * rangePerTask;       // Start of the range for this machine
+                long rangeEnd = (i + 1) * rangePerTask;   // End of the range for this machine
+                string outputFileName = $"primes-{rangeStart}-{rangeEnd}.txt";
+                string command = $"apt-get update && apt-get install -y primesieve && primesieve {rangeStart} {rangeEnd} -p > /tmp/{outputFileName}";
 
-            task.Outputs.Add(new()
-            {
-                Path = $"/tmp/{outputFileName}",
-                Url = $"https://{_storageAccountName}.blob.core.windows.net/outputs/{outputFileName}"
-            });
-            
-            using ITesClient tesClient = new TesClient(_tesCredentials);
-            var completedTask = await tesClient.CreateAndWaitTilDoneAsync(task);
-            Console.WriteLine($"TES Task State: {completedTask.State}");
+                TesTask task = new();
+                task.Resources.Preemptible = true;
+                task.Resources.CpuCores = 1;
+                task.Resources.RamGb = 1;
+                task.Resources.DiskGb = 1;
 
-            if (completedTask.State == TesState.COMPLETE)
-            {
-                var outputPath = Path.Join(Path.GetTempPath(), outputFileName);
-                var client = new BlobClient(new Uri(task.Outputs.First().Url), new AzureCliCredential());
-                await client.DownloadToAsync(outputPath);
-                Console.WriteLine($"Output file downloaded to: {outputPath}");
-            }
-            else
-            {
-                Console.WriteLine($"Failure reason: {completedTask.FailureReason}");
-                var paths = await DownloadTaskFilesAsync(completedTask, _storageAccountName, CancellationToken.None);
-
-                foreach (var path in paths)
+                task.Executors.Add(new()
                 {
-                    Console.WriteLine($"Task file downloaded to: {path}");
+                    Image = "ubuntu:22.04",
+                    Command = new List<string>
+                    {
+                        "/bin/sh",
+                        "-c",
+                        $"chmod 1777 /tmp && {command}"
+                    }
+                });
+
+                task.Outputs.Add(new()
+                {
+                    Path = $"/tmp/{outputFileName}",
+                    Url = $"https://{_storageAccountName}.blob.core.windows.net/outputs/{outputFileName}"
+                });
+
+                tasks.Add(task);
+            }
+
+            // Submit all tasks
+
+            using ITesClient tesClient = new TesClient(_tesCredentials);
+            var completedTasks = await tesClient.CreateAndWaitTilDoneAsync(tasks);
+
+            foreach (var completedTask in completedTasks)
+            {
+                if (completedTask.State == TesState.COMPLETE)
+                {
+                    string outputFileName = completedTask.Outputs.First().Path.Split('/').Last();
+                    var outputPath = Path.Join(Path.GetTempPath(), outputFileName);
+                    var client = new BlobClient(new Uri(completedTask.Outputs.First().Url), new AzureCliCredential());
+                    await client.DownloadToAsync(outputPath);
+                    Console.WriteLine($"Output file downloaded to: {outputPath}");
+                }
+                else
+                {
+                    Console.WriteLine($"Failure reason: {completedTask.FailureReason}");
+                    var paths = await DownloadTaskFilesAsync(completedTask, _storageAccountName, CancellationToken.None);
+
+                    foreach (var path in paths)
+                    {
+                        Console.WriteLine($"Task file downloaded to: {path}");
+                    }
                 }
             }
         }
