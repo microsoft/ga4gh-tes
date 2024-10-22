@@ -60,6 +60,7 @@ namespace TES.SDK.Examples
             // Submit all tasks
 
             using ITesClient tesClient = new TesClient(_tesCredentials);
+            Console.WriteLine($"Submitting {tasks.Count} tasks and waiting til done...");
             var completedTasks = await tesClient.CreateAndWaitTilDoneAsync(tasks);
 
             foreach (var completedTask in completedTasks)

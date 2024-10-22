@@ -213,9 +213,9 @@ namespace Tes.SDK
 
                         return completedTasks;
                     }
-
-                    await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
                 }
+
+                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
             }
 
             throw new TaskCanceledException();
