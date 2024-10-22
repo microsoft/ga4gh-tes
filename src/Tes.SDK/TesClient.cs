@@ -8,6 +8,7 @@ using Azure.Identity;
 using Azure.Storage.Blobs;
 using Newtonsoft.Json;
 using Polly;
+using Polly.Retry;
 using Tes.Models;
 
 namespace Tes.SDK
@@ -25,6 +26,10 @@ namespace Tes.SDK
         private readonly Uri _baseUrl;
         private readonly string? _username;
         private readonly string? _password;
+        private readonly AsyncRetryPolicy getTaskRetryPolicy = Policy
+                .Handle<Exception>()
+                .WaitAndRetryAsync(60, _ => TimeSpan.FromSeconds(15));
+
         private bool disposedValue;
 
         private static StringContent Serialize<T>(T obj)
@@ -192,16 +197,21 @@ namespace Tes.SDK
             {
                 foreach (var taskId in runningTasks.Keys)
                 {
-                    var retryPolicy = Policy
-                        .Handle<Exception>()
-                        .WaitAndRetryAsync(60, _ => TimeSpan.FromSeconds(15));
-
-                    var task = await retryPolicy.ExecuteAsync(() => GetTaskAsync(taskId, TesView.MINIMAL, cancellationToken));
+                    var task = await getTaskRetryPolicy.ExecuteAsync(() => GetTaskAsync(taskId, TesView.MINIMAL, cancellationToken));
                     runningTasks[taskId] = task;
 
                     if (runningTasks.Values.All(t => !t.IsActiveState()))
                     {
-                        return runningTasks.Values.ToList();
+                        // All tasks are done; now get their FULL metadata
+                        var completedTasks = new List<TesTask>();
+
+                        foreach (var kvp in runningTasks)
+                        {
+                            var completedTask = await GetTaskAsync(kvp.Key, TesView.FULL, cancellationToken);
+                            completedTasks.Add(completedTask);
+                        }
+
+                        return completedTasks;
                     }
 
                     await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
@@ -215,15 +225,10 @@ namespace Tes.SDK
         public async Task<TesTask> CreateAndWaitTilDoneAsync(TesTask tesTask, CancellationToken cancellationToken = default)
         {
             var taskId = await CreateTaskAsync(tesTask, cancellationToken);
-            var retryPolicy = Policy
-                .Handle<Exception>()
-                .WaitAndRetryAsync(60, _ => TimeSpan.FromSeconds(15));
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                var task = await retryPolicy.ExecuteAsync(() => GetTaskAsync(taskId, TesView.MINIMAL, cancellationToken));
-                // TODO support DI ILogger for TesClient
-                Console.WriteLine($"[{DateTime.Now}] Id: {task.Id} State: {task.State}");
+                var task = await getTaskRetryPolicy.ExecuteAsync(() => GetTaskAsync(taskId, TesView.MINIMAL, cancellationToken));
 
                 if (!task.IsActiveState())
                 {
