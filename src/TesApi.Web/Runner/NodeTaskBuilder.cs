@@ -71,15 +71,32 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
+        /// Sets the host directory for container mounts
+        /// </summary>
+        /// <param name="mountDirectory"></param>
+        /// <returns></returns>
+        public NodeTaskBuilder WithContainerMountParentDirectory(string mountDirectory)
+        {
+            nodeTask.MountParentDirectoryPath = mountDirectory;
+            return this;
+        }
+
+        /// <summary>
         /// Sets the container working directory of the NodeTask
         /// </summary>
         /// <param name="workingDirectory"></param>
+        /// <param name="stdId"></param>
+        /// <param name="stdOut"></param>
+        /// <param name="stdErr"></param>
+        /// <param name="env"></param>
         /// <returns></returns>
-        public NodeTaskBuilder WithContainerWorkingDirectory(string workingDirectory)
+        public NodeTaskBuilder WithContainerExecutionParameters(string workingDirectory, string stdId, string stdOut, string stdErr, Dictionary<string, string> env)
         {
-            ArgumentException.ThrowIfNullOrEmpty(workingDirectory, nameof(workingDirectory));
-
             nodeTask.ContainerWorkDir = workingDirectory;
+            nodeTask.ContainerStdInPath = stdId;
+            nodeTask.ContainerStdOutPath = stdOut;
+            nodeTask.ContainerStdErrPath = stdErr;
+            nodeTask.ContainerEnv = env;
             return this;
         }
 
@@ -90,9 +107,8 @@ namespace TesApi.Web.Runner
         /// </summary>
         /// <param name="path"></param>
         /// <param name="sourceUrl"></param>
-        /// <param name="mountParentDirectory"></param>
         /// <returns></returns>
-        public NodeTaskBuilder WithInputUsingCombinedTransformationStrategy(string path, string sourceUrl, string mountParentDirectory)
+        public NodeTaskBuilder WithInputUsingCombinedTransformationStrategy(string path, string sourceUrl)
         {
             ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
             TransformationStrategy transformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions();
@@ -115,7 +131,6 @@ namespace TesApi.Web.Runner
             nodeTask.Inputs.Add(
                 new FileInput()
                 {
-                    MountParentDirectory = mountParentDirectory,
                     Path = path,
                     SourceUrl = sourceUrl,
                     TransformationStrategy = transformationStrategy
@@ -133,10 +148,9 @@ namespace TesApi.Web.Runner
         /// <param name="path"></param>
         /// <param name="targetUrl"></param>
         /// <param name="fileType"></param>
-        /// <param name="mountParentDirectory"></param>
         /// <returns></returns>
         public NodeTaskBuilder WithOutputUsingCombinedTransformationStrategy(string path, string targetUrl,
-            FileType? fileType, string mountParentDirectory)
+            FileType? fileType)
         {
             ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
             ArgumentException.ThrowIfNullOrEmpty(targetUrl, nameof(targetUrl));
@@ -144,7 +158,6 @@ namespace TesApi.Web.Runner
             nodeTask.Outputs.Add(
                 new FileOutput()
                 {
-                    MountParentDirectory = mountParentDirectory,
                     Path = path,
                     TargetUrl = targetUrl,
                     TransformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions(),

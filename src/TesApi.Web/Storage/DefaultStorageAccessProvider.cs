@@ -181,7 +181,7 @@ namespace TesApi.Web.Storage
 
             var resultPathSegments = await AddSasTokenAsync(pathSegments, cancellationToken, getContainerSas: true);
 
-            return resultPathSegments.ToUri();
+            return resultPathSegments?.ToUri();
         }
 
 
@@ -233,7 +233,7 @@ namespace TesApi.Web.Storage
 
             var resultPathSegments = await AddSasTokenAsync(pathSegments, cancellationToken, getContainerSas: true);
 
-            return resultPathSegments.ToUri();
+            return resultPathSegments?.ToUri();
         }
 
         private async Task<bool> TryGetStorageAccountInfoAsync(string accountName, CancellationToken cancellationToken, Action<StorageAccountInfo> onSuccess = null)

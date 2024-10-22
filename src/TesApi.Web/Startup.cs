@@ -8,7 +8,6 @@ using System.Net;
 using System.Reflection;
 using System.Threading;
 using Azure.Core;
-using Azure.ResourceManager;
 using CommonUtilities;
 using CommonUtilities.AzureCloud;
 using CommonUtilities.Options;
@@ -42,7 +41,7 @@ namespace TesApi.Web
     public class Startup
     {
         // TODO centralize in single location
-        internal const string TesVersion = "5.4.3";
+        internal const string TesVersion = "5.4.5";
         private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
@@ -120,7 +119,7 @@ namespace TesApi.Web
                     .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                     .AddSingleton<IBatchScheduler, BatchScheduler>()
                     .AddSingleton<PriceApiClient>()
-                    .AddSingleton<IBatchSkuInformationProvider, PriceApiBatchSkuInformationProvider>()
+                    .AddSingleton<IBatchSkuInformationProvider>(s => ActivatorUtilities.CreateInstance<PriceApiBatchSkuInformationProvider>(s, TerraOptionsAreConfigured(s)))
                     .AddSingleton(CreateBatchAccountResourceInformation)
                     .AddSingleton(CreateBatchQuotaProviderFromConfiguration)
                     .AddSingleton<AzureManagementClientsFactory>()
