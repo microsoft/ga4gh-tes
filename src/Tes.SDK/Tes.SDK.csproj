@@ -1,19 +1,29 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <AssemblyTitle>TES API client</AssemblyTitle>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AssemblyTitle>TES API client</AssemblyTitle>
 
-  <ItemGroup>
-    <PackageReference Include="Azure.Identity" Version="1.12.1" />
-    <PackageReference Include="Azure.Storage.Blobs" Version="12.22.1" />
-  </ItemGroup>
+        <PackageId>TesApiClient</PackageId>
+        <Version>1.0.0</Version>
+        <Authors>Microsoft</Authors>
+        <Company>Microsoft Corporation</Company>
+        <Description>API client for GA4GH TES</Description>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <RepositoryUrl>https://github.com/microsoft/ga4gh-tes</RepositoryUrl>
+        <PackageProjectUrl>https://github.com/microsoft/ga4gh-tes</PackageProjectUrl>
+        <PackageTags>GA4GH, TES, API, Client</PackageTags>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Tes\Tes.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Azure.Identity" Version="1.12.1" />
+        <PackageReference Include="Azure.Storage.Blobs" Version="12.22.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Tes\Tes.csproj" Pack="true" PrivateAssets="none" IncludeAssets="all" />
+    </ItemGroup>
 
 </Project>
