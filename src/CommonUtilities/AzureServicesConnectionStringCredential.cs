@@ -51,6 +51,7 @@ namespace CommonUtilities
             Configuration = configuration;
             SetInitialState(armEndpoints);
             ConnectionString = GetEnvironmentVariable("AzureServicesAuthConnectionString")!;
+            PrintState();
         }
 
         public AzureServicesConnectionStringCredentialOptions(string connectionString, AzureCloudConfig armEndpoints)
@@ -58,6 +59,19 @@ namespace CommonUtilities
         {
             SetInitialState(armEndpoints);
             ConnectionString = connectionString;
+            PrintState();
+        }
+
+        private void PrintState()
+        {
+            var prefix = nameof(AzureServicesConnectionStringCredential) + ": ";
+            Console.WriteLine(prefix + nameof(AdditionallyAllowedTenants) + $"({AdditionallyAllowedTenants.Count}) =" + string.Join(", ", AdditionallyAllowedTenants));
+            Console.WriteLine(prefix + nameof(Audience) + "=" + Audience ?? "<null>");
+            Console.WriteLine(prefix + nameof(AuthorityHost) + "=" + AuthorityHost ?? "<null>");
+            Console.WriteLine(prefix + nameof(ConnectionString) + "=" + ConnectionString ?? "<null>");
+            Console.WriteLine(prefix + nameof(DisableInstanceDiscovery) + "=" + DisableInstanceDiscovery ?? "<null>");
+            Console.WriteLine(prefix + nameof(Resource) + "=" + Resource ?? "<null>");
+            Console.WriteLine(prefix + nameof(TenantId) + "=" + TenantId ?? "<null>");
         }
 
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
