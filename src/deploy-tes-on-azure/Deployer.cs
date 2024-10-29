@@ -439,10 +439,6 @@ namespace TesDeployer
                         }
                     }
 
-                    //if (installedVersion is null || installedVersion < new Version(5, 4, 7))
-                    //{
-                    //}
-
                     //if (installedVersion is null || installedVersion < new Version(x, y, z))
                     //{
                     //}
@@ -1235,7 +1231,7 @@ namespace TesDeployer
 
             var federatedCredentialsCollection = managedIdentity.GetFederatedIdentityCredentials();
 
-            if ((await federatedCredentialsCollection.SingleOrDefaultAsync(r => "coaFederatedIdentity".Equals(r.Id.Name, StringComparison.OrdinalIgnoreCase), cts.Token)) is null)
+            if ((await federatedCredentialsCollection.SingleOrDefaultAsync(r => "toaFederatedIdentity".Equals(r.Id.Name, StringComparison.OrdinalIgnoreCase), cts.Token)) is null)
             {
                 var data = new FederatedIdentityCredentialData()
                 {
@@ -1580,16 +1576,12 @@ namespace TesDeployer
             var message = $"Assigning '{RoleDefinitions.GetDisplayName(RoleDefinitions.Containers.RbacClusterAdmin)}' role for {{Admins}} to AKS cluster resource scope...";
             var roleDefinitionId = GetSubscriptionRoleDefinition(RoleDefinitions.Containers.RbacClusterAdmin);
 
-            _ = ConsoleEx.WriteLine($"AadGroupIds: {configuration.AadGroupIds ?? "<null>"}", ConsoleColor.Yellow);
-            _ = ConsoleEx.WriteLine($"AdminGroupObjectIds: {string.Join(", ", managedCluster.Data.AadProfile?.AdminGroupObjectIds ?? []):D}", ConsoleColor.Yellow);
             var adminGroupObjectIds = managedCluster.Data.AadProfile?.AdminGroupObjectIds ?? [];
             adminGroupObjectIds = adminGroupObjectIds.Count != 0 ? adminGroupObjectIds : (string.IsNullOrWhiteSpace(configuration.AadGroupIds) ? [] : configuration.AadGroupIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Guid.Parse).ToList());
-            _ = ConsoleEx.WriteLine($"adminGroupObjectIds: {string.Join(", ", adminGroupObjectIds):D}", ConsoleColor.Yellow);
 
             if (adminGroupObjectIds.Count == 0)
             {
                 var user = await GetUserObjectAsync();
-                _ = ConsoleEx.WriteLine($"User: {user?.Id ?? "<null>"}", ConsoleColor.Yellow);
 
                 if (user is not null)
                 {
