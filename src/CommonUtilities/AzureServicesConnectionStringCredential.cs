@@ -193,7 +193,21 @@ namespace CommonUtilities
 
         internal Azure.Identity.ManagedIdentityCredential CreateManagedIdentityCredential(int _1)
         {
-            return new((string)null!, this);
+            return new(options: this);
+        }
+
+        internal Azure.Identity.WorkloadIdentityCredential CreateWorkloadIdentityCredential(string appId)
+        {
+            Azure.Identity.WorkloadIdentityCredentialOptions result = new() { ClientId = appId, AuthorityHost = AuthorityHost, IsUnsafeSupportLoggingEnabled = IsUnsafeSupportLoggingEnabled, DisableInstanceDiscovery = DisableInstanceDiscovery, TenantId = TenantId };
+            CopyAdditionallyAllowedTenants(result.AdditionallyAllowedTenants);
+            return new(result);
+        }
+
+        internal Azure.Identity.WorkloadIdentityCredential CreateWorkloadIdentityCredential()
+        {
+            Azure.Identity.WorkloadIdentityCredentialOptions result = new() { AuthorityHost = AuthorityHost, IsUnsafeSupportLoggingEnabled = IsUnsafeSupportLoggingEnabled, DisableInstanceDiscovery = DisableInstanceDiscovery, TenantId = TenantId };
+            CopyAdditionallyAllowedTenants(result.AdditionallyAllowedTenants);
+            return new(result);
         }
 
         void CopyAdditionallyAllowedTenants(IList<string> additionalTenants)
@@ -216,6 +230,7 @@ namespace CommonUtilities
         private const string VisualStudioCode = "VisualStudioCode";
         private const string DeveloperTool = "DeveloperTool";
         private const string CurrentUser = "CurrentUser";
+        private const string Workload = "Workload";
         private const string App = "App";
         private const string AppId = "AppId";
         private const string AppKey = "AppKey";
@@ -383,6 +398,21 @@ namespace CommonUtilities
                         connectionSettings.TryGetValue(MsiRetryTimeout, out var value)
                             ? int.Parse(value)
                             : 0);
+                }
+            }
+            else if (string.Equals(runAs, Workload, StringComparison.OrdinalIgnoreCase))
+            {
+                // If RunAs=Workload
+                // If AppId key is present, use it as the ClientId
+                if (connectionSettings.TryGetValue(AppId, out var appId))
+                {
+                    ValidateAttribute(connectionSettings, AppId, options.ConnectionString);
+
+                    azureServiceTokenCredential = options.CreateWorkloadIdentityCredential(appId);
+                }
+                else
+                {
+                    azureServiceTokenCredential = options.CreateWorkloadIdentityCredential();
                 }
             }
             else
