@@ -1778,7 +1778,7 @@ namespace TesDeployer
                     (Task)resource.GetRoleAssignments().CreateOrUpdateAsync(WaitUntil.Completed, Guid.NewGuid().ToString(),
                         new(roleDefinitionId, principal)
                         {
-                            PrincipalType = Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType.ServicePrincipal
+                            PrincipalType = principalType
                         },
                         token),
                     cts.Token));
