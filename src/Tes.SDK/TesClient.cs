@@ -4,8 +4,6 @@
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
-using Azure.Identity;
-using Azure.Storage.Blobs;
 using Newtonsoft.Json;
 using Polly;
 using Polly.Retry;

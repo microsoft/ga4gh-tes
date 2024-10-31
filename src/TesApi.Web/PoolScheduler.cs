@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using CommonUtilities;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
@@ -159,14 +160,14 @@ namespace TesApi.Web
         /// <returns></returns>
         private async ValueTask ProcessCloudTaskStatesAsync(string poolId, IAsyncEnumerable<CloudTaskBatchTaskState> states, CancellationToken cancellationToken)
         {
-            var list = new ConcurrentBag<(TesTask TesTask, AzureBatchTaskState State)>();
+            ConcurrentBag<(TesTask TesTask, AzureBatchTaskState State)> tasksAndStates = [];
 
             await Parallel.ForEachAsync(states, cancellationToken, async (state, token) =>
             {
                 TesTask tesTask = default;
                 if (await Repository.TryGetItemAsync(BatchScheduler.GetTesTaskIdFromCloudTaskId(state.CloudTaskId), token, task => tesTask = task) && tesTask is not null)
                 {
-                    list.Add((tesTask, state.TaskState));
+                    tasksAndStates.Add((tesTask, state.TaskState));
                 }
                 else
                 {
@@ -174,13 +175,41 @@ namespace TesApi.Web
                 }
             });
 
-            if (!list.IsEmpty)
+            if (!tasksAndStates.IsEmpty)
             {
-                await OrchestrateTesTasksOnBatchAsync(
-                    $"NodeState ({poolId})",
-                    _ => ValueTask.FromResult(list.Select(t => t.TesTask).ToAsyncEnumerable()),
-                    (tesTasks, token) => TaskScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, list.Select(t => t.State).ToArray(), token),
-                    cancellationToken);
+                ConcurrentBag<string> requeues = [];
+                Dictionary<string, AzureBatchTaskState> statesByTask = new(StringComparer.Ordinal);
+                List<TesTask> tasks = [];
+
+                tasksAndStates.ForEach(t =>
+                {
+                    tasks.Add(t.TesTask);
+                    statesByTask.Add(t.TesTask.Id, t.State);
+                });
+
+                do
+                {
+                    requeues.Clear();
+
+                    await OrchestrateTesTasksOnBatchAsync(
+                        $"NodeState ({poolId})",
+                        _ => ValueTask.FromResult(tasks.ToAsyncEnumerable()),
+                        (tesTasks, token) => TaskScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, tesTasks.Select(task => statesByTask[task.Id]).ToArray(), token),
+                        ex => { requeues.Add(ex.RepositoryItem.Id); return ValueTask.CompletedTask; }, cancellationToken);
+
+                    tasks.Clear();
+
+                    await Parallel.ForEachAsync(requeues, cancellationToken, async (id, token) =>
+                    {
+                        TesTask tesTask = default;
+
+                        if (await Repository.TryGetItemAsync(id, token, task => tesTask = task))
+                        {
+                            tasks.Add(tesTask);
+                        }
+                    });
+                }
+                while (!requeues.IsEmpty);
             }
             else
             {

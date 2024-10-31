@@ -316,7 +316,7 @@ namespace TesApi.Tests
 
                 // Mock UpdateItemAsync to throw a RepositoryCollisionException
                 r.Setup(repo => repo.UpdateItemAsync(It.IsAny<TesTask>(), It.IsAny<CancellationToken>()))
-                    .ThrowsAsync(new RepositoryCollisionException<TesTask>(Task.FromResult<TesTask>(default)));
+                    .ThrowsAsync(new RepositoryCollisionException<TesTask>(default));
             });
 
             var controller = services.GetT();

@@ -134,10 +134,13 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="pollName">Tag to disambiguate the state and/or action workflow performed in log messages.</param>
         /// <param name="task"><see cref="TesTask"/>.</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="requeue"></param>
         /// <returns></returns>
-        protected async ValueTask ProcessOrchestratedTesTaskAsync(string pollName, RelatedTask<TesTask, bool> task, CancellationToken cancellationToken)
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        protected async ValueTask ProcessOrchestratedTesTaskAsync(string pollName, RelatedTask<TesTask, bool> task, Func<RepositoryCollisionException<TesTask>, ValueTask> requeue, CancellationToken cancellationToken)
         {
+            ArgumentNullException.ThrowIfNull(requeue);
+
             var tesTask = task.Related;
 
             try
@@ -251,27 +254,19 @@ namespace TesApi.Web
             }
             catch (RepositoryCollisionException<TesTask> rce)
             {
-                Logger.LogError(rce, "RepositoryCollisionException in OrchestrateTesTasksOnBatch({Poll})", pollName);
+                Logger.LogInformation(rce, "RepositoryCollisionException in OrchestrateTesTasksOnBatch({Poll})", pollName);
 
                 try
                 {
-                    var currentTesTask = await rce.Task;
+                    var currentTesTask = rce.RepositoryItem;
 
-                    if (currentTesTask is not null && currentTesTask.IsActiveState())
+                    if (currentTesTask is not null)
                     {
-                        currentTesTask.SetWarning(rce.Message);
-
-                        if (currentTesTask.IsActiveState())
-                        {
-                            // TODO: merge tesTask and currentTesTask
-                        }
-
-                        await Repository.UpdateItemAsync(currentTesTask, cancellationToken);
+                        await requeue(rce);
                     }
                 }
                 catch (Exception exc)
                 {
-                    // Consider retrying repository.UpdateItemAsync() if this exception was thrown from 'await rce.Task'
                     Logger.LogError(exc, "Updating TES Task '{TesTask}' threw {ExceptionType}: '{ExceptionMessage}'. Stack trace: {ExceptionStackTrace}", tesTask.Id, exc.GetType().FullName, exc.Message, exc.StackTrace);
                 }
             }
@@ -302,18 +297,21 @@ namespace TesApi.Web
         /// <param name="pollName">Tag to disambiguate the state and/or action workflow performed in log messages.</param>
         /// <param name="tesTaskGetter">Provides array of <see cref="TesTask"/>s on which to perform actions through <paramref name="tesTaskProcessor"/>.</param>
         /// <param name="tesTaskProcessor">Method operating on <paramref name="tesTaskGetter"/> returning <see cref="RelatedTask{TRelated, TResult}"/> indicating if each <see cref="TesTask"/> needs updating into the repository.</param>
+        /// <param name="requeue"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="unitsLabel">Tag to indicate the underlying unit quantity of items processed in log messages.</param>
-        /// <param name="needPoolFlush">True to process <see cref="IBatchScheduler.NeedPoolFlush"/> even if there are no tasks processed.</param>
         /// <returns>A <see cref="ValueTask"/> that represents this method's operations.</returns>
+        /// <param name="needPoolFlush">True to process <see cref="IBatchScheduler.NeedPoolFlush"/> even if there are no tasks processed.</param>
         protected async ValueTask OrchestrateTesTasksOnBatchAsync(
             string pollName,
             Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>> tesTaskGetter,
             Func<TesTask[], CancellationToken, IAsyncEnumerable<RelatedTask<TesTask, bool>>> tesTaskProcessor,
+            Func<RepositoryCollisionException<TesTask>, ValueTask> requeue,
             CancellationToken cancellationToken,
-            string unitsLabel = "tasks",
-            bool needPoolFlush = false)
+            string unitsLabel = "tasks", bool needPoolFlush = false)
         {
+            ArgumentNullException.ThrowIfNull(requeue);
+
             var tesTasks = await (await tesTaskGetter(cancellationToken)).ToArrayAsync(cancellationToken);
             var noTasks = tesTasks.All(task => task is null);
 
@@ -327,7 +325,7 @@ namespace TesApi.Web
 
             if (!noTasks)
             {
-                await Parallel.ForEachAsync(tesTaskProcessor(tesTasks, cancellationToken), cancellationToken, (task, token) => ProcessOrchestratedTesTaskAsync(pollName, task, token));
+                await Parallel.ForEachAsync(tesTaskProcessor(tesTasks, cancellationToken), cancellationToken, (task, token) => ProcessOrchestratedTesTaskAsync(pollName, task, requeue, token));
             }
 
             if (BatchScheduler.NeedPoolFlush)

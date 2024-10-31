@@ -266,7 +266,7 @@ namespace TesApi.Controllers
 
             logger.LogDebug("Creating task with id {TesTask} state {TesTaskState}", tesTask.Id, tesTask.State);
             tesTask = await repository.CreateItemAsync(tesTask, cancellationToken);
-            await taskScheduler.ProcessQueuedTesTaskAsync(tesTask, cancellationToken);
+            taskScheduler.QueueTesTask(tesTask);
             return StatusCode(200, new TesCreateTaskResponse { Id = tesTask.Id });
         }
 

@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using CommonUtilities;
 using Microsoft.Extensions.Logging;
 using Tes.Models;
 using Tes.Repository;
@@ -26,8 +27,7 @@ namespace TesApi.Web
         /// Schedules a <see cref="TesTask"/>
         /// </summary>
         /// <param name="tesTask">A <see cref="TesTask"/> to schedule on the batch system.</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        Task ProcessQueuedTesTaskAsync(TesTask tesTask, CancellationToken cancellationToken);
+        void QueueTesTask(TesTask tesTask);
 
         /// <summary>
         /// Updates <see cref="TesTask"/>s with task-related state
@@ -124,7 +124,7 @@ namespace TesApi.Web
                 }
                 catch (Exception ex)
                 {
-                    await ProcessOrchestratedTesTaskAsync("Initialization", new(Task.FromException<bool>(ex), tesTask), cancellationToken);
+                    await ProcessOrchestratedTesTaskAsync("Initialization", new(Task.FromException<bool>(ex), tesTask), ex => { Logger.LogCritical(ex, "Unexpected repository failure in initialization with {TesTask}", ex.RepositoryItem.Id); return ValueTask.CompletedTask; }, cancellationToken);
                 }
             }
 
@@ -198,7 +198,17 @@ namespace TesApi.Web
         {
             while (!cancellationToken.IsCancellationRequested && queuedTesTasks.TryDequeue(out var tesTask))
             {
-                await ProcessOrchestratedTesTaskAsync("Queued", new(BatchScheduler.ProcessQueuedTesTaskAsync(tesTask, cancellationToken), tesTask), cancellationToken);
+                await ProcessOrchestratedTesTaskAsync("Queued", new(BatchScheduler.ProcessQueuedTesTaskAsync(tesTask, cancellationToken), tesTask), Requeue, cancellationToken);
+            }
+
+            async ValueTask Requeue(RepositoryCollisionException<TesTask> exception)
+            {
+                TesTask tesTask = default;
+
+                if (await Repository.TryGetItemAsync(exception.RepositoryItem.Id, cancellationToken, task => tesTask = task) && (tesTask?.IsActiveState() ?? false) && tesTask?.State != TesState.CANCELING)
+                {
+                    queuedTesTasks.Enqueue(tesTask);
+                }
             }
         }
 
@@ -239,14 +249,43 @@ namespace TesApi.Web
                 .ToAsyncEnumerable());
 
             return ExecuteActionOnIntervalAsync(BatchRunInterval,
-                token => OrchestrateTesTasksOnBatchAsync(
-                    "Cancelled",
-                    query,
-                    (tasks, ct) => ((ITaskScheduler)this).ProcessTesTaskBatchStatesAsync(
-                        tasks,
-                        Enumerable.Repeat<AzureBatchTaskState>(new(AzureBatchTaskState.TaskState.CancellationRequested), tasks.Length).ToArray(),
-                        ct),
-                    token),
+                async token =>
+                {
+                    ConcurrentBag<string> requeues = [];
+                    List<TesTask> tasks = [];
+
+                    await foreach (var task in await query(cancellationToken))
+                    {
+                        tasks.Add(task);
+                    }
+
+                    do
+                    {
+                        requeues.Clear();
+
+                        await OrchestrateTesTasksOnBatchAsync(
+                            "Cancelled",
+                            query,
+                            (tasks, ct) => ((ITaskScheduler)this).ProcessTesTaskBatchStatesAsync(
+                                tasks,
+                                Enumerable.Repeat<AzureBatchTaskState>(new(AzureBatchTaskState.TaskState.CancellationRequested), tasks.Length).ToArray(),
+                                ct),
+                            ex => { requeues.Add(ex.RepositoryItem.Id); return ValueTask.CompletedTask; }, token);
+
+                        tasks.Clear();
+
+                        await Parallel.ForEachAsync(requeues, cancellationToken, async (id, token) =>
+                        {
+                            TesTask tesTask = default;
+
+                            if (await Repository.TryGetItemAsync(id, token, task => tesTask = task))
+                            {
+                                tasks.Add(tesTask);
+                            }
+                        });
+                    }
+                    while (!requeues.IsEmpty);
+                },
                 cancellationToken);
         }
 
@@ -361,13 +400,42 @@ namespace TesApi.Web
                 return;
             }
 
-            // Update TesTasks
-            await OrchestrateTesTasksOnBatchAsync(
+            ConcurrentBag<string> requeues = [];
+            Dictionary<string, (AzureBatchTaskState State, Func<CancellationToken, Task> MarkProcessedAsync)> statesByTask = new(StringComparer.Ordinal);
+            List<TesTask> tasks = [];
+
+            eventStates.ForEach(t =>
+            {
+                tasks.Add(t.Task);
+                statesByTask.Add(t.Task.Id, (t.State, t.MarkProcessedAsync));
+            });
+
+            do
+            {
+                requeues.Clear();
+
+
+                // Update TesTasks
+                await OrchestrateTesTasksOnBatchAsync(
                 "NodeEvent",
-                _ => ValueTask.FromResult(eventStates.Select(@event => @event.Task).ToAsyncEnumerable()),
-                (tesTasks, token) => ((ITaskScheduler)this).ProcessTesTaskBatchStatesAsync(tesTasks, eventStates.Select(@event => @event.State).ToArray(), token),
-                cancellationToken,
+                _ => ValueTask.FromResult(tasks.ToAsyncEnumerable()),
+                (tesTasks, token) => ((ITaskScheduler)this).ProcessTesTaskBatchStatesAsync(tesTasks, tesTasks.Select(task => statesByTask[task.Id].State).ToArray(), token),
+                ex => { requeues.Add(ex.RepositoryItem.Id); return ValueTask.CompletedTask; }, cancellationToken,
                 "events");
+
+                tasks.Clear();
+
+                await Parallel.ForEachAsync(requeues, cancellationToken, async (id, token) =>
+                {
+                    TesTask tesTask = default;
+
+                    if (await Repository.TryGetItemAsync(id, token, task => tesTask = task))
+                    {
+                        tasks.Add(tesTask);
+                    }
+                });
+            }
+            while (!requeues.IsEmpty);
 
             await Parallel.ForEachAsync(eventStates.Select(@event => @event.MarkProcessedAsync).Where(func => func is not null), cancellationToken, async (markEventProcessed, token) =>
             {
@@ -387,10 +455,9 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        Task ITaskScheduler.ProcessQueuedTesTaskAsync(TesTask tesTask, CancellationToken cancellationToken)
+        void ITaskScheduler.QueueTesTask(TesTask tesTask)
         {
             queuedTesTasks.Enqueue(tesTask);
-            return Task.CompletedTask;
         }
 
         /// <inheritdoc/>

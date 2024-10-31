@@ -150,6 +150,8 @@ namespace Tes.Repository
         /// <returns></returns>
         protected Task<TDbItem> AddUpdateOrRemoveItemInDbAsync(TDbItem item, Func<TDbItem, TItem> getItem, WriteAction action, CancellationToken cancellationToken)
         {
+            ArgumentNullException.ThrowIfNull(getItem);
+
             var source = new TaskCompletionSource<TDbItem>();
             var result = source.Task;
 
@@ -161,7 +163,7 @@ namespace Tes.Repository
             {
                 throw new RepositoryCollisionException<TItem>(
                     "Respository concurrency failure: attempt to update item with previously queued update pending.",
-                    result.ContinueWith(task => getItem(task.Result), TaskContinuationOptions.OnlyOnRanToCompletion));
+                    getItem(item));
             }
 
             if (!itemsToWrite.Writer.TryWrite(new(item, action, source)))

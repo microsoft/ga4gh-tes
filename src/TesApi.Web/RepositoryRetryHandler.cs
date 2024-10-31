@@ -34,7 +34,9 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(retryPolicyOptions);
 
             _asyncRetryPolicy = new RetryPolicyBuilder(retryPolicyOptions)
-                .DefaultRetryPolicyBuilder()
+                .PolicyBuilder
+                .OpinionatedRetryPolicy(Polly.Policy.Handle<Exception>(ex => ex is not RepositoryCollisionException<T>))
+                .WithRetryPolicyOptionsWait()
                 .SetOnRetryBehavior(logger)
                 .AsyncBuild();
             _repository = repository;
