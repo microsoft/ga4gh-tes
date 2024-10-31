@@ -11,7 +11,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure.ResourceManager;
 using Azure.ResourceManager.ContainerService;
 using Azure.ResourceManager.ManagedServiceIdentities;
 using Azure.Storage.Blobs;
@@ -185,14 +184,9 @@ namespace TesDeployer
 
             var helmRepoList = await ExecHelmProcessAsync($"repo list", workingDirectory: null, throwOnNonZeroExitCode: false);
 
-            if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("ingress-nginx", StringComparison.OrdinalIgnoreCase))
+            foreach (var (helmCmd, throwOnNonZeroExitCode) in EnsureUpdateHelmRepo(helmRepoList, "ingress-nginx", NginxIngressRepo).Concat(EnsureUpdateHelmRepo(helmRepoList, "jetstack", CertManagerRepo)))
             {
-                await ExecHelmProcessAsync($"repo add ingress-nginx {NginxIngressRepo}");
-            }
-
-            if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("jetstack", StringComparison.OrdinalIgnoreCase))
-            {
-                await ExecHelmProcessAsync($"repo add jetstack {CertManagerRepo}");
+                await ExecHelmProcessAsync(helmCmd, throwOnNonZeroExitCode: throwOnNonZeroExitCode);
             }
 
             await ExecHelmProcessAsync($"repo update");
@@ -218,6 +212,26 @@ namespace TesDeployer
             await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
 
             return client;
+
+            static IEnumerable<(string HelmCmd, bool ThrowOnNonZeroExitCode)> EnsureUpdateHelmRepo(string helmRepoList, string helmRepo, string helmRepoUri)
+            {
+                if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains(helmRepo, StringComparison.OrdinalIgnoreCase))
+                {
+                    return [($"repo add {helmRepo} {helmRepoUri}", true)];
+                }
+                else if (!helmRepoList.Contains(helmRepoUri, StringComparison.OrdinalIgnoreCase))
+                {
+                    return
+                    [
+                        ($"repo remove {helmRepo}", false),
+                        ($"repo add {helmRepo} {helmRepoUri}", true)
+                    ];
+                }
+                else
+                {
+                    return [];
+                }
+            }
         }
 
         public async Task DeployHelmChartToClusterAsync(IKubernetes kubernetesClient)
@@ -231,7 +245,7 @@ namespace TesDeployer
 
         public async Task RemovePodAadChart()
         {
-            await ExecHelmProcessAsync($"uninstall aad-pod-identity", throwOnNonZeroExitCode: false);
+            await ExecHelmProcessAsync($"uninstall aad-pod-identity --namespace kube-system --kubeconfig \"{kubeConfigPath}\"", throwOnNonZeroExitCode: false);
         }
 
         public async Task<HelmValues> GetHelmValuesAsync(string valuesTemplatePath)
