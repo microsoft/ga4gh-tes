@@ -244,10 +244,10 @@ namespace TesApi.Controllers
 
                 // Backends shall log system warnings if a key is passed that is unsupported.
                 var unsupportedKeys = keys.Except(Enum.GetNames(typeof(TesResources.SupportedBackendParameters))).ToList();
+                var sanitizedUnsupportedKeys = string.Join(", ", unsupportedKeys).Replace(Environment.NewLine, " ").Replace("\n", " ").Replace("\r", " ");
 
                 if (unsupportedKeys.Count > 0)
                 {
-                    var sanitizedUnsupportedKeys = string.Join(",", unsupportedKeys).Replace(Environment.NewLine, "").Replace("\n", "").Replace("\r", "");
                     logger.LogWarning("Unsupported keys were passed to TesResources.backend_parameters: '{UnsupportedKeys}'", sanitizedUnsupportedKeys);
                 }
 
@@ -255,7 +255,7 @@ namespace TesApi.Controllers
                 if (tesTask.Resources?.BackendParametersStrict == true
                     && unsupportedKeys.Count > 0)
                 {
-                    return BadRequest($"backend_parameters_strict is set to true and unsupported backend_parameters were specified: {string.Join(",", unsupportedKeys)}");
+                    return BadRequest($"backend_parameters_strict is set to true and unsupported backend_parameters were specified: {string.Join(",", sanitizedUnsupportedKeys)}");
                 }
 
                 // Backends shall not store or return unsupported keys if included in a task.
