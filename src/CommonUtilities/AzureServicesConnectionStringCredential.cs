@@ -27,11 +27,13 @@ namespace CommonUtilities
             this.credential = AzureServicesConnectionStringCredentialFactory.Create(options);
         }
 
+        /// <inheritdoc/>
         public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken)
         {
             return credential.GetToken(requestContext, cancellationToken);
         }
 
+        /// <inheritdoc/>
         public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken)
         {
             return credential.GetTokenAsync(requestContext, cancellationToken);
@@ -69,7 +71,7 @@ namespace CommonUtilities
 
         private void SetInitialState(AzureCloudConfig armEndpoints)
         {
-            (GetEnvironmentVariable("AZURE_ADDITIONALLY_ALLOWED_TENANTS") ?? string.Empty).Split([';'], StringSplitOptions.RemoveEmptyEntries).ForEach(AdditionallyAllowedTenants.Add);
+            (GetEnvironmentVariable("AZURE_ADDITIONALLY_ALLOWED_TENANTS") ?? string.Empty).Split([';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ForEach(AdditionallyAllowedTenants.Add);
             TenantId = GetEnvironmentVariable("AZURE_TENANT_ID")!;
             AuthorityHost = armEndpoints.AuthorityHost ?? new(armEndpoints.Authentication?.LoginEndpointUrl ?? throw new ArgumentException("AuthorityHost is missing", nameof(armEndpoints)));
             Audience = armEndpoints.ArmEnvironment?.Audience ?? armEndpoints.Authentication?.Audiences?.LastOrDefault() ?? throw new ArgumentException("Audience is missing", nameof(armEndpoints));
@@ -179,7 +181,21 @@ namespace CommonUtilities
 
         internal Azure.Identity.ManagedIdentityCredential CreateManagedIdentityCredential(int _1)
         {
-            return new((string)null!, this);
+            return new(options: this);
+        }
+
+        internal Azure.Identity.WorkloadIdentityCredential CreateWorkloadIdentityCredential(string appId)
+        {
+            Azure.Identity.WorkloadIdentityCredentialOptions result = new() { ClientId = appId, AuthorityHost = AuthorityHost, IsUnsafeSupportLoggingEnabled = IsUnsafeSupportLoggingEnabled, DisableInstanceDiscovery = DisableInstanceDiscovery, TenantId = TenantId };
+            CopyAdditionallyAllowedTenants(result.AdditionallyAllowedTenants);
+            return new(result);
+        }
+
+        internal Azure.Identity.WorkloadIdentityCredential CreateWorkloadIdentityCredential()
+        {
+            Azure.Identity.WorkloadIdentityCredentialOptions result = new() { AuthorityHost = AuthorityHost, IsUnsafeSupportLoggingEnabled = IsUnsafeSupportLoggingEnabled, DisableInstanceDiscovery = DisableInstanceDiscovery, TenantId = TenantId };
+            CopyAdditionallyAllowedTenants(result.AdditionallyAllowedTenants);
+            return new(result);
         }
 
         void CopyAdditionallyAllowedTenants(IList<string> additionalTenants)
@@ -193,7 +209,7 @@ namespace CommonUtilities
 
     // adapted from https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/mgmtcommon/AppAuthentication/Azure.Services.AppAuthentication/AzureServiceTokenProviderFactory.cs
     // Implements https://learn.microsoft.com/en-us/dotnet/api/overview/azure/app-auth-migration?view=azure-dotnet
-    internal partial class AzureServicesConnectionStringCredentialFactory
+    internal partial struct AzureServicesConnectionStringCredentialFactory
     {
         private const string RunAs = "RunAs";
         private const string Developer = "Developer";
@@ -202,6 +218,7 @@ namespace CommonUtilities
         private const string VisualStudioCode = "VisualStudioCode";
         private const string DeveloperTool = "DeveloperTool";
         private const string CurrentUser = "CurrentUser";
+        private const string Workload = "Workload";
         private const string App = "App";
         private const string AppId = "AppId";
         private const string AppKey = "AppKey";
@@ -268,14 +285,14 @@ namespace CommonUtilities
                 }
                 else
                 {
-                    throw new ArgumentException($"Connection string {connectionString} is not valid. {DeveloperTool} '{connectionSettings[DeveloperTool]}' is not valid. " +
-                                                $"Allowed values are {AzureCli}, {VisualStudio} or {VisualStudioCode}");
+                    throw new ArgumentException($"Connection string '{connectionString}' is not valid. {DeveloperTool} '{connectionSettings[DeveloperTool]}' is not valid. " +
+                                                $"Allowed values are {AzureCli}, {VisualStudio} or {VisualStudioCode}", nameof(options));
                 }
             }
             else if (string.Equals(runAs, CurrentUser, StringComparison.OrdinalIgnoreCase))
             {
                 // If RunAs=CurrentUser
-                throw new ArgumentException("Connection string " + connectionString + " is not supported for .NET Core.");
+                throw new ArgumentException("Connection string " + connectionString + " is not supported for .NET Core.", nameof(options));
             }
             else if (string.Equals(runAs, App, StringComparison.OrdinalIgnoreCase))
             {
@@ -304,18 +321,18 @@ namespace CommonUtilities
                         //            .Single(),
                         //        connectionSettings[TenantId]);
 
-                        throw new ArgumentException("Connection string " + connectionString + " is not supported. CertificateStoreLocation is deprecated.");
+                        throw new ArgumentException("Connection string '" + connectionString + "' is not supported. CertificateStoreLocation is deprecated.", nameof(options));
                     }
                     else if (connectionSettings.ContainsKey(CertificateThumbprint) ||
                              connectionSettings.ContainsKey(CertificateSubjectName))
                     {
                         // if certificate thumbprint or subject name are specified but certificate store location is not, throw error
-                        throw new ArgumentException($"Connection string {connectionString} is not valid. Must contain '{CertificateStoreLocation}' attribute and it must not be empty " +
-                                                    $"when using '{CertificateThumbprint}' and '{CertificateSubjectName}' attributes");
+                        throw new ArgumentException($"Connection string '{connectionString}' is not valid. Must contain '{CertificateStoreLocation}' attribute and it must not be empty " +
+                                                    $"when using '{CertificateThumbprint}' and '{CertificateSubjectName}' attributes", nameof(options));
                     }
                     else if (connectionSettings.ContainsKey(KeyVaultCertificateSecretIdentifier))
                     {
-                        throw new ArgumentException("Connection string " + connectionString + " is not supported. KeyVaultCertificateSecretIdentifier is deprecated.");
+                        throw new ArgumentException("Connection string '" + connectionString + "' is not supported. KeyVaultCertificateSecretIdentifier is deprecated.", nameof(options));
 
                         //ValidateMsiRetryTimeout(connectionSettings, options.ConnectionString);
 
@@ -371,10 +388,25 @@ namespace CommonUtilities
                             : 0);
                 }
             }
+            else if (string.Equals(runAs, Workload, StringComparison.OrdinalIgnoreCase))
+            {
+                // If RunAs=Workload use the specified Workload Identity
+                // If AppId key is present, use it as the ClientId
+                if (connectionSettings.TryGetValue(AppId, out var appId))
+                {
+                    ValidateAttribute(connectionSettings, AppId, options.ConnectionString);
+
+                    azureServiceTokenCredential = options.CreateWorkloadIdentityCredential(appId);
+                }
+                else
+                {
+                    azureServiceTokenCredential = options.CreateWorkloadIdentityCredential();
+                }
+            }
             else
             {
-                throw new ArgumentException($"Connection string {connectionString} is not valid. RunAs value '{connectionSettings[RunAs]}' is not valid.  " +
-                                            $"Allowed values are {Developer}, {CurrentUser}, or {App}");
+                throw new ArgumentException($"Connection string '{connectionString}' is not valid. RunAs value '{connectionSettings[RunAs]}' is not valid. " +
+                                            $"Allowed values are {Developer}, {CurrentUser}, {App}, or {Workload}");
             }
 
             return azureServiceTokenCredential;
@@ -395,7 +427,7 @@ namespace CommonUtilities
             if (connectionSettings != null &&
                 (!connectionSettings.ContainsKey(attribute) || string.IsNullOrWhiteSpace(connectionSettings[attribute])))
             {
-                throw new ArgumentException($"Connection string {connectionString} is not valid. Must contain '{attribute}' attribute and it must not be empty.", nameof(connectionString));
+                throw new ArgumentException($"Connection string '{connectionString}' is not valid. Must contain '{attribute}' attribute and it must not be empty.", nameof(connectionString));
             }
         }
 
@@ -447,11 +479,9 @@ namespace CommonUtilities
                     var parseSucceeded = int.TryParse(timeoutString, out _);
                     if (!parseSucceeded)
                     {
-                        throw new ArgumentException(
-                            $"Connection string {connectionString} is not valid. MsiRetryTimeout {timeoutString} is not valid. Valid values are integers greater than or equal to 0.");
+                        throw new ArgumentException($"Connection string '{connectionString}' is not valid. MsiRetryTimeout '{timeoutString}' is not valid. Valid values are integers greater than or equal to 0.", nameof(connectionString));
                     }
                 }
-
             }
         }
 
@@ -470,8 +500,7 @@ namespace CommonUtilities
             var match = ConnectionStringPatternRegex.Match(connectionString);
             if (!match.Success || match.Length != connectionString.Length)
             {
-                throw new ArgumentException(
-                        $"Connection string {connectionString} is not in a proper format. Expected format is Key1=Value1;Key2=Value2;", nameof(connectionString));
+                throw new ArgumentException($"Connection string '{connectionString}' is not in a proper format. Expected format is Key1=Value1;Key2=Value2;", nameof(connectionString));
             }
 
             var indexValue = 0;
@@ -503,8 +532,7 @@ namespace CommonUtilities
                     }
                     else
                     {
-                        throw new ArgumentException(
-                            $"Connection string {connectionString} is not in a proper format. Key '{key}' is repeated.", nameof(connectionString));
+                        throw new ArgumentException($"Connection string '{connectionString}' is not in a proper format. Key '{key}' is repeated.", nameof(connectionString));
                     }
                 }
             }

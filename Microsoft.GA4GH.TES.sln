@@ -51,6 +51,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.SDK.Tests", "src\Tes.SD
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.Repository", "src\Tes.Repository\Tes.Repository.csproj", "{515A4905-0522-4C72-BC18-41BE6A3BE880}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.SDK.Examples", "src\Tes.SDK.Examples\Tes.SDK.Examples.csproj", "{08A30572-2C5A-4F61-AF77-36F624A6020B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -121,6 +123,10 @@ Global
 		{515A4905-0522-4C72-BC18-41BE6A3BE880}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{515A4905-0522-4C72-BC18-41BE6A3BE880}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{515A4905-0522-4C72-BC18-41BE6A3BE880}.Release|Any CPU.Build.0 = Release|Any CPU
+		{08A30572-2C5A-4F61-AF77-36F624A6020B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{08A30572-2C5A-4F61-AF77-36F624A6020B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{08A30572-2C5A-4F61-AF77-36F624A6020B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{08A30572-2C5A-4F61-AF77-36F624A6020B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

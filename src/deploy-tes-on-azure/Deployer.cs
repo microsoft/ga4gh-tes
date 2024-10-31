@@ -359,6 +359,8 @@ namespace TesDeployer
 
                     var settings = ConfigureSettings(managedIdentity.Data.ClientId?.ToString("D"), aksValues, installedVersion);
                     var waitForRoleAssignmentPropagation = false;
+                    IEnumerable<string> manualPrecommands = null;
+                    Func<IKubernetes, Task> asyncTask = null;
 
                     if (installedVersion is null || installedVersion < new Version(4, 4))
                     {
@@ -386,10 +388,45 @@ namespace TesDeployer
                         }
                     }
 
-                    if (installedVersion is null || installedVersion < new Version(5, 2, 2))
+                    if (installedVersion is null || installedVersion < new Version(5, 4, 7)) // Previous attempt 5.2.2
                     {
-                        await operationNotAllowedConflictRetryPolicy.ExecuteWithRetryAsync(() => EnableWorkloadIdentity(aksCluster, managedIdentity, resourceGroup));
-                        await kubernetesManager.RemovePodAadChart();
+                        var connectionString = settings["AzureServicesAuthConnectionString"];
+                        if (connectionString.Contains("RunAs=App"))
+                        {
+                            settings["AzureServicesAuthConnectionString"] = connectionString.Replace("RunAs=App", "RunAs=Workload");
+                        }
+
+                        var pool = aksCluster.Data.AgentPoolProfiles.FirstOrDefault(pool => "nodepool1".Equals(pool.Name, StringComparison.OrdinalIgnoreCase));
+
+                        if (!(aksCluster.Data.SecurityProfile.IsWorkloadIdentityEnabled ?? false) ||
+                            !(aksCluster.Data.OidcIssuerProfile.IsEnabled ?? false) ||
+                            pool?.OSSku == ContainerServiceOSSku.Ubuntu ||
+                            !(pool?.EnableEncryptionAtHost ?? false) ||
+                            "Standard_D3_v2".Equals(pool?.VmSize, StringComparison.OrdinalIgnoreCase) ||
+                            !(aksCluster.Data.AadProfile?.IsAzureRbacEnabled ?? false) ||
+                            (await managedIdentity.GetFederatedIdentityCredentials()
+                                .SingleOrDefaultAsync(r => "toaFederatedIdentity".Equals(r.Id.Name, StringComparison.OrdinalIgnoreCase), cts.Token)) is null)
+                        {
+                            await AssignMeAsRbacClusterAdminToManagedClusterAsync(aksCluster);
+                            waitForRoleAssignmentPropagation = true;
+                            ManagedClusterEnableManagedAad(aksCluster.Data);
+
+                            if (pool?.OSSku == ContainerServiceOSSku.Ubuntu || !(pool?.EnableEncryptionAtHost ?? false))
+                            {
+                                pool.EnableEncryptionAtHost = true;
+                                pool.OSSku = ContainerServiceOSSku.AzureLinux;
+                                pool.VmSize = "Standard_D4s_v3";
+                            }
+
+                            aksCluster = await EnableWorkloadIdentity(aksCluster, managedIdentity, resourceGroup);
+                            await Task.Delay(TimeSpan.FromMinutes(2), cts.Token);
+
+                            if (installedVersion is null || installedVersion < new Version(5, 2, 3))
+                            {
+                                manualPrecommands = (manualPrecommands ?? []).Append("Include the following HELM command: uninstall aad-pod-identity --namespace kube-system");
+                                asyncTask = _ => kubernetesManager.RemovePodAadChart();
+                            }
+                        }
                     }
 
                     if (installedVersion is null || installedVersion < new Version(5, 3, 1))
@@ -414,12 +451,13 @@ namespace TesDeployer
 
                     if (waitForRoleAssignmentPropagation)
                     {
-                        await Execute("Waiting 5 minutes for role assignment propagation...",
-                            () => Task.Delay(TimeSpan.FromMinutes(5), cts.Token));
+                        // 10 minutes for propagation https://learn.microsoft.com/azure/role-based-access-control/troubleshooting
+                        await Execute("Waiting 10 minutes for role assignment propagation...",
+                            () => Task.Delay(TimeSpan.FromMinutes(10), cts.Token));
                     }
 
                     await kubernetesManager.UpgradeValuesYamlAsync(storageAccountData, settings);
-                    await PerformHelmDeploymentAsync(aksCluster);
+                    await PerformHelmDeploymentAsync(aksCluster, manualPrecommands, asyncTask);
                 }
 
                 if (!configuration.Update)
@@ -603,7 +641,8 @@ namespace TesDeployer
                             if (aksCluster is null && !configuration.ManualHelmDeployment)
                             {
                                 aksCluster = await ProvisionManagedClusterAsync(managedIdentity, logAnalyticsWorkspace, vnetAndSubnet?.vmSubnet.Id, configuration.PrivateNetworking.GetValueOrDefault());
-                                await EnableWorkloadIdentity(aksCluster, managedIdentity, resourceGroup);
+                                await AssignMeAsRbacClusterAdminToManagedClusterAsync(aksCluster);
+                                aksCluster = await EnableWorkloadIdentity(aksCluster, managedIdentity, resourceGroup);
                             }
                         }),
                         Task.Run(async () =>
@@ -797,7 +836,7 @@ namespace TesDeployer
                 if (!(exc is OperationCanceledException && cts.Token.IsCancellationRequested))
                 {
                     ConsoleEx.WriteLine();
-                    ConsoleEx.WriteLine($"{exc.GetType().Name}: {exc.Message}", ConsoleColor.Red);
+                    ConsoleEx.WriteLine($"{exc.GetType().FullName}: {exc.Message}", ConsoleColor.Red);
 
                     if (configuration.DebugLogging)
                     {
@@ -1118,6 +1157,15 @@ namespace TesDeployer
             }
         }
 
+        private static void ManagedClusterEnableManagedAad(ContainerServiceManagedClusterData managedCluster)
+        {
+            managedCluster.EnableRbac = true;
+            managedCluster.AadProfile ??= new();
+            managedCluster.AadProfile.IsAzureRbacEnabled = true;
+            managedCluster.AadProfile.IsManagedAadEnabled = true;
+            managedCluster.AadProfile.AdminGroupObjectIds.ToList().ForEach(item => _ = managedCluster.AadProfile.AdminGroupObjectIds.Remove(item));
+        }
+
         private async Task<ContainerServiceManagedClusterResource> ProvisionManagedClusterAsync(UserAssignedIdentityResource managedIdentity, OperationalInsightsWorkspaceResource logAnalyticsWorkspace, ResourceIdentifier subnetId, bool privateNetworking)
         {
             var uami = await EnsureResourceDataAsync(managedIdentity, r => r.HasData, r => r.GetAsync, cts.Token);
@@ -1138,19 +1186,7 @@ namespace TesDeployer
             ManagedClusterAddonProfile clusterAddonProfile = new(isEnabled: true);
             clusterAddonProfile.Config.Add("logAnalyticsWorkspaceResourceID", logAnalyticsWorkspace.Id);
             cluster.AddonProfiles.Add("omsagent", clusterAddonProfile);
-
-            if (!string.IsNullOrWhiteSpace(configuration.AadGroupIds))
-            {
-                cluster.EnableRbac = true;
-                cluster.AadProfile = new()
-                {
-                    IsAzureRbacEnabled = false,
-                    IsManagedAadEnabled = true
-                };
-
-                configuration.AadGroupIds.Split(",", StringSplitOptions.RemoveEmptyEntries).Select(Guid.Parse).ForEach(cluster.AadProfile.AdminGroupObjectIds.Add);
-            }
-
+            ManagedClusterEnableManagedAad(cluster);
             Azure.ResourceManager.Models.ManagedServiceIdentity identity = new(Azure.ResourceManager.Models.ManagedServiceIdentityType.UserAssigned);
             identity.UserAssignedIdentities.Add(uami.Id, new());
             cluster.Identity = identity;
@@ -1188,23 +1224,33 @@ namespace TesDeployer
                 async () => (await resourceGroup.GetContainerServiceManagedClusters().CreateOrUpdateAsync(Azure.WaitUntil.Completed, configuration.AksClusterName, cluster, cts.Token)).Value);
         }
 
-        private async Task EnableWorkloadIdentity(ContainerServiceManagedClusterResource aksCluster, UserAssignedIdentityResource managedIdentity, ResourceGroupResource resourceGroup)
+        private async Task<ContainerServiceManagedClusterResource> EnableWorkloadIdentity(ContainerServiceManagedClusterResource aksCluster, UserAssignedIdentityResource managedIdentity, ResourceGroupResource resourceGroup)
         {
             aksCluster.Data.SecurityProfile.IsWorkloadIdentityEnabled = true;
             aksCluster.Data.OidcIssuerProfile.IsEnabled = true;
             var aksClusterCollection = resourceGroup.GetContainerServiceManagedClusters();
-            var cluster = await aksClusterCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, aksCluster.Data.Name, aksCluster.Data, cts.Token);
+
+            var cluster = await Execute("Updating AKS cluster...",
+                async () => await operationNotAllowedConflictRetryPolicy.ExecuteWithRetryAsync(token => aksClusterCollection.CreateOrUpdateAsync(WaitUntil.Completed, aksCluster.Data.Name, aksCluster.Data, token), cts.Token));
+
             var aksOidcIssuer = cluster.Value.Data.OidcIssuerProfile.IssuerUriInfo;
 
             var federatedCredentialsCollection = managedIdentity.GetFederatedIdentityCredentials();
-            var data = new FederatedIdentityCredentialData()
-            {
-                IssuerUri = new Uri(aksOidcIssuer),
-                Subject = $"system:serviceaccount:{configuration.AksCoANamespace}:{managedIdentity.Id.Name}-sa"
-            };
-            data.Audiences.Add("api://AzureADTokenExchange");
 
-            await federatedCredentialsCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, "toaFederatedIdentity", data, cts.Token);
+            if ((await federatedCredentialsCollection.SingleOrDefaultAsync(r => "toaFederatedIdentity".Equals(r.Id.Name, StringComparison.OrdinalIgnoreCase), cts.Token)) is null)
+            {
+                var data = new FederatedIdentityCredentialData()
+                {
+                    IssuerUri = new Uri(aksOidcIssuer),
+                    Subject = $"system:serviceaccount:{configuration.AksCoANamespace}:{managedIdentity.Id.Name}-sa"
+                };
+                data.Audiences.Add("api://AzureADTokenExchange");
+
+                await Execute("Enabling workload identity...",
+                    async () => _ = await operationNotAllowedConflictRetryPolicy.ExecuteWithRetryAsync(token => federatedCredentialsCollection.CreateOrUpdateAsync(WaitUntil.Completed, "toaFederatedIdentity", data, token), cts.Token));
+            }
+
+            return cluster.Value;
         }
 
         private static Dictionary<string, string> GetDefaultValues(string[] files)
@@ -1252,7 +1298,7 @@ namespace TesDeployer
                 UpdateSetting(settings, defaults, "BatchAccountName", configuration.BatchAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ApplicationInsightsAccountName", configuration.ApplicationInsightsAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ManagedIdentityClientId", managedIdentityClientId, ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "AzureServicesAuthConnectionString", $"RunAs=App;AppId={managedIdentityClientId}", ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "AzureServicesAuthConnectionString", $"RunAs=Workload;AppId={managedIdentityClientId}", ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "KeyVaultName", configuration.KeyVaultName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "AksCoANamespace", configuration.AksCoANamespace, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "CrossSubscriptionAKSDeployment", configuration.CrossSubscriptionAKSDeployment);
@@ -1531,6 +1577,39 @@ namespace TesDeployer
             => AssignRoleToResourceAsync(managedIdentity, storageAccount, GetSubscriptionRoleDefinition(RoleDefinitions.General.Contributor),
                 $"Assigning '{RoleDefinitions.GetDisplayName(RoleDefinitions.General.Contributor)}' role for user-managed identity to Storage Account resource scope...");
 
+        private async Task AssignMeAsRbacClusterAdminToManagedClusterAsync(ContainerServiceManagedClusterResource managedCluster)
+        {
+            var message = $"Assigning '{RoleDefinitions.GetDisplayName(RoleDefinitions.Containers.RbacClusterAdmin)}' role for {{Admins}} to AKS cluster resource scope...";
+            var roleDefinitionId = GetSubscriptionRoleDefinition(RoleDefinitions.Containers.RbacClusterAdmin);
+
+            var adminGroupObjectIds = managedCluster.Data.AadProfile?.AdminGroupObjectIds ?? [];
+            adminGroupObjectIds = adminGroupObjectIds.Count != 0 ? adminGroupObjectIds : (string.IsNullOrWhiteSpace(configuration.AadGroupIds) ? [] : configuration.AadGroupIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Guid.Parse).ToList());
+
+            if (adminGroupObjectIds.Count == 0)
+            {
+                var user = await GetUserObjectAsync();
+
+                if (user is not null)
+                {
+                    await AssignRoleToResourceAsync(
+                        [new Guid(user.Id)],
+                        Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType.User,
+                        managedCluster,
+                        roleDefinitionId,
+                        message.Replace(@"{Admins}", "deployer user"));
+                }
+            }
+            else
+            {
+                await AssignRoleToResourceAsync(
+                    adminGroupObjectIds,
+                    Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType.Group,
+                    managedCluster,
+                    roleDefinitionId,
+                    message.Replace(@"{Admins}", "designated group"));
+            }
+        }
+
         private Task<StorageAccountResource> CreateStorageAccountAsync()
             => Execute(
                 $"Creating Storage Account: {configuration.StorageAccountName}...",
@@ -1679,28 +1758,37 @@ namespace TesDeployer
         private ResourceIdentifier GetSubscriptionRoleDefinition(Guid roleDefinition)
             => AuthorizationRoleDefinitionResource.CreateResourceIdentifier(SubscriptionResource.CreateResourceIdentifier(configuration.SubscriptionId), new(roleDefinition.ToString("D")));
 
-        private async Task<bool> AssignRoleToResourceAsync(UserAssignedIdentityResource managedIdentity, ArmResource resource, ResourceIdentifier roleDefinitionId, string message)
+        private Task<bool> AssignRoleToResourceAsync(UserAssignedIdentityResource managedIdentity, ArmResource resource, ResourceIdentifier roleDefinitionId, string message)
+            => AssignRoleToResourceAsync([managedIdentity.Data.PrincipalId.Value], Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType.ServicePrincipal, resource, roleDefinitionId, message);
+
+        private async Task<bool> AssignRoleToResourceAsync(IEnumerable<Guid> principalIds, Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType principalType, ArmResource resource, ResourceIdentifier roleDefinitionId, string message)
         {
-            if (await resource.GetRoleAssignments().GetAllAsync(filter: "atScope()", cancellationToken: cts.Token)
-                .SelectAwaitWithCancellation(async (a, ct) => await EnsureResourceDataAsync(a, r => r.HasData, CallGetAsync, ct))
-                .Where(a => a?.HasData ?? false)
-                .Where(a => managedIdentity.Data.PrincipalId.Value.Equals(a.Data.PrincipalId.Value))
-                .Where(a => roleDefinitionId.Equals(a.Data.RoleDefinitionId))
-                .AnyAsync(cts.Token))
+            var changed = false;
+
+            foreach (var principal in principalIds)
             {
-                return false;
+                if (await resource.GetRoleAssignments().GetAllAsync(filter: "atScope()", cancellationToken: cts.Token)
+                    .SelectAwaitWithCancellation(async (a, ct) => await EnsureResourceDataAsync(a, r => r.HasData, CallGetAsync, ct))
+                    .Where(a => a?.HasData ?? false)
+                    .Where(a => principal.Equals(a.Data.PrincipalId.Value))
+                    .Where(a => roleDefinitionId.Equals(a.Data.RoleDefinitionId))
+                    .AnyAsync(cts.Token))
+                {
+                    continue;
+                }
+
+                changed = true;
+                await Execute(message, () => roleAssignmentHashConflictRetryPolicy.ExecuteWithRetryAsync(token =>
+                    (Task)resource.GetRoleAssignments().CreateOrUpdateAsync(WaitUntil.Completed, Guid.NewGuid().ToString(),
+                        new(roleDefinitionId, principal)
+                        {
+                            PrincipalType = principalType
+                        },
+                        token),
+                    cts.Token));
             }
 
-            await Execute(message, () => roleAssignmentHashConflictRetryPolicy.ExecuteWithRetryAsync(token =>
-                (Task)resource.GetRoleAssignments().CreateOrUpdateAsync(WaitUntil.Completed, Guid.NewGuid().ToString(),
-                    new(roleDefinitionId, managedIdentity.Data.PrincipalId.Value)
-                    {
-                        PrincipalType = Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType.ServicePrincipal
-                    },
-                    token),
-                cts.Token));
-
-            return true;
+            return changed;
 
             static Func<CancellationToken, Task<Response<RoleAssignmentResource>>> CallGetAsync(RoleAssignmentResource resource)
             {
@@ -1871,7 +1959,7 @@ namespace TesDeployer
 
                     properties.AccessPolicies.AddRange(
                     [
-                        new(tenantId.Value, await GetUserObjectId(), permissions),
+                        new(tenantId.Value, (await GetUserObjectAsync()).Id, permissions),
                         new(tenantId.Value, managedIdentity.Data.PrincipalId.Value.ToString("D"), permissions),
                     ]);
 
@@ -1913,41 +2001,48 @@ namespace TesDeployer
                     }
 
                     return vault;
-
-                    async ValueTask<string> GetUserObjectId()
-                    {
-                        string baseUrl;
-                        {
-                            using var client = GraphClientFactory.Create(nationalCloud: NationalCloud());
-                            baseUrl = client.BaseAddress.AbsoluteUri;
-                        }
-                        {
-                            using var client = new GraphServiceClient(tokenCredential, baseUrl: baseUrl);
-                            return (await client.Me.GetAsync(cancellationToken: cts.Token)).Id;
-                        }
-                    }
-
-                    // Note that there are two different values for USGovernment.
-                    string NationalCloud()
-                    {
-                        if (cloudEnvironment.ArmEnvironment.Endpoint == ArmEnvironment.AzurePublicCloud.Endpoint)
-                        {
-                            return GraphClientFactory.Global_Cloud;
-                        }
-
-                        if (cloudEnvironment.ArmEnvironment.Endpoint == ArmEnvironment.AzureChina.Endpoint)
-                        {
-                            return GraphClientFactory.China_Cloud;
-                        }
-
-                        if (cloudEnvironment.ArmEnvironment.Endpoint == ArmEnvironment.AzureGovernment.Endpoint)
-                        {
-                            return GraphClientFactory.USGOV_Cloud; // TODO: when should we return GraphClientFactory.USGOV_DOD_Cloud?
-                        }
-
-                        return GraphClientFactory.Global_Cloud;
-                    }
                 });
+
+        private Microsoft.Graph.Models.User _me = null;
+
+        async Task<Microsoft.Graph.Models.User> GetUserObjectAsync()
+        {
+            if (_me is null)
+            {
+                Dictionary<Uri, string> nationalClouds = new(
+                [
+                    new(ArmEnvironment.AzurePublicCloud.Endpoint, GraphClientFactory.Global_Cloud),
+                    new(ArmEnvironment.AzureChina.Endpoint, GraphClientFactory.China_Cloud),
+                    // Note that there are two different values for USGovernment.
+                    new(ArmEnvironment.AzureGovernment.Endpoint, GraphClientFactory.USGOV_Cloud), // TODO: when should we return GraphClientFactory.USGOV_DOD_Cloud?
+                ]);
+
+                string baseUrl;
+                {
+                    using var client = GraphClientFactory.Create(nationalCloud: nationalClouds.TryGetValue(cloudEnvironment.ArmEnvironment.Endpoint, out var value) ? value : GraphClientFactory.Global_Cloud);
+                    baseUrl = client.BaseAddress.AbsoluteUri;
+                }
+                {
+                    using var client = new GraphServiceClient(tokenCredential, baseUrl: baseUrl);
+
+                    try
+                    {
+                        _me = await client.Me.GetAsync(cancellationToken: cts.Token);
+                    }
+                    catch (AuthenticationFailedException)
+                    {
+                        _me = null;
+                    }
+                    catch (Microsoft.Graph.Models.ODataErrors.ODataError ex) when ("BadRequest".Equals(ex.Error?.Code, StringComparison.OrdinalIgnoreCase) && ex.Message.Contains("/me", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // "/me request is only valid with delegated authentication flow."
+                        _me = null;
+                    }
+                }
+            }
+
+            return _me;
+        }
 
         private Task<OperationalInsightsWorkspaceResource> CreateLogAnalyticsWorkspaceResourceAsync(string workspaceName)
             => Execute(
@@ -2427,6 +2522,7 @@ namespace TesDeployer
             ThrowIfProvidedForUpdate(configuration.VnetResourceGroupName, nameof(configuration.VnetResourceGroupName));
             ThrowIfProvidedForUpdate(configuration.SubnetName, nameof(configuration.SubnetName));
             ThrowIfProvidedForUpdate(configuration.Tags, nameof(configuration.Tags));
+            ThrowIfProvidedForUpdate(configuration.AadGroupIds, nameof(configuration.AadGroupIds));
 
             ThrowIfTagsFormatIsUnacceptable(configuration.Tags, nameof(configuration.Tags));
 
@@ -2458,6 +2554,21 @@ namespace TesDeployer
             if (!new[] { "AzureCloud", "AzureUSGovernment", "AzureChinaCloud" }.Contains(configuration.AzureCloudName, StringComparer.OrdinalIgnoreCase))
             {
                 throw new ValidationException("AzureCloudName must be either 'AzureCloud','AzureUSGovernment', or 'AzureChinaCloud'");
+            }
+
+            if (!string.IsNullOrWhiteSpace(configuration.AadGroupIds))
+            {
+                try
+                {
+                    if (!configuration.AadGroupIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Guid.Parse).Any())
+                    {
+                        throw new FormatException();
+                    }
+                }
+                catch (FormatException)
+                {
+                    throw new ValidationException("Invalid configuration option AadGroupIds is not formatted correctly.");
+                }
             }
         }
 

@@ -11,7 +11,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Azure.ResourceManager.Batch;
 using Azure.ResourceManager.Batch.Models;
-using Azure.Storage.Blobs;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -1755,11 +1754,11 @@ namespace TesApi.Tests
                 return proxy;
             }
 
-            private readonly Dictionary<string, IList<MetadataItem>> poolMetadata = [];
+            private readonly System.Collections.Concurrent.ConcurrentDictionary<string, IList<MetadataItem>> poolMetadata = [];
 
             internal void DeleteBatchPoolImpl(string poolId, CancellationToken cancellationToken)
             {
-                _ = poolMetadata.Remove(poolId);
+                _ = poolMetadata.TryRemove(poolId, out _);
                 AzureProxyDeleteBatchPool(poolId, cancellationToken);
             }
 
@@ -1769,7 +1768,7 @@ namespace TesApi.Tests
                 pool.Metadata.Remove(poolNameItem);
                 var poolId = poolNameItem.Value;
 
-                poolMetadata.Add(poolId, pool.Metadata?.Select(Convert).ToList());
+                poolMetadata.AddOrUpdate(poolId, _ => pool.Metadata?.Select(Convert).ToList(), (_, _) => throw new Exception("Unexpected attempt to modify pool."));
                 return poolId;
 
                 static MetadataItem Convert(BatchAccountPoolMetadataItem item)
