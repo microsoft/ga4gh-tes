@@ -25,6 +25,7 @@ using Newtonsoft.Json.Serialization;
 using Tes.ApiClients;
 using Tes.Models;
 using Tes.Repository;
+using Tes.Repository.Models;
 using TesApi.Filters;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Batch;

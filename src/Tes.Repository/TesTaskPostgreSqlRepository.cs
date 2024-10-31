@@ -18,6 +18,8 @@ namespace Tes.Repository
     using Microsoft.Extensions.Options;
     using Npgsql;
     using Tes.Models;
+    using Tes.Repository.Models;
+    using Tes.Repository.Utilities;
     using Tes.Utilities;
 
     /// <summary>

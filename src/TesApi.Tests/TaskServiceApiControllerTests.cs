@@ -593,7 +593,7 @@ namespace TesApi.Tests
                     new(null, []));
                 r.Setup(repo => repo
                     .JsonFormattableRawString(It.IsAny<string>(), It.IsAny<FormattableString>()))
-                .Returns((string property, FormattableString sql) => new Tes.Utilities.PrependableFormattableString($"{property}:", sql));
+                .Returns((string property, FormattableString sql) => new Tes.Repository.Utilities.PrependableFormattableString($"{property}:", sql));
             });
 
         private static Task<IActionResult> ListTasksWithTagArgumentsAsync(TaskServiceApiController controller, string query)

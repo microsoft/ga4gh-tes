@@ -3,7 +3,7 @@
 
 using System;
 
-namespace Tes.Utilities
+namespace Tes.Repository.Utilities
 {
     internal class PrependableFormattableString : FormattableString
     {

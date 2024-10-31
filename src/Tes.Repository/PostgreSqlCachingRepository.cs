@@ -21,7 +21,7 @@ namespace Tes.Repository
     /// </summary>
     /// <typeparam name="TDbItem">Database table schema class</typeparam>
     /// <typeparam name="TItem">Corresponding type for <typeparamref name="TDbItem"/></typeparam>
-    public abstract class PostgreSqlCachingRepository<TDbItem, TItem> : IDisposable where TDbItem : class where TItem : RepositoryItem<TItem>
+    public abstract class PostgreSqlCachingRepository<TDbItem, TItem> : IDisposable where TDbItem : Models.KeyedDbItem where TItem : RepositoryItem<TItem>
     {
         private const int BatchSize = 1000;
         private static readonly TimeSpan defaultCompletedTaskCacheExpiration = TimeSpan.FromDays(1);
@@ -34,7 +34,7 @@ namespace Tes.Repository
 
         private record struct WriteItem(TDbItem DbItem, WriteAction Action, TaskCompletionSource<TDbItem> TaskSource);
         private readonly Channel<WriteItem> itemsToWrite = Channel.CreateUnbounded<WriteItem>(new() { SingleReader = true });
-        private readonly ConcurrentDictionary<TDbItem, object> updatingItems = new(); // Collection of all pending updates to be written, to faciliate detection of simultaneous parallel updates.
+        private readonly ConcurrentDictionary<long, object> updatingItems = new(); // Collection of all pending updates to be written, to faciliate detection of simultaneous parallel updates.
         private readonly CancellationTokenSource writerWorkerCancellationTokenSource = new();
         private readonly Task writerWorkerTask;
 
@@ -153,7 +153,7 @@ namespace Tes.Repository
             var source = new TaskCompletionSource<TDbItem>();
             var result = source.Task;
 
-            if (updatingItems.TryAdd(item, null))
+            if (updatingItems.TryAdd(item.Id, null))
             {
                 result = source.Task.ContinueWith(RemoveUpdatingItem).Unwrap();
             }
@@ -173,7 +173,7 @@ namespace Tes.Repository
 
             Task<TDbItem> RemoveUpdatingItem(Task<TDbItem> task)
             {
-                _ = updatingItems.Remove(item, out _);
+                _ = updatingItems.Remove(item.Id, out _);
                 return task.Status switch
                 {
                     TaskStatus.RanToCompletion => Task.FromResult(task.Result),

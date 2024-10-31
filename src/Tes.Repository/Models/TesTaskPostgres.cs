@@ -4,19 +4,16 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
-namespace Tes.Models
+namespace Tes.Repository.Models
 {
     /// <summary>
     /// Database schema for encapsulating a TesTask as Json for Postgresql.
     /// </summary>
-    [Table(Repository.TesDbContext.TesTasksPostgresTableName)]
-    public class TesTaskDatabaseItem
+    [Table(TesDbContext.TesTasksPostgresTableName)]
+    public class TesTaskDatabaseItem : KeyedDbItem
     {
-        [Column("id")]
-        public long Id { get; set; }
-
         [Column("json", TypeName = "jsonb")]
-        public TesTask Json { get; set; }
+        public Tes.Models.TesTask Json { get; set; }
 
         public TesTaskDatabaseItem Clone()
         {

@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-namespace Tes.Models
+namespace Tes.Repository.Models
 {
     /// <summary>
     /// PostgresSql configuration options
