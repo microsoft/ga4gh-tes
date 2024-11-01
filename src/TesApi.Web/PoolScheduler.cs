@@ -190,24 +190,27 @@ namespace TesApi.Web
                 do
                 {
                     requeues.Clear();
-
                     await OrchestrateTesTasksOnBatchAsync(
                         $"NodeState ({poolId})",
                         _ => ValueTask.FromResult(tasks.ToAsyncEnumerable()),
                         (tesTasks, token) => TaskScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, tesTasks.Select(task => statesByTask[task.Id]).ToArray(), token),
                         ex => { requeues.Add(ex.RepositoryItem.Id); return ValueTask.CompletedTask; }, cancellationToken);
 
-                    tasks.Clear();
-
+                    // Fetch updated TesTasks from the repository
+                    ConcurrentBag<TesTask> requeuedTasks = [];
                     await Parallel.ForEachAsync(requeues, cancellationToken, async (id, token) =>
                     {
                         TesTask tesTask = default;
 
                         if (await Repository.TryGetItemAsync(id, token, task => tesTask = task))
                         {
-                            tasks.Add(tesTask);
+                            requeuedTasks.Add(tesTask);
                         }
                     });
+
+                    // Stage next loop
+                    tasks.Clear();
+                    requeuedTasks.ForEach(tasks.Add);
                 }
                 while (!requeues.IsEmpty);
             }
