@@ -159,7 +159,7 @@ namespace Tes.Runner.Storage
             if (fileInfoProvider.FileExists(expandedPath))
             {
                 //treat the output as a single file and use the target URL as is
-                logger.LogInformation("Adding file: {ExpandedPath} to the output list with a target URL as is", expandedPath);
+                logger.LogDebug("Adding file: {ExpandedPath} to the output list with a target URL as is", expandedPath);
 
                 yield return CreateExpandedFileOutputUsingTargetUrl(output,
                     absoluteFilePath: expandedPath);
@@ -182,7 +182,7 @@ namespace Tes.Runner.Storage
 
                 foreach (var file in fileInfoProvider.GetFilesBySearchPattern(rootPathPair.Root, rootPathPair.RelativePath))
                 {
-                    logger.LogInformation("Adding file: {RelativePathToSearchPath} with absolute path: {AbsolutePath} to the output list with a combined target URL", file.RelativePathToSearchPath, file.AbsolutePath);
+                    logger.LogDebug("Adding file: {RelativePathToSearchPath} with absolute path: {AbsolutePath} to the output list with a combined target URL", file.RelativePathToSearchPath, file.AbsolutePath);
 
                     yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, absoluteFilePath: file.AbsolutePath, relativePathToSearchPath: file.RelativePathToSearchPath);
                 }

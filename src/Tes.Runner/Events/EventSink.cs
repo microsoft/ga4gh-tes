@@ -26,7 +26,7 @@ namespace Tes.Runner.Events
 
         public void Start()
         {
-            logger.LogDebug("Starting events processing handler");
+            logger.LogTrace("Starting events processing handler");
 
             eventHandlerTask = Task.Run(async () => await EventHandlerAsync());
         }
@@ -41,7 +41,7 @@ namespace Tes.Runner.Events
 
             if (eventHandlerTask.IsCompleted)
             {
-                logger.LogDebug("Task already completed");
+                logger.LogTrace("Task already completed");
                 return;
             }
 
@@ -70,11 +70,11 @@ namespace Tes.Runner.Events
                 {
                     try
                     {
-                        logger.LogDebug($"Handling event. Event Name: {eventMessage.Name} Event ID: {eventMessage.Id} ");
+                        logger.LogTrace($"Handling event. Event Name: {eventMessage.Name} Event ID: {eventMessage.Id} ");
 
                         await HandleEventAsync(eventMessage);
 
-                        logger.LogDebug($"Event handled. Event Name: {eventMessage.Name} Event ID: {eventMessage.Id} ");
+                        logger.LogTrace($"Event handled. Event Name: {eventMessage.Name} Event ID: {eventMessage.Id} ");
                     }
                     catch (Exception e)
                     {

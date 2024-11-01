@@ -45,11 +45,11 @@ namespace TesApi.Web.Management.Batch
 
                 var batchManagementClient = azureClientsFactory.CreateBatchAccountManagementClient();
 
-                logger.LogInformation("Creating batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", nameItem.Value, poolSpec.VmSize, isPreemptable);
+                logger.LogDebug("Creating batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", nameItem.Value, poolSpec.VmSize, isPreemptable);
 
                 _ = await batchManagementClient.GetBatchAccountPools().CreateOrUpdateAsync(Azure.WaitUntil.Completed, nameItem.Value, poolSpec, cancellationToken: cancellationToken);
 
-                logger.LogInformation("Successfully created batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", nameItem.Value, poolSpec.VmSize, isPreemptable);
+                logger.LogDebug("Successfully created batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", nameItem.Value, poolSpec.VmSize, isPreemptable);
 
                 return nameItem.Value;
             }
@@ -68,13 +68,13 @@ namespace TesApi.Web.Management.Batch
             {
                 var batchManagementClient = azureClientsFactory.CreateBatchAccountManagementClient();
 
-                logger.LogInformation(
+                logger.LogDebug(
                     @"Deleting pool with the id/name:{PoolName} in Batch account:{BatchAccountName}", poolId, azureClientsFactory.BatchAccountInformation.Name);
 
                 _ = await batchManagementClient.GetBatchAccountPools().Get(poolId, cancellationToken: cancellationToken).Value
                     .DeleteAsync(Azure.WaitUntil.Completed, cancellationToken);
 
-                logger.LogInformation(
+                logger.LogDebug(
                     @"Successfully deleted pool with the id/name:{PoolName} in Batch account:{BatchAccountName}", poolId, azureClientsFactory.BatchAccountInformation.Name);
             }
             catch (Exception exc)

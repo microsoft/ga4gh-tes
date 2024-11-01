@@ -132,7 +132,7 @@ namespace Tes.RunnerCLI.Commands
             {
                 var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri, apiVersion);
 
-                Logger.LogDebug("Executing commands in container for Task ID: {NodeTaskId}", nodeTask.Id);
+                Logger.LogTrace("Executing commands in container for Task ID: {NodeTaskId}", nodeTask.Id);
 
                 await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
 
@@ -181,7 +181,7 @@ namespace Tes.RunnerCLI.Commands
             string apiVersion)
         {
 
-            Logger.LogDebug("Starting upload operation.");
+            Logger.LogTrace("Starting upload operation.");
 
             var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri, apiVersion);
 
@@ -213,7 +213,7 @@ namespace Tes.RunnerCLI.Commands
         {
             var options = CommandLauncher.CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion, setContentMd5OnUploads: false);
 
-            Logger.LogDebug("Starting download operation.");
+            Logger.LogTrace("Starting download operation.");
 
             var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri, apiVersion);
 

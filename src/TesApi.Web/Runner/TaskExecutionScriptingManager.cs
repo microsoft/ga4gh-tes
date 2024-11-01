@@ -112,14 +112,14 @@ namespace TesApi.Web.Runner
         {
             var batchRunCommand = $"/usr/bin/env -S \"{BatchScheduler.BatchNodeSharedEnvVar}/{BatchScheduler.NodeTaskRunnerFilename} -i '{(new Azure.Storage.Blobs.BlobUriBuilder(batchScriptAssets.NodeTaskUrl) { Sas = null }).ToUri().AbsoluteUri}'\"";
 
-            logger.LogInformation("Run command: {RunCommand}", batchRunCommand);
+            logger.LogDebug("Run command: {RunCommand}", batchRunCommand);
 
             return batchRunCommand;
         }
 
         private async Task<Uri> CreateAndUploadNodeTaskAsync(TesTask tesTask, NodeTaskConversionOptions nodeTaskConversionOptions, CancellationToken cancellationToken)
         {
-            logger.LogInformation("Creating and uploading node task definition file for Task ID: {TesTask}", tesTask.Id);
+            logger.LogDebug("Creating and uploading node task definition file for Task ID: {TesTask}", tesTask.Id);
 
             var nodeTask = await taskToNodeConverter.ToNodeTaskAsync(tesTask, nodeTaskConversionOptions, cancellationToken);
 
@@ -127,7 +127,7 @@ namespace TesApi.Web.Runner
 
             var nodeTaskUrl = await UploadContentAsBlobToInternalTesLocationAsync(tesTask, nodeTaskContent, NodeTaskFilename, cancellationToken);
 
-            logger.LogInformation("Successfully created and uploaded node task definition file for Task ID: {TesTask}", tesTask.Id);
+            logger.LogDebug("Successfully created and uploaded node task definition file for Task ID: {TesTask}", tesTask.Id);
 
             return nodeTaskUrl;
         }

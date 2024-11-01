@@ -95,7 +95,7 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
     {
         try
         {
-            logger.LogInformation($"Getting quota information for Batch Account: {clientsFactory.BatchAccountInformation.Name} calling ARM API");
+            logger.LogDebug($"Getting quota information for Batch Account: {clientsFactory.BatchAccountInformation.Name} calling ARM API");
 
             var managementClient = clientsFactory.CreateBatchAccountManagementClient();
             var batchAccount = (await managementClient.GetAsync(cancellationToken: cancellationToken)).Value.Data;

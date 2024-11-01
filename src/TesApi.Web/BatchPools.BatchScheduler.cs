@@ -209,7 +209,7 @@ namespace TesApi.Web
         public Task DeletePoolAndJobAsync(IBatchPool pool, CancellationToken cancellationToken)
         {
             // TODO: Consider moving any remaining tasks to another pool, or failing tasks explicitly
-            logger.LogDebug(@"Deleting pool and job {PoolId}", pool.PoolId);
+            logger.LogTrace(@"Deleting pool and job {PoolId}", pool.PoolId);
 
             return Task.WhenAll(
                 AllowIfNotFound(batchPoolManager.DeleteBatchPoolAsync(pool.PoolId, cancellationToken)),

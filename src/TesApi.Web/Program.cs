@@ -109,6 +109,14 @@ namespace TesApi.Web
                 {
                     if (context.HostingEnvironment.IsProduction())
                     {
+                        // This configures Container logging in AKS
+                        logging.AddSimpleConsole(options =>
+                        {
+                            options.IncludeScopes = true;
+                            options.SingleLine = true;
+                            options.UseUtcTimestamp = true;
+                        });
+                        logging.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Warning);
 
                         if (!string.IsNullOrEmpty(applicationInsightsOptions?.ConnectionString))
                         {

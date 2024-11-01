@@ -89,7 +89,7 @@ namespace TesApi.Controllers
                 }
                 else if (tesTask.State != TesState.CANCELED)
                 {
-                    logger.LogInformation("Canceling task");
+                    logger.LogInformation("Canceling task {TesTask}", id);
                     tesTask.State = TesState.CANCELING;
 
                     try
@@ -281,7 +281,7 @@ namespace TesApi.Controllers
         [SwaggerResponse(statusCode: 200, type: typeof(TesServiceInfo), description: "")]
         public virtual IActionResult GetServiceInfo()
         {
-            logger.LogInformation("Id: {ServiceInfoId} Name: {ServiceInfoName} Type: {ServiceInfoType} Description: {ServiceInfoDescription} Organization: {ServiceInfoOrganization} ContactUrl: {ServiceInfoContactUrl} DocumentationUrl: {ServiceInfoDocumentationUrl} CreatedAt:{ServiceInfoCreatedAt} UpdatedAt:{ServiceInfoUpdatedAt} Environment: {ServiceInfoEnvironment} Version: {ServiceInfoVersion} Storage: {ServiceInfoStorage} TesResourcesSupportedBackendParameters: {ServiceInfoTesResourcesSupportedBackendParameters}",
+            logger.LogDebug("Id: {ServiceInfoId} Name: {ServiceInfoName} Type: {ServiceInfoType} Description: {ServiceInfoDescription} Organization: {ServiceInfoOrganization} ContactUrl: {ServiceInfoContactUrl} DocumentationUrl: {ServiceInfoDocumentationUrl} CreatedAt:{ServiceInfoCreatedAt} UpdatedAt:{ServiceInfoUpdatedAt} Environment: {ServiceInfoEnvironment} Version: {ServiceInfoVersion} Storage: {ServiceInfoStorage} TesResourcesSupportedBackendParameters: {ServiceInfoTesResourcesSupportedBackendParameters}",
                 serviceInfo.Id, serviceInfo.Name, serviceInfo.Type, serviceInfo.Description, serviceInfo.Organization, serviceInfo.ContactUrl, serviceInfo.DocumentationUrl, serviceInfo.CreatedAt, serviceInfo.UpdatedAt, serviceInfo.Environment, serviceInfo.Version, string.Join(",", serviceInfo.Storage ?? []), string.Join(",", serviceInfo.TesResourcesSupportedBackendParameters ?? []));
             return StatusCode(200, serviceInfo);
         }

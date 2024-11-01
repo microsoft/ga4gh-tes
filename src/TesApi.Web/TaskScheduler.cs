@@ -92,7 +92,7 @@ namespace TesApi.Web
                 return;
             }
 
-            Logger.LogDebug(@"Querying active tasks");
+            Logger.LogTrace(@"Querying active tasks");
 
             foreach (var tesTask in
                 (await Repository.GetItemsAsync(
@@ -104,7 +104,7 @@ namespace TesApi.Web
                 {
                     if (TesState.QUEUED.Equals(tesTask.State) && string.IsNullOrWhiteSpace(tesTask.PoolId))
                     {
-                        Logger.LogDebug(@"Adding queued task from repository");
+                        Logger.LogTrace(@"Adding queued task from repository");
                         queuedTesTasks.Enqueue(tesTask);
                     }
                     else
@@ -118,7 +118,7 @@ namespace TesApi.Web
                         }
                         else
                         {
-                            Logger.LogDebug(@"Adding task to pool w/o cloudtask");
+                            Logger.LogTrace(@"Adding task to pool w/o cloudtask");
                             _ = pool.AssociatedTesTasks.AddOrUpdate(tesTask.Id, key => null, (key, value) => value);
                         }
                     }
@@ -129,7 +129,7 @@ namespace TesApi.Web
                 }
             }
 
-            Logger.LogDebug(@"Active tasks processed");
+            Logger.LogTrace(@"Active tasks processed");
         }
 
         /// <inheritdoc />
@@ -159,7 +159,7 @@ namespace TesApi.Web
                 return;
             }
 
-            Logger.LogDebug(@"Task load: {TaskCount}", queuedTasks.Count);
+            Logger.LogTrace(@"Task load: {TaskCount}", queuedTasks.Count);
             await Task.WhenAll(queuedTasks);
         }
 
@@ -375,7 +375,7 @@ namespace TesApi.Web
                     TesTask tesTask = default;
                     if (await Repository.TryGetItemAsync(id, token, task => tesTask = task) && tesTask is not null)
                     {
-                        Logger.LogDebug("Completing event '{TaskEvent}' for task {TesTask}.", @event, tesTask.Id);
+                        Logger.LogTrace("Completing event '{TaskEvent}' for task {TesTask}.", @event, tesTask.Id);
                         return tesTask;
                     }
                     else

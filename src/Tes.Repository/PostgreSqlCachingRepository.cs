@@ -62,7 +62,7 @@ namespace Tes.Repository
             writerWorkerTask = Task.Run(() => WriterWorkerAsync(writerWorkerCancellationTokenSource.Token))
                 .ContinueWith(async task =>
                 {
-                    Logger?.LogInformation("The repository WriterWorkerAsync ended with TaskStatus: {TaskStatus}", task.Status);
+                    Logger?.LogDebug("The repository WriterWorkerAsync ended with TaskStatus: {TaskStatus}", task.Status);
 
                     if (task.Status == TaskStatus.Faulted)
                     {
@@ -77,7 +77,7 @@ namespace Tes.Repository
                     await Task.Delay(TimeSpan.FromSeconds(40)); // Give the logger time to flush; default flush is 30s
                     hostApplicationLifetime?.StopApplication();
                 }, TaskContinuationOptions.NotOnCanceled)
-                .ContinueWith(task => Logger?.LogInformation("The repository WriterWorkerAsync ended normally"), TaskContinuationOptions.OnlyOnCanceled);
+                .ContinueWith(task => Logger?.LogDebug("The repository WriterWorkerAsync ended normally"), TaskContinuationOptions.OnlyOnCanceled);
         }
 
         /// <summary>

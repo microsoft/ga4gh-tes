@@ -241,11 +241,11 @@ namespace TesApi.Web.Storage
 
             CheckIfAccountIsTerraStorageAccount(segments.AccountName);
 
-            Logger.LogInformation($"Getting Workspace ID from the Container Name: {segments.ContainerName}");
+            Logger.LogDebug($"Getting Workspace ID from the Container Name: {segments.ContainerName}");
 
             var workspaceId = ToWorkspaceId(segments.ContainerName);
 
-            Logger.LogInformation($"Workspace ID to use: {segments.ContainerName}");
+            Logger.LogDebug($"Workspace ID to use: {segments.ContainerName}");
 
             var wsmContainerResourceId = await GetWsmContainerResourceIdAsync(workspaceId, segments.ContainerName, cancellationToken);
 
@@ -254,7 +254,7 @@ namespace TesApi.Web.Storage
 
         private async Task<Guid> GetWsmContainerResourceIdAsync(Guid workspaceId, string containerName, CancellationToken cancellationToken)
         {
-            Logger.LogInformation($"Getting container resource information from WSM. Workspace ID: {workspaceId} Container Name: {containerName}");
+            Logger.LogDebug($"Getting container resource information from WSM. Workspace ID: {workspaceId} Container Name: {containerName}");
 
             try
             {
@@ -266,7 +266,7 @@ namespace TesApi.Web.Storage
                     r.ResourceAttributes.AzureStorageContainer.StorageContainerName.Equals(containerName,
                         StringComparison.OrdinalIgnoreCase)).Metadata;
 
-                Logger.LogInformation($"Found the resource id for storage container resource. Resource ID: {metadata.ResourceId} Container Name: {containerName}");
+                Logger.LogDebug($"Found the resource id for storage container resource. Resource ID: {metadata.ResourceId} Container Name: {containerName}");
 
                 return Guid.Parse(metadata.ResourceId);
             }
@@ -325,7 +325,7 @@ namespace TesApi.Web.Storage
         {
             var tokenInfo = await GetWorkspaceBlobSasTokenFromWsmAsync(blobInfo, needsTags, cancellationToken);
 
-            Logger.LogInformation($"Successfully obtained the Sas Url from Terra. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
+            Logger.LogDebug($"Successfully obtained the Sas Url from Terra. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
 
             var uriBuilder = new UriBuilder(tokenInfo.Url);
 
@@ -351,7 +351,7 @@ namespace TesApi.Web.Storage
         {
             var tokenParams = CreateTokenParamsFromOptions(blobInfo.BlobName, SasBlobPermissions + (needsTags.GetValueOrDefault() ? "t" : string.Empty));
 
-            Logger.LogInformation(
+            Logger.LogDebug(
                 $"Getting Sas Url from Terra. Wsm workspace id:{blobInfo.WorkspaceId}");
 
             return await terraWsmApiClient.Value.GetSasTokenAsync(
@@ -365,7 +365,7 @@ namespace TesApi.Web.Storage
             // an empty blob name gets a container Sas token
             var tokenParams = CreateTokenParamsFromOptions(blobName: "", SasContainerPermissions + (needsTags.GetValueOrDefault() ? "t" : string.Empty));
 
-            Logger.LogInformation(
+            Logger.LogDebug(
                 $"Getting Sas container Url from Terra. Wsm workspace id:{blobInfo.WorkspaceId}");
 
             return await terraWsmApiClient.Value.GetSasTokenAsync(

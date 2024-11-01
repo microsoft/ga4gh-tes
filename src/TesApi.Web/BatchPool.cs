@@ -347,16 +347,16 @@ namespace TesApi.Web
                                 switch (node.State)
                                 {
                                     case ComputeNodeState.Unusable:
-                                        _logger.LogDebug("Found unusable node {NodeId}", node.Id);
+                                        _logger.LogTrace("Found unusable node {NodeId}", node.Id);
                                         break;
 
                                     case ComputeNodeState.StartTaskFailed:
-                                        _logger.LogDebug("Found starttaskfailed node {NodeId}", node.Id);
+                                        _logger.LogTrace("Found starttaskfailed node {NodeId}", node.Id);
                                         StartTaskFailures.Enqueue(new(node.Id, node.StartTaskInformation.FailureInformation));
                                         break;
 
                                     case ComputeNodeState.Preempted:
-                                        _logger.LogDebug("Found preempted node {NodeId}", node.Id);
+                                        _logger.LogTrace("Found preempted node {NodeId}", node.Id);
                                         break;
 
                                     default:
@@ -559,7 +559,7 @@ namespace TesApi.Web
                 // List tasks from batch just one time each time we service the pool when called from PoolScheduler
                 _foundTasks.Clear();
                 _foundTasks.AddRange(GetTasksAsync("creationTime,executionInfo,id,nodeInfo,state,stateTransitionTime", null).ToBlockingEnumerable(cancellationToken));
-                _logger.LogDebug("{PoolId}: {TaskCount} tasks discovered.", PoolId, _foundTasks.Count);
+                _logger.LogTrace("{PoolId}: {TaskCount} tasks discovered.", PoolId, _foundTasks.Count);
 
                 // List nodes from Batch at most one time each time we service the pool
                 _lazyComputeNodes = _taskPreviousComputeNodeIds.Count == 0

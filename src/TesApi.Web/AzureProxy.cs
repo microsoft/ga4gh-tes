@@ -172,13 +172,13 @@ namespace TesApi.Web
         {
             ArgumentException.ThrowIfNullOrEmpty(jobId);
 
-            logger.LogInformation("TES: Creating Batch job {BatchJob}", jobId);
+            logger.LogDebug("TES: Creating Batch job {BatchJob}", jobId);
             var job = batchClient.JobOperations.CreateJob(jobId, new() { PoolId = poolId });
             job.OnAllTasksComplete = OnAllTasksComplete.NoAction;
             job.OnTaskFailure = OnTaskFailure.NoAction;
 
             await job.CommitAsync(cancellationToken: cancellationToken);
-            logger.LogInformation("TES: Batch job {BatchJob} committed successfully", jobId);
+            logger.LogDebug("TES: Batch job {BatchJob} committed successfully", jobId);
             await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
         }
 
@@ -200,7 +200,7 @@ namespace TesApi.Web
         public async Task DeleteBatchJobAsync(string jobId, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrEmpty(jobId);
-            logger.LogInformation("Deleting job {BatchJob}", jobId);
+            logger.LogDebug("Deleting job {BatchJob}", jobId);
             await batchClient.JobOperations.DeleteJobAsync(jobId, cancellationToken: cancellationToken);
         }
 
@@ -232,7 +232,7 @@ namespace TesApi.Web
 
             foreach (var task in batchTasksToTerminate)
             {
-                logger.LogInformation("Terminating task {BatchTask}", task.Id);
+                logger.LogDebug("Terminating task {BatchTask}", task.Id);
                 await batchRetryPolicyWhenNodeNotReady.ExecuteWithRetryAsync(ct => task.TerminateAsync(cancellationToken: ct), cancellationToken);
             }
         }
@@ -240,7 +240,7 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async Task DeleteBatchTaskAsync(string taskId, string jobId, CancellationToken cancellationToken)
         {
-            logger.LogInformation("Deleting task {BatchTask}", taskId);
+            logger.LogDebug("Deleting task {BatchTask}", taskId);
             await batchRetryPolicyWhenNodeNotReady.ExecuteWithRetryAsync(ct => batchClient.JobOperations.DeleteTaskAsync(jobId, taskId, cancellationToken: ct), cancellationToken);
         }
 

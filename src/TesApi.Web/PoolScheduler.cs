@@ -216,7 +216,7 @@ namespace TesApi.Web
             }
             else
             {
-                Logger.LogDebug("No task state changes from pool/node information this time: PoolId: {PoolId}.", poolId);
+                Logger.LogTrace("No task state changes from pool/node information this time: PoolId: {PoolId}.", poolId);
             }
         }
 
@@ -235,11 +235,11 @@ namespace TesApi.Web
                     switch (await taskResult)
                     {
                         case true:
-                            Logger.LogDebug(@"Azure task {CloudTask} was deleted.", taskResult.Related.TaskId);
+                            Logger.LogTrace(@"Azure task {CloudTask} was deleted.", taskResult.Related.TaskId);
                             break;
 
                         case false:
-                            Logger.LogDebug(@"Azure task {CloudTask} was NOT deleted.", taskResult.Related.TaskId);
+                            Logger.LogTrace(@"Azure task {CloudTask} was NOT deleted.", taskResult.Related.TaskId);
                             break;
                     }
                 }
@@ -283,7 +283,7 @@ namespace TesApi.Web
                         .Where(task => node.Id.Equals(task.PreviousComputeNodeId, StringComparison.InvariantCultureIgnoreCase))
                         .Select(task => task.CloudTask))
                     {
-                        Logger.LogDebug("{TaskId} connected to node {NodeId} in state {NodeState}.", task.Id, node.Id, node.State);
+                        Logger.LogTrace("{TaskId} connected to node {NodeId} in state {NodeState}.", task.Id, node.Id, node.State);
 
                         yield return new(task.Id, node.State switch
                         {
@@ -292,7 +292,7 @@ namespace TesApi.Web
                             _ => throw new System.Diagnostics.UnreachableException(),
                         });
 
-                        Logger.LogDebug("Removing {TaskId} from consideration for other errors.", task.Id);
+                        Logger.LogTrace("Removing {TaskId} from consideration for other errors.", task.Id);
                         _ = activeTaskList.Remove(task);
                     }
                 }
@@ -363,7 +363,7 @@ namespace TesApi.Web
 
             AzureBatchTaskState GetCompletedBatchState(CloudTask task)
             {
-                Logger.LogDebug("Getting batch task state from completed task {TesTask}.", BatchScheduler.GetTesTaskIdFromCloudTaskId(task.Id));
+                Logger.LogTrace("Getting batch task state from completed task {TesTask}.", BatchScheduler.GetTesTaskIdFromCloudTaskId(task.Id));
                 return task.ExecutionInformation.Result switch
                 {
                     TaskExecutionResult.Success => new(

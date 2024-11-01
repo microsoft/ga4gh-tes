@@ -91,7 +91,7 @@ namespace TesApi.Web.Runner
 
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
                 {
-                    logger.LogInformation("Setting up Terra as the runtime environment for the runner");
+                    logger.LogDebug("Setting up Terra as the runtime environment for the runner");
                     builder.WithTerraAsRuntimeEnvironment(terraOptions.WsmApiHost, terraOptions.LandingZoneApiHost,
                         terraOptions.SasAllowedIpRange);
                 }
@@ -134,7 +134,7 @@ namespace TesApi.Web.Runner
 
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
                 {
-                    logger.LogInformation("Setting up Terra as the runtime environment for the runner");
+                    logger.LogDebug("Setting up Terra as the runtime environment for the runner");
                     builder.WithTerraAsRuntimeEnvironment(terraOptions.WsmApiHost, terraOptions.LandingZoneApiHost,
                         terraOptions.SasAllowedIpRange);
                 }
@@ -197,7 +197,7 @@ namespace TesApi.Web.Runner
         {
             if (task.Outputs is not null)
             {
-                logger.LogInformation(@"Mapping {TaskOutputsCount} outputs", task.Outputs.Count);
+                logger.LogDebug(@"Mapping {TaskOutputsCount} outputs", task.Outputs.Count);
 
                 var outputs = PrepareLocalOutputsForMapping(task, defaultStorageAccount);
 
@@ -251,7 +251,7 @@ namespace TesApi.Web.Runner
         {
             if (task.Inputs is not null || additionalInputs is not null)
             {
-                logger.LogInformation($"Mapping inputs");
+                logger.LogDebug($"Mapping inputs");
 
                 var inputs = await PrepareInputsForMappingAsync(task, defaultStorageAccount, cancellationToken);
 
@@ -284,7 +284,7 @@ namespace TesApi.Web.Runner
             {
                 var key = $"{input.Path}{input.Url}";
 
-                logger.LogInformation(@"Preparing input {InputPath}", input.Path);
+                logger.LogDebug(@"Preparing input {InputPath}", input.Path);
 
                 if (input.Streamable == true) // Don't download files where localization_optional is set to true in WDL (corresponds to "Streamable" property being true on TesInput)
                 {
@@ -301,7 +301,7 @@ namespace TesApi.Web.Runner
 
                 if (preparedInput != null)
                 {
-                    logger.LogInformation(@"Input {InputPath} is a content input", input.Path);
+                    logger.LogDebug(@"Input {InputPath} is a content input", input.Path);
                     inputs.Add(key, preparedInput);
                     continue;
                 }
@@ -312,7 +312,7 @@ namespace TesApi.Web.Runner
 
                 if (preparedInput != null)
                 {
-                    logger.LogInformation(@"Input {InputPath} is a local input", input.Path);
+                    logger.LogDebug(@"Input {InputPath} is a local input", input.Path);
 
                     inputs.Add(key, preparedInput);
                     continue;
@@ -322,13 +322,13 @@ namespace TesApi.Web.Runner
 
                 if (preparedInput != null)
                 {
-                    logger.LogInformation(@"Input {InputPath} is an external storage account input", input.Path);
+                    logger.LogDebug(@"Input {InputPath} is an external storage account input", input.Path);
 
                     inputs.Add(key, preparedInput);
                     continue;
                 }
 
-                logger.LogInformation(@"Input {InputPath} is a regular input", input.Path);
+                logger.LogDebug(@"Input {InputPath} is a regular input", input.Path);
 
                 inputs.Add(key, input);
             }
@@ -503,7 +503,7 @@ namespace TesApi.Web.Runner
 
             var inputUrl = StorageUrlUtils.RemoveQueryStringFromUrl(inputFileUrl);
 
-            logger.LogInformation(@"Successfully uploaded content input as a new blob at: {InputUrl}", inputUrl);
+            logger.LogDebug(@"Successfully uploaded content input as a new blob at: {InputUrl}", inputUrl);
 
             return new TesInput
             {
@@ -521,7 +521,7 @@ namespace TesApi.Web.Runner
                 return default;
             }
 
-            logger.LogInformation(@"The input is content. Uploading its content to the internal storage location. Input path:{InputPath}", input.Path);
+            logger.LogDebug(@"The input is content. Uploading its content to the internal storage location. Input path:{InputPath}", input.Path);
 
             if (input.Type == TesFileType.DIRECTORY)
             {

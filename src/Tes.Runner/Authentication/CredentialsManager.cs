@@ -65,7 +65,7 @@ namespace Tes.Runner.Authentication
 
                 if (!string.IsNullOrWhiteSpace(managedIdentityResourceId))
                 {
-                    logger.LogInformation("Token credentials with Managed Identity and resource ID: {NodeManagedIdentityResourceId}", managedIdentityResourceId);
+                    logger.LogDebug("Token credentials with Managed Identity and resource ID: {NodeManagedIdentityResourceId}", managedIdentityResourceId);
                     var tokenCredentialOptions = new TokenCredentialOptions { AuthorityHost = authorityHost };
 
                     tokenCredential = new ManagedIdentityCredential(
@@ -74,7 +74,7 @@ namespace Tes.Runner.Authentication
                 }
                 else
                 {
-                    logger.LogInformation("Token credentials with DefaultAzureCredential");
+                    logger.LogDebug("Token credentials with DefaultAzureCredential");
                     var defaultAzureCredentialOptions = new DefaultAzureCredentialOptions { AuthorityHost = authorityHost };
                     tokenCredential = new DefaultAzureCredential(defaultAzureCredentialOptions);
                 }

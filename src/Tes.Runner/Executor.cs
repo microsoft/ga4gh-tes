@@ -170,7 +170,7 @@ namespace Tes.Runner
 
             var executionResult = await TimedExecutionAsync(async () => await uploader.UploadAsync(outputs));
 
-            logger.LogInformation("Executed Upload. Time elapsed: {ElapsedTime} Bandwidth: {BandwidthMiBpS} MiB/s", executionResult.Elapsed, BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds));
+            logger.LogDebug("Executed Upload. Time elapsed: {ElapsedTime} Bandwidth: {BandwidthMiBpS} MiB/s", executionResult.Elapsed, BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds));
 
             return new(executionResult.Result, uploader.CompletedFiles);
         }
@@ -179,7 +179,7 @@ namespace Tes.Runner
         {
             if ((tesNodeTask.Outputs ?? []).Count == 0)
             {
-                logger.LogInformation("No outputs provided");
+                logger.LogDebug("No outputs provided");
                 {
                     return default;
                 }
@@ -270,7 +270,7 @@ namespace Tes.Runner
         {
             if (tesNodeTask.Inputs is null || tesNodeTask.Inputs.Count == 0)
             {
-                logger.LogInformation("No inputs provided");
+                logger.LogDebug("No inputs provided");
                 {
                     return default;
                 }
@@ -289,10 +289,10 @@ namespace Tes.Runner
 
         private void LogStartConfig(BlobPipelineOptions blobPipelineOptions)
         {
-            logger.LogInformation("Writers: {NumberOfWriters}", blobPipelineOptions.NumberOfWriters);
-            logger.LogInformation("Readers: {NumberOfReaders}", blobPipelineOptions.NumberOfReaders);
-            logger.LogInformation("Capacity: {ReadWriteBuffersCapacity}", blobPipelineOptions.ReadWriteBuffersCapacity);
-            logger.LogInformation("BlockSize: {BlockSizeBytes}", blobPipelineOptions.BlockSizeBytes);
+            logger.LogDebug("Writers: {NumberOfWriters}", blobPipelineOptions.NumberOfWriters);
+            logger.LogDebug("Readers: {NumberOfReaders}", blobPipelineOptions.NumberOfReaders);
+            logger.LogDebug("Capacity: {ReadWriteBuffersCapacity}", blobPipelineOptions.ReadWriteBuffersCapacity);
+            logger.LogDebug("BlockSize: {BlockSizeBytes}", blobPipelineOptions.BlockSizeBytes);
         }
 
         private static async Task<TimedExecutionResult<T>> TimedExecutionAsync<T>(Func<Task<T>> execution)

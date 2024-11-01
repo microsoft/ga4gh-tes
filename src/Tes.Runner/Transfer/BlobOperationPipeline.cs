@@ -64,13 +64,13 @@ public abstract class BlobOperationPipeline : IBlobPipeline
             return default;
         }
 
-        Logger.LogInformation("Calculating MD5 hash for file: {filePath}", filePath);
+        Logger.LogDebug("Calculating MD5 hash for file: {filePath}", filePath);
 
         await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
 
         var hash = await MD5.HashDataAsync(stream);
 
-        Logger.LogInformation("MD5 hash calculated for file: {filePath}.", filePath);
+        Logger.LogDebug("MD5 hash calculated for file: {filePath}.", filePath);
 
         return Convert.ToBase64String(hash);
     }
@@ -91,7 +91,7 @@ public abstract class BlobOperationPipeline : IBlobPipeline
         {
             await WhenAllFailFast(pipelineTasks);
 
-            Logger.LogInformation("Pipeline processing completed.");
+            Logger.LogDebug("Pipeline processing completed.");
         }
         catch (Exception e)
         {
@@ -99,9 +99,9 @@ public abstract class BlobOperationPipeline : IBlobPipeline
             throw;
         }
 
-        Logger.LogInformation("Waiting for processed part processor to complete.");
+        Logger.LogDebug("Waiting for processed part processor to complete.");
         var bytesProcessed = await processedPartsProcessorTask;
-        Logger.LogInformation("Processed parts completed.");
+        Logger.LogDebug("Processed parts completed.");
 
         return bytesProcessed;
     }

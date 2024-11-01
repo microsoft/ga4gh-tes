@@ -52,7 +52,7 @@ namespace Tes.ApiClients
 
             var url = GetSamActionManagedIdentityUrl(resourceType, resourceId, action);
 
-            Logger.LogInformation(@"Fetching action managed identity from Sam for {resourceId}", resourceId);
+            Logger.LogDebug(@"Fetching action managed identity from Sam for {resourceId}", resourceId);
 
             try
             {

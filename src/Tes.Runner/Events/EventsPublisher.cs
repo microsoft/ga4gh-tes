@@ -224,7 +224,7 @@ public class EventsPublisher : IAsyncDisposable
 
         foreach (var sink in sinks)
         {
-            logger.LogInformation("Publishing event {MessageName} to sink: {SinkType}", message.Name, sink.GetType().Name);
+            logger.LogDebug("Publishing event {MessageName} to sink: {SinkType}", message.Name, sink.GetType().Name);
 
             await sink.PublishEventAsync(message);
         }

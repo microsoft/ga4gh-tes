@@ -380,7 +380,7 @@ namespace TesApi.Web
                 newLog.VirtualMachineInfo = oldLog.VirtualMachineInfo;
                 newLog.StartTime = DateTimeOffset.UtcNow;
                 tesTask.State = TesState.INITIALIZING;
-                logger.LogInformation("The TesTask {TesTask}'s node was preempted. It was automatically rescheduled.", tesTask.Id);
+                logger.LogDebug("The TesTask {TesTask}'s node was preempted. It was automatically rescheduled.", tesTask.Id);
                 return true;
             }
 
@@ -479,14 +479,14 @@ namespace TesApi.Web
         public async Task UploadTaskRunnerIfNeededAsync(CancellationToken cancellationToken)
         {
             var blobUri = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, storageAccessProvider.BlobPermissionsWithWrite, cancellationToken);
-            logger.LogDebug(@"NodeTaskRunner Uri: {NodeTaskRunnerUri}", new BlobUriBuilder(blobUri) { Sas = null }.ToUri().AbsoluteUri);
+            logger.LogTrace(@"NodeTaskRunner Uri: {NodeTaskRunnerUri}", new BlobUriBuilder(blobUri) { Sas = null }.ToUri().AbsoluteUri);
             var blobProperties = await azureProxy.GetBlobPropertiesAsync(blobUri, cancellationToken);
-            logger.LogDebug(@"NodeTaskRunner MD5: {NodeTaskRunnerMD5}", Convert.ToBase64String(blobProperties?.ContentHash ?? []));
+            logger.LogTrace(@"NodeTaskRunner MD5: {NodeTaskRunnerMD5}", Convert.ToBase64String(blobProperties?.ContentHash ?? []));
             if (!runnerMD5.Equals(Convert.ToBase64String(blobProperties?.ContentHash ?? []), StringComparison.OrdinalIgnoreCase))
             {
-                logger.LogInformation(@"Uploading NodeTaskRunner");
+                logger.LogDebug(@"Uploading NodeTaskRunner");
                 await azureProxy.UploadBlobFromFileAsync(blobUri, $"scripts/{NodeTaskRunnerFilename}", cancellationToken);
-                logger.LogInformation(@"Uploaded NodeTaskRunner");
+                logger.LogDebug(@"Uploaded NodeTaskRunner");
             }
         }
 
@@ -596,7 +596,7 @@ namespace TesApi.Web
                 // acrPullIdentity is special. Add it to the end of the list even if it is null, so it is always retrievable.
                 identities.Add(await actionIdentityProvider.GetAcrPullActionIdentity(cancellationToken));
 
-                logger.LogDebug(@"Checking quota for {TesTask}.", tesTask.Id);
+                logger.LogTrace(@"Checking quota for {TesTask}.", tesTask.Id);
 
                 var virtualMachineInfo = await GetVmSizeAsync(tesTask, cancellationToken);
                 virtualMachineInfo.Identities = identities;
@@ -687,7 +687,7 @@ namespace TesApi.Web
                 var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(cloudTaskId, tesTask, virtualMachineInfo.Identities.Last(), virtualMachineInfo.VM.VmFamily, cancellationToken);
                 _ = pool.AssociatedTesTasks.AddOrUpdate(tesTask.Id, key => cloudTask.Id, (key, value) => cloudTask.Id);
 
-                logger.LogInformation(@"Creating batch task for TES task {TesTaskId}. Using VM size {VmSize}.", tesTask.Id, virtualMachineInfo.VM.VmSize);
+                logger.LogDebug(@"Creating batch task for TES task {TesTaskId}. Using VM size {VmSize}.", tesTask.Id, virtualMachineInfo.VM.VmSize);
 
                 AddTValueToCollectorQueue(
                     key: pool.PoolId,
@@ -802,7 +802,7 @@ namespace TesApi.Web
             if (_queuedTesTaskPendingJobBatches.TryDequeue(out var jobBatch))
             {
                 var (jobId, tasks) = jobBatch;
-                logger.LogDebug(@"Adding {AddedTasks} tasks to {CloudJob}.", tasks.Count, jobId);
+                logger.LogTrace(@"Adding {AddedTasks} tasks to {CloudJob}.", tasks.Count, jobId);
                 await PerformTaskAsync(
                     method: async token => await azureProxy.AddBatchTasksAsync(tasks.Select(t => t.CloudTask), jobId, token),
                     taskCompletions: tasks.Select(task => task.TaskCompletion),
@@ -907,7 +907,7 @@ namespace TesApi.Web
                                 method: async token =>
                                 {
                                     // This will remove pool keys we cannot accommodate due to quota, along with all of their associated tasks, from being queued into Batch.
-                                    logger.LogDebug(@"Checking pools and jobs quota to accommodate {NeededPools} additional pools.", poolsByKey.Count);
+                                    logger.LogTrace(@"Checking pools and jobs quota to accommodate {NeededPools} additional pools.", poolsByKey.Count);
 
                                     var (exceededQuantity, exception) = await quotaVerifier.CheckBatchAccountPoolAndJobQuotasAsync(poolsByKey.Count, token);
 
@@ -929,7 +929,7 @@ namespace TesApi.Web
                                         return true;
                                     }
 
-                                    logger.LogDebug(@"Obtaining {NewPools} batch pools.", poolsByKey.Count);
+                                    logger.LogTrace(@"Obtaining {NewPools} batch pools.", poolsByKey.Count);
 
                                     foreach (var poolToCreate in poolsByKey.Values.SelectMany(pools => pools))
                                     {
