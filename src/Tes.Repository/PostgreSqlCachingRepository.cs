@@ -155,15 +155,18 @@ namespace Tes.Repository
             var source = new TaskCompletionSource<TDbItem>();
             var result = source.Task;
 
-            if (updatingItems.TryAdd(item.Id, null))
+            if (WriteAction.Add != action)
             {
-                result = source.Task.ContinueWith(RemoveUpdatingItem).Unwrap();
-            }
-            else
-            {
-                throw new RepositoryCollisionException<TItem>(
-                    "Respository concurrency failure: attempt to update item with previously queued update pending.",
-                    getItem(item));
+                if (updatingItems.TryAdd(item.Id, null))
+                {
+                    result = source.Task.ContinueWith(RemoveUpdatingItem).Unwrap();
+                }
+                else
+                {
+                    throw new RepositoryCollisionException<TItem>(
+                        "Respository concurrency failure: attempt to update item with previously queued update pending.",
+                        getItem(item));
+                }
             }
 
             if (!itemsToWrite.Writer.TryWrite(new(item, action, source)))

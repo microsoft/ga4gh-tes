@@ -140,7 +140,6 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, CancellationToken cancellationToken)
         {
-            Logger.LogWarning(@"TesTaskPostgreSqlRepository::GetItemsAsync called"); // TODO: remove this log
             return (await InternalGetItemsAsync(cancellationToken, efPredicates: [predicate])).Select(t => t.TesTask);
         }
 
