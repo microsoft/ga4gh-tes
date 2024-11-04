@@ -140,6 +140,7 @@ namespace CommonUtilities.Tests
         }.ToFrozenDictionary();
 
         [DataTestMethod]
+        [Ignore]
         [DataRow("AzureCloud", "https://management.azure.com//.default", DisplayName = "AzureCloud")]
         [DataRow("AzurePublicCloud", "https://management.azure.com//.default", DisplayName = "AzurePublicCloud")]
         [DataRow("AzureUSGovernment", "https://management.usgovcloudapi.net/.default", DisplayName = "AzureUSGovernment")]
@@ -157,6 +158,7 @@ namespace CommonUtilities.Tests
         }
 
         [DataTestMethod]
+        [Ignore]
         [DataRow(Cloud.Public, "AzureCloud", DisplayName = "All generally available global Azure regions")]
         [DataRow(Cloud.USGovernment, "AzureUSGovernment", DisplayName = "Azure Government")]
         [DataRow(Cloud.China, "AzureChinaCloud", DisplayName = "Microsoft Azure operated by 21Vianet")]

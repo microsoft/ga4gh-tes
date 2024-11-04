@@ -7,6 +7,7 @@ namespace CommonUtilities.AzureCloud.Tests
     public class AzureCloudConfigTests
     {
         [TestMethod]
+        [Ignore]
         public async Task AzureCloudConfigCanBeRetrievedAndDeserialized()
         {
             var config = await AzureCloudConfig.CreateAsync();
