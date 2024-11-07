@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Net;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
@@ -60,10 +61,19 @@ namespace Tes.Runner.Storage
         {
             try
             {
-                var blobUrl = new BlobUriBuilder(new Uri(sourceUrl));
+                Uri uri = new(sourceUrl);
+                var blobUrl = new BlobUriBuilder(uri);
                 var blobServiceClient = blobServiceClientFactory(new Uri($"https://{blobUrl.Host}"));
 
-                var userKey = await GetUserDelegationKeyAsync(blobServiceClient, blobUrl.AccountName);
+                var userKey = await GetUserDelegationKeyAsync(blobServiceClient, blobUrl.AccountName,
+                    (permissions & ~(BlobSasPermissions.Read | BlobSasPermissions.List | BlobSasPermissions.Execute)) == 0);
+
+                if (userKey is null)
+                {
+                    // It's possible read access is anonymous. If not, or if creating/writing, the failure raised then will be both sufficient and appropriate.
+                    logger.LogWarning("The URL provided is not a storage account the managed identity can access. The resolution strategy won't be applied. Host: {Host}", blobUrl.Host);
+                    return uri;
+                }
 
                 var sasBuilder = new BlobSasBuilder()
                 {
@@ -73,13 +83,9 @@ namespace Tes.Runner.Storage
                 };
 
                 sasBuilder.SetPermissions(permissions);
+                blobUrl.Sas = sasBuilder.ToSasQueryParameters(userKey, blobUrl.AccountName);
 
-                var blobUriWithSas = new BlobUriBuilder(blobUrl.ToUri())
-                {
-                    Sas = sasBuilder.ToSasQueryParameters(userKey, blobUrl.AccountName)
-                };
-
-                return blobUriWithSas.ToUri();
+                return blobUrl.ToUri();
             }
             catch (Exception e)
             {
@@ -88,7 +94,7 @@ namespace Tes.Runner.Storage
             }
         }
 
-        private async Task<UserDelegationKey> GetUserDelegationKeyAsync(BlobServiceClient blobServiceClient, string storageAccountName)
+        private async Task<UserDelegationKey?> GetUserDelegationKeyAsync(BlobServiceClient blobServiceClient, string storageAccountName, bool isReadOnly)
         {
             try
             {
@@ -108,6 +114,10 @@ namespace Tes.Runner.Storage
                 }
 
                 return userDelegationKey;
+            }
+            catch (Azure.RequestFailedException e) when (isReadOnly && e.Status == (int)HttpStatusCode.Forbidden && BlobErrorCode.AuthorizationPermissionMismatch.ToString().Equals(e.ErrorCode, StringComparison.InvariantCultureIgnoreCase))
+            {
+                return default;
             }
             catch (Exception e)
             {
