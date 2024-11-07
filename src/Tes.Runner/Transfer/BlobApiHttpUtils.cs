@@ -93,6 +93,7 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolic
     {
         return new Uri($"{baseUri?.AbsoluteUri}&comp=block&blockid={ToBlockId(ordinal)}");
     }
+
     public static Uri ParsePutAppendBlockUrl(Uri? baseUri)
     {
         ArgumentNullException.ThrowIfNull(baseUri);
@@ -180,6 +181,21 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolic
 
         return !string.IsNullOrWhiteSpace(blobBuilder.Sas?.Signature);
     }
+
+    public virtual async Task<bool> IsEndPointPublic(Uri uri)
+    {
+        try
+        {
+            using var _ = await ExecuteHttpRequestAsync(() => new HttpRequestMessage(HttpMethod.Head, uri));
+            return true;
+
+        }
+        catch (HttpRequestException e) when (e.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            return false;
+        }
+    }
+
     private async Task<HttpResponseMessage> ExecuteHttpRequestImplAsync(Func<HttpRequestMessage> request, CancellationToken cancellationToken)
     {
         HttpResponseMessage? response = null;
