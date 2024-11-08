@@ -190,7 +190,13 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolic
             return true;
 
         }
-        catch (HttpRequestException e) when (e.StatusCode == HttpStatusCode.Unauthorized)
+        catch (HttpRequestException e) when (e.StatusCode switch
+            {
+                HttpStatusCode.Unauthorized => true,
+                HttpStatusCode.Forbidden => true, // Because not everyone understands the difference between 401 & 403
+                HttpStatusCode.Conflict => true, // Blob Storage returns this instead of 401
+                _ => false,
+            })
         {
             return false;
         }
