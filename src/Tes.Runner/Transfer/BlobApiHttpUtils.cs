@@ -193,9 +193,9 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolic
         catch (HttpRequestException e) when (e.StatusCode switch
         {
             HttpStatusCode.Unauthorized => true,
-            // Because not everyone understands the difference between 401 & 403
+            // Because some servers confuse the difference between 401 & 403
             HttpStatusCode.Forbidden => true,
-            // Blob Storage returns 409 instead of 401
+            // Azure Blob Storage returns 409 instead of 401
             HttpStatusCode.Conflict => true,
             _ => false,
         })
