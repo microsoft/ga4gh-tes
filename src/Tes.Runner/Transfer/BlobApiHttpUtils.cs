@@ -181,6 +181,29 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryHandlerPolicy ret
 
         return !string.IsNullOrWhiteSpace(blobBuilder.Sas?.Signature);
     }
+
+    public virtual async Task<bool> IsEndPointPublic(Uri uri)
+    {
+        try
+        {
+            using var _ = await ExecuteHttpRequestAsync(() => new HttpRequestMessage(HttpMethod.Head, uri));
+            return true;
+
+        }
+        catch (HttpRequestException e) when (e.StatusCode switch
+        {
+            HttpStatusCode.Unauthorized => true,
+            // Because some servers confuse the difference between 401 & 403
+            HttpStatusCode.Forbidden => true,
+            // Azure Blob Storage returns 409 instead of 401
+            HttpStatusCode.Conflict => true,
+            _ => false,
+        })
+        {
+            return false;
+        }
+    }
+
     private async Task<HttpResponseMessage> ExecuteHttpRequestImplAsync(Func<HttpRequestMessage> request, CancellationToken cancellationToken)
     {
         HttpResponseMessage? response = null;

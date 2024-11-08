@@ -5,7 +5,6 @@ using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
 using CommonUtilities;
-using CommonUtilities.Options;
 using Moq;
 using Tes.Runner.Models;
 using Tes.Runner.Storage;
@@ -16,6 +15,7 @@ namespace Tes.Runner.Test.Storage
     public class ArmUrlTransformationStrategyTests
     {
         private Mock<BlobServiceClient> mockBlobServiceClient = null!;
+        private Mock<Runner.Transfer.BlobApiHttpUtils> mockBlobApiHttpUtils = null!;
         private ArmUrlTransformationStrategy armUrlTransformationStrategy = null!;
         private UserDelegationKey userDelegationKey = null!;
         const string StorageAccountName = "foo";
@@ -30,12 +30,42 @@ namespace Tes.Runner.Test.Storage
                 AzureEnvironmentConfig = AzureEnvironmentConfig.FromArmEnvironmentEndpoints(CommonUtilities.AzureCloud.AzureCloudConfig.FromKnownCloudNameAsync().Result)
             };
 
-            armUrlTransformationStrategy = new ArmUrlTransformationStrategy(_ => mockBlobServiceClient.Object, options);
+            mockBlobApiHttpUtils = new();
+            mockBlobApiHttpUtils.Setup(x => x.IsEndPointPublic(It.IsAny<Uri>()))
+                .ReturnsAsync(false);
+
+            armUrlTransformationStrategy = new ArmUrlTransformationStrategy(_ => mockBlobServiceClient.Object, options, mockBlobApiHttpUtils.Object);
             userDelegationKey = BlobsModelFactory.UserDelegationKey(Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), DateTimeOffset.UtcNow,
                 DateTimeOffset.UtcNow.AddHours(1), "SIGNED_SERVICE", "V1_0", RunnerTestUtils.GenerateRandomTestAzureStorageKey());
             mockBlobServiceClient.Setup(c => c.GetUserDelegationKeyAsync(It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(Azure.Response.FromValue(userDelegationKey, null!));
+        }
 
+        [TestMethod]
+        public async Task TransformUrlWithStrategyAsync_BlobStorageUrlWithOutPermissions_WhenRequestingRead_UrlIsReturnAsIs()
+        {
+            mockBlobApiHttpUtils.Setup(x => x.IsEndPointPublic(It.IsAny<Uri>()))
+                .ReturnsAsync(true);
+
+            var sourceUrl = $"https://{StorageAccountName}.blob.core.windows.net/cont/blob";
+            var transformedUrl = await armUrlTransformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
+
+            Assert.AreEqual(1, mockBlobApiHttpUtils.Invocations.Count);
+            Assert.IsNotNull(transformedUrl);
+            var blobUri = new Uri(sourceUrl);
+            Assert.AreEqual(blobUri.AbsoluteUri, transformedUrl.AbsoluteUri);
+        }
+
+        [TestMethod]
+        public async Task TransformUrlWithStrategyAsync_BlobStorageUrlWithOutPermissions_WhenRequestingWrite_IsEndPointPublicIsNotCalled()
+        {
+            mockBlobApiHttpUtils.Setup(x => x.IsEndPointPublic(It.IsAny<Uri>()))
+                .ReturnsAsync(true);
+
+            var sourceUrl = $"https://{StorageAccountName}.blob.core.windows.net/cont/blob";
+            var transformedUrl = await armUrlTransformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, BlobSasPermissions.Create);
+
+            Assert.IsFalse(mockBlobApiHttpUtils.Invocations.Any());
         }
 
         [TestMethod]
