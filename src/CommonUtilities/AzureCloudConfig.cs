@@ -151,6 +151,35 @@ namespace CommonUtilities.AzureCloud
             };
         }
 
+        public static AzureCloudConfig ForUnitTesting()
+        {
+            return new()
+            {
+                PortalUrl = "http://portal.test",
+                Authentication = new() { Tenant = "common" },
+                MediaUrl = "http://media.test",
+                GraphAudienceUrl = "http://graph.test",
+                Name = "Test",
+                Suffixes = new()
+                {
+                    AcrLoginServerSuffix = "azurecr.io",
+                    KeyVaultDnsSuffix = "vault.azure.net",
+                    StorageSuffix = "core.windows.net",
+                    PostgresqlServerEndpointSuffix = "postgres.database.azure.com"
+                },
+                BatchUrl = "https://batch.core.windows.net/",
+                ResourceManagerUrl = "https://management.azure.com/",
+                MicrosoftGraphResourceUrl = "http://graph.test",
+                ApplicationInsightsResourceUrl = "https://api.applicationinsights.io",
+                ApplicationInsightsTelemetryChannelResourceUrl = "https://dc.applicationinsights.azure.com/v2/track",
+
+                DefaultTokenScope = "https://management.azure.com//.default",
+                ArmEnvironment = new(new("https://management.azure.com/"), "https://management.azure.com/"),
+                Domain = "Test",
+                AzureEnvironmentConfig = new("https://login.microsoftonline.com", "https://management.azure.com//.default", "core.windows.net")
+            };
+        }
+
         private static readonly Uri AzurePublicCloud = Azure.ResourceManager.ArmEnvironment.AzurePublicCloud.Endpoint;
         private static readonly Uri AzureUSGovernmentCloud = Azure.ResourceManager.ArmEnvironment.AzureGovernment.Endpoint;
         private static readonly Uri AzureChinaCloud = Azure.ResourceManager.ArmEnvironment.AzureChina.Endpoint;

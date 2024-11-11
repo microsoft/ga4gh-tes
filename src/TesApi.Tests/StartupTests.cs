@@ -62,7 +62,7 @@ namespace TesApi.Tests
             services.AddSingleton(hostEnv.Object);
 #pragma warning restore CS0618
 
-            Startup.AzureCloudConfig = AzureCloudConfig.FromKnownCloudNameAsync().Result;
+            Startup.AzureCloudConfig = AzureCloudConfig.ForUnitTesting();
             var configuration = builder.Build();
             services.AddSingleton(configuration);
             services.AddSingleton<IConfiguration>(configuration);

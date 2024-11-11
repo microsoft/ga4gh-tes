@@ -27,7 +27,7 @@ namespace Tes.Runner.Test.Storage
             mockBlobServiceClient = new Mock<BlobServiceClient>();
             RuntimeOptions options = new()
             {
-                AzureEnvironmentConfig = AzureEnvironmentConfig.FromArmEnvironmentEndpoints(CommonUtilities.AzureCloud.AzureCloudConfig.FromKnownCloudNameAsync().Result)
+                AzureEnvironmentConfig = AzureEnvironmentConfig.FromArmEnvironmentEndpoints(CommonUtilities.AzureCloud.AzureCloudConfig.ForUnitTesting())
             };
 
             mockBlobApiHttpUtils = new();
