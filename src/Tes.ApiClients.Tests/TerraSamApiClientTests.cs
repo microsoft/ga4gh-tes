@@ -30,7 +30,7 @@ namespace Tes.ApiClients.Tests
             cache.Setup(c => c.CreateEntry(It.IsAny<object>())).Returns(new Mock<Microsoft.Extensions.Caching.Memory.ICacheEntry>().Object);
             cacheAndRetryBuilder.SetupGet(c => c.AppCache).Returns(cache.Object);
             cacheAndRetryHandler = new(TestServices.RetryHandlersHelpers.GetCachingAsyncRetryPolicyMock(cacheAndRetryBuilder, c => c.DefaultRetryHttpResponseMessagePolicyBuilder()));
-            azureEnvironmentConfig = ExpensiveObjectTestUtility.AzureCloudConfig.AzureEnvironmentConfig!;
+            azureEnvironmentConfig = CommonUtilities.AzureCloud.AzureCloudConfig.ForUnitTesting().AzureEnvironmentConfig!;
 
             terraSamApiClient = new TerraSamApiClient(TerraApiStubData.SamApiHost, tokenCredential.Object,
                 cacheAndRetryBuilder.Object, azureEnvironmentConfig, NullLogger<TerraSamApiClient>.Instance);

@@ -48,7 +48,7 @@ namespace TesApi.Tests
             batchSchedulingOptions = new BatchSchedulingOptions() { Prefix = BatchSchedulingPrefix };
             optionsMock.Setup(o => o.Value).Returns(terraOptions);
             azureProxyMock = new Mock<IAzureProxy>();
-            var config = ExpensiveObjectTestUtility.AzureCloudConfig.AzureEnvironmentConfig;
+            var config = CommonUtilities.AzureCloud.AzureCloudConfig.ForUnitTesting().AzureEnvironmentConfig;
             terraStorageAccessProvider = new TerraStorageAccessProvider(new(wsmApiClientMock.Object), azureProxyMock.Object, optionsMock.Object, Options.Create(batchSchedulingOptions), config, NullLogger<TerraStorageAccessProvider>.Instance);
         }
 
