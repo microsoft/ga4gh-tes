@@ -51,7 +51,7 @@ namespace TesApi.Web.Storage
                     }
                     else
                     {
-                        logger.LogError($"Invalid value '{uri}' found in 'ExternalStorageContainers' configuration. Value must be a valid azure storage account or container URL.");
+                        logger.LogError("Invalid value '{Url}' found in 'ExternalStorageContainers' configuration. Value must be a valid azure storage account or container URL.", uri);
                         return null;
                     }
                 })
@@ -183,7 +183,7 @@ namespace TesApi.Web.Storage
 
             if (!await TryGetStorageAccountInfoAsync(pathSegments.AccountName, cancellationToken, info => storageAccountInfo = info))
             {
-                Logger.LogError($"Could not find storage account '{pathSegments.AccountName}' corresponding to path '{path}'. Either the account does not exist or the TES app service does not have permission to it.");
+                Logger.LogError("Could not find storage account '{StorageAccount}' corresponding to path '{StoragePath}'. Either the account does not exist or the TES app service does not have permission to it.", pathSegments.AccountName, path);
                 throw new InvalidOperationException($"Could not find storage account '{pathSegments.AccountName}' corresponding to path '{path}'.");
             }
 
@@ -303,12 +303,12 @@ namespace TesApi.Web.Storage
                 }
                 else
                 {
-                    Logger.LogError($"Could not find storage account '{accountName}'. Either the account does not exist or the TES app service does not have permission to it.");
+                    Logger.LogError("Could not find storage account '{StorageAccountName}'. Either the account does not exist or the TES app service does not have permission to it.", accountName);
                 }
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, $"Exception while getting storage account '{accountName}'");
+                Logger.LogError(ex, "Exception while getting storage account '{StorageAccountName}'", accountName);
             }
 
             return false;

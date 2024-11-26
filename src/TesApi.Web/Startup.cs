@@ -303,6 +303,12 @@ namespace TesApi.Web
                     .AddHostedService(sp => (AllowedVmSizesService)sp.GetRequiredService(typeof(IAllowedVmSizesService)))
                     .AddHostedService<PoolScheduler>()
                     .AddHostedService(s => s.GetRequiredService<TaskScheduler>());
+
+                RetryPolicyOptions retryPolicy = new();
+                configuration.Bind(RetryPolicyOptions.SectionName, retryPolicy);
+
+                ClientOptions.Default.Retry.MaxRetries = retryPolicy.MaxRetryCount;
+                ClientOptions.Default.Retry.Delay = TimeSpan.FromSeconds(retryPolicy.ExponentialBackOffExponent);
             }
             catch (Exception exc)
             {

@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Azure.ResourceManager;
 using CommonUtilities;
 using CommonUtilities.AzureCloud;
+using CommonUtilities.Options;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -160,10 +161,18 @@ namespace TesApi.Web
 
             static AzureCloudConfig GetAzureCloudConfig(IConfiguration configuration)
             {
-                var tesOptions = new GeneralOptions();
+                GeneralOptions tesOptions = new();
                 configuration.Bind(GeneralOptions.SectionName, tesOptions);
                 Console.WriteLine($"tesOptions.AzureCloudName: {tesOptions.AzureCloudName}");
-                return AzureCloudConfig.FromKnownCloudNameAsync(cloudName: tesOptions.AzureCloudName, azureCloudMetadataUrlApiVersion: tesOptions.AzureCloudMetadataUrlApiVersion).Result;
+
+                RetryPolicyOptions retryPolicy = new();
+                configuration.Bind(RetryPolicyOptions.SectionName, retryPolicy);
+
+                return AzureCloudConfig.FromKnownCloudNameAsync(
+                        cloudName: tesOptions.AzureCloudName,
+                        azureCloudMetadataUrlApiVersion: tesOptions.AzureCloudMetadataUrlApiVersion,
+                        retryPolicyOptions: Microsoft.Extensions.Options.Options.Create(retryPolicy))
+                    .Result;
             }
         }
     }
