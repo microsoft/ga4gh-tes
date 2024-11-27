@@ -41,7 +41,7 @@ namespace TesApi.Web
     public class Startup
     {
         // TODO centralize in single location
-        internal const string TesVersion = "5.5.0";
+        internal const string TesVersion = "5.5.1";
         private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
