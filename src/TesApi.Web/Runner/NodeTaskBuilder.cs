@@ -77,7 +77,8 @@ namespace TesApi.Web.Runner
         /// <returns></returns>
         public NodeTaskBuilder WithContainerMountParentDirectory(string mountDirectory)
         {
-            nodeTask.MountParentDirectoryPath = mountDirectory;
+            nodeTask.RuntimeOptions ??= new();
+            nodeTask.RuntimeOptions.MountParentDirectoryPath = mountDirectory;
             return this;
         }
 
@@ -407,6 +408,7 @@ namespace TesApi.Web.Runner
             {
                 return false;
             }
+
             //Ignore the case because constant segments could be lower case, pascal case or camel case.
             // e.g. /resourcegroup/ or /resourceGroup/
             return Regex.IsMatch(resourceId, ManagedIdentityResourceIdPattern, RegexOptions.IgnoreCase);

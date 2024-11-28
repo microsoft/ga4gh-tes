@@ -26,10 +26,10 @@ namespace TesApi.Web
 
         internal delegate ValueTask<BatchAccountPoolData> ModelPoolFactory(string poolId, CancellationToken cancellationToken);
 
-        private (string PoolKey, string DisplayName) GetPoolKey(Tes.Models.TesTask tesTask, VirtualMachineInformationWithDataDisks virtualMachineInformation, List<string> identities, CancellationToken cancellationToken)
+        private string GetPoolKey(Tes.Models.TesTask tesTask, ref VirtualMachineInformationWithDataDisks virtualMachineInformation)
         {
-            var identityResourceIds = identities is not null && identities.Count > 0
-                ? string.Join(";", identities)
+            var identityResourceIds = virtualMachineInformation.Identities is not null && virtualMachineInformation.Identities.Count > 0
+                ? string.Join(";", virtualMachineInformation.Identities)
                 : "<none>";
 
             var executorImage = tesTask.Executors.First().Image;
@@ -56,7 +56,7 @@ namespace TesApi.Web
             if (displayName.Length > 1024)
             {
                 // Remove "paths" of identityResourceId
-                displayName = displayName[..^identityResourceIds.Length] + string.Join(";", identities.Select(x => x[(x.LastIndexOf('/') + 1)..]));
+                displayName = displayName[..^identityResourceIds.Length] + string.Join(";", virtualMachineInformation.Identities.Select(x => x[(x.LastIndexOf('/') + 1)..]));
 
                 if (displayName.Length > 1024)
                 {
@@ -65,7 +65,8 @@ namespace TesApi.Web
                 }
             }
 
-            return (name, displayName);
+            virtualMachineInformation.PoolDisplayName = displayName;
+            return name;
 
             static string LimitVmSize(string vmSize, int limit)
             {
@@ -94,8 +95,8 @@ namespace TesApi.Web
             }
         }
 
-        private readonly BatchPools batchPools = new();
-        private readonly HashSet<string> neededPools = new();
+        private readonly BatchPools batchPools = [];
+        private readonly HashSet<string> neededPools = [];
 
         /// <inheritdoc/>
         public bool NeedPoolFlush
@@ -148,10 +149,9 @@ namespace TesApi.Web
                 RandomNumberGenerator.Fill(uniquifier);
                 var poolId = $"{key}-{uniquifier.ConvertToBase32().TrimEnd('=').ToLowerInvariant()}"; // embedded '-' is required by GetKeyFromPoolId()
                 var modelPool = await modelPoolFactory(poolId, cancellationToken);
-                modelPool.Metadata.Add(new(PoolMetadata, new IBatchScheduler.PoolMetadata(this.batchPrefix, !isPreemptable, this.runnerMD5).ToString()));
-                var batchPool = _batchPoolFactory.CreateNew();
-                await batchPool.CreatePoolAndJobAsync(modelPool, isPreemptable, runnerMD5, cancellationToken);
-                pool = batchPool;
+                modelPool.Metadata.Add(new(PoolMetadata, new IBatchScheduler.PoolMetadata(this.batchPrefix, !isPreemptable, this.runnerMD5, Events.RunnerEventsMessage.EventsVersion).ToString()));
+                pool = batchPoolFactory();
+                await pool.CreatePoolAndJobAsync(modelPool, isPreemptable, runnerMD5, cancellationToken);
             }
 
             return pool;
@@ -166,7 +166,18 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public bool RemovePoolFromList(IBatchPool pool)
-            => batchPools.Remove(pool);
+        {
+            pool.MarkRemovedFromService();
+
+            try
+            {
+                return batchPools.Remove(pool);
+            }
+            catch (InvalidOperationException)
+            {
+                return true;
+            }
+        }
 
         /// <inheritdoc/>
         public async ValueTask FlushPoolsAsync(IEnumerable<string> assignedPools, CancellationToken cancellationToken)
@@ -178,13 +189,13 @@ namespace TesApi.Web
                 await foreach (var pool in batchPools
                     .GetAllPools()
                     .ToAsyncEnumerable()
-                    .WhereAwait(async p => await p.CanBeDeleted(cancellationToken))
+                    .WhereAwait(async p => await p.CanBeDeletedAsync(cancellationToken))
                     .Where(p => !assignedPools.Contains(p.PoolId))
-                    .OrderByAwait(async p => await p.GetAllocationStateTransitionTime(cancellationToken))
+                    .OrderByAwait(p => p.GetAllocationStateTransitionTimeAsync(cancellationToken))
                     .Take(neededPools.Count)
                     .WithCancellation(cancellationToken))
                 {
-                    await DeletePoolAsync(pool, cancellationToken);
+                    await DeletePoolAndJobAsync(pool, cancellationToken);
                     _ = RemovePoolFromList(pool);
                 }
             }
@@ -195,9 +206,10 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public Task DeletePoolAsync(IBatchPool pool, CancellationToken cancellationToken)
+        public Task DeletePoolAndJobAsync(IBatchPool pool, CancellationToken cancellationToken)
         {
-            logger.LogDebug(@"Deleting pool and job {PoolId}", pool.PoolId);
+            // TODO: Consider moving any remaining tasks to another pool, or failing tasks explicitly
+            logger.LogTrace(@"Deleting pool and job {PoolId}", pool.PoolId);
 
             return Task.WhenAll(
                 AllowIfNotFound(batchPoolManager.DeleteBatchPoolAsync(pool.PoolId, cancellationToken)),
@@ -238,6 +250,8 @@ namespace TesApi.Web
 
         internal sealed class BatchPools : KeyedCollection<string, PoolSet>
         {
+            private readonly object _lock = new(); // TODO: replace object with Lock in .NET 9/10
+
             public BatchPools()
                 : base(StringComparer.OrdinalIgnoreCase)
             { }
@@ -256,9 +270,12 @@ namespace TesApi.Web
 
             public bool Add(IBatchPool pool)
             {
-                return TryGetValue(GetKeyForItem(pool), out var poolSet)
-                    ? poolSet.Add(pool)
-                    : AddSet();
+                lock (_lock)
+                {
+                    return TryGetValue(GetKeyForItem(pool), out var poolSet)
+                        ? poolSet.Add(pool)
+                        : AddSet();
+                }
 
                 bool AddSet()
                 {
@@ -269,23 +286,26 @@ namespace TesApi.Web
 
             public bool Remove(IBatchPool pool)
             {
-                if (TryGetValue(GetKeyForItem(pool), out var poolSet))
+                lock (_lock)
                 {
-                    if (poolSet.Remove(pool))
+                    if (TryGetValue(GetKeyForItem(pool), out var poolSet))
                     {
-                        if (0 == poolSet.Count)
+                        if (poolSet.Remove(pool))
                         {
-                            if (!Remove(poolSet))
+                            if (0 == poolSet.Count)
                             {
-                                throw new InvalidOperationException();
+                                if (!Remove(poolSet))
+                                {
+                                    throw new InvalidOperationException();
+                                }
                             }
+
+                            return true;
                         }
-
-                        return true;
                     }
-                }
 
-                return false;
+                    return false;
+                }
             }
 
             internal IEnumerable<string> GetPoolKeys()

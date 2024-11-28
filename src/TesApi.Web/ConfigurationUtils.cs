@@ -45,7 +45,6 @@ namespace TesApi.Web
             IOptions<Management.Configuration.TerraOptions> terraOptions,
             ILogger<ConfigurationUtils> logger)
         {
-            ArgumentNullException.ThrowIfNull(storageAccessProvider);
             ArgumentNullException.ThrowIfNull(quotaProvider);
             ArgumentNullException.ThrowIfNull(batchAccountResourceInformation);
 
@@ -74,8 +73,8 @@ namespace TesApi.Web
         /// <returns></returns>
         public async Task<List<string>> ProcessAllowedVmSizesConfigurationFileAsync(CancellationToken cancellationToken)
         {
-            var supportedVmSizesUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync("/configuration/supported-vm-sizes", cancellationToken);
-            var allowedVmSizesUrl = allowedVmSizesOverride is null ? await storageAccessProvider.GetInternalTesBlobUrlAsync("/configuration/allowed-vm-sizes", cancellationToken) : allowedVmSizesOverride;
+            var supportedVmSizesUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync("/configuration/supported-vm-sizes", storageAccessProvider.BlobPermissionsWithWrite, cancellationToken);
+            var allowedVmSizesUrl = allowedVmSizesOverride is null ? await storageAccessProvider.GetInternalTesBlobUrlAsync("/configuration/allowed-vm-sizes", storageAccessProvider.BlobPermissionsWithWrite, cancellationToken) : allowedVmSizesOverride;
 
             var supportedVmSizes = (await skuInformationProvider.GetVmSizesAndPricesAsync(batchAccountResourceInformation.Region, cancellationToken)).ToList();
             var batchAccountQuotas = await quotaProvider.GetVmCoreQuotaAsync(lowPriority: false, cancellationToken: cancellationToken);
