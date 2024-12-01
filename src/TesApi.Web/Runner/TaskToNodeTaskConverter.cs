@@ -129,18 +129,15 @@ namespace TesApi.Web.Runner
             {
                 var builder = new NodeTaskBuilder();
 
-                //TODO: Revise this assumption (carried over from the current implementation) and consider Single() if in practice only one executor per task is supported.
-                var executor = task.Executors.First();
-
                 builder.WithId(task.Id)
                     .WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
+                    .WithMountParentDirectory(containerMountParentDirectory)
                     .WithResourceIdManagedIdentity(GetNodeManagedIdentityResourceId(task, nodeTaskConversionOptions.GlobalManagedIdentity))
                     .WithAcrPullResourceIdManagedIdentity(nodeTaskConversionOptions.AcrPullIdentity)
                     .WithWorkflowId(task.WorkflowId)
+                    .WithContainerVolumes(task.Volumes)
+                    .WithExecutors(task.Executors)
                     .WithContainerMountParentDirectory(containerMountParentDirectory)
-                    .WithContainerCommands(executor.Command)
-                    .WithContainerImage(executor.Image)
-                    .WithContainerExecutionParameters(executor.Workdir, executor.Stdin, executor.Stdout, executor.Stderr, executor.Env)
                     .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath: string.Empty))
                     .WithLogPublisher(storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath: string.Empty))
                     .WithDrsHubUrl(nodeTaskConversionOptions.DrsHubApiHost)

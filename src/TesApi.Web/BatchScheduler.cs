@@ -297,7 +297,7 @@ namespace TesApi.Web
                 // https://github.com/microsoft/ga4gh-tes/blob/6e120d33f78c7a36cffe953c74b55cba7cfbf7fc/src/Tes.Runner/Logs/AppendBlobLogPublisher.cs#L39
 
                 // Get any logs the task runner left. Look for the latest set in this order: upload, exec, download
-                foreach (var prefix in new[] { "upload_std", "exec_std", "download_std" })
+                foreach (var prefix in new[] { "upload_std", "exec-", "download_std" })
                 {
                     var logs = await GetAvailableProcessLogs(tesTask, prefix, cancellationToken);
 
