@@ -261,6 +261,8 @@ namespace TesApi.Controllers
                 // Backends shall not store or return unsupported keys if included in a task.
                 foreach (var key in unsupportedKeys)
                 {
+                    // this is stored to ensure all keys from Cromwell are stored and returned to the client for better reporting and analysis
+                    tesTask.TaskSubmitter.UnsupportedBackendParameters.Add(key, tesTask.Resources.BackendParameters[key]);
                     tesTask.Resources.BackendParameters.Remove(key);
                 }
             }
