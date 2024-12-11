@@ -183,8 +183,8 @@ namespace TesApi.Web.Runner
 
         private void AddTaskOutputs(TesTask task, NodeTaskBuilder builder)
         {
-            foreach (var (path, url) in new List<string>(["stderr.txt", "stdout.txt", MetricsFileName])
-                .Select(file => (Path: $"/{file}", Url: storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, file))))
+            foreach (var (path, url) in new List<string>(["stderr.txt", "stdout.txt", $"wd/{MetricsFileName}"])
+                .Select(file => (Path: $"/{file}", Url: storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, System.IO.Path.GetFileName(file)))))
             {
                 builder.WithOutputUsingCombinedTransformationStrategy(
                     AppendParentDirectoryIfSet(path, $"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%"),
