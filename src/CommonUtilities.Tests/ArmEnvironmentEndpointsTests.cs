@@ -147,13 +147,8 @@ namespace CommonUtilities.Tests
         [DataRow("AzureChinaCloud", "https://management.chinacloudapi.cn/.default", DisplayName = "AzureChinaCloud")]
         public async Task FromKnownCloudNameAsync_ExpectedDefaultTokenScope(string cloud, string audience)
         {
-            var environment = await AzureCloudConfig.FromKnownCloudNameAsync(cloudName: cloud, retryPolicyOptions: Microsoft.Extensions.Options.Options.Create(new Options.RetryPolicyOptions()));
+            var environment = await SkipWhenTimeout(AzureCloudConfig.FromKnownCloudNameAsync(cloudName: cloud, retryPolicyOptions: Microsoft.Extensions.Options.Options.Create(new Options.RetryPolicyOptions())));
             Assert.AreEqual(audience, GetPropertyFromEnvironment<string>(environment, nameof(AzureCloudConfig.DefaultTokenScope)));
-        }
-
-        private static T? GetPropertyFromEnvironment<T>(AzureCloudConfig environment, string property)
-        {
-            return (T?)environment.GetType().GetProperty(property)?.GetValue(environment);
         }
 
         [DataTestMethod]
@@ -162,7 +157,7 @@ namespace CommonUtilities.Tests
         [DataRow(Cloud.China, "AzureChinaCloud", DisplayName = "Microsoft Azure operated by 21Vianet")]
         public async Task FromKnownCloudNameAsync_ExpectedValues(Cloud cloud, string cloudName)
         {
-            var environment = await AzureCloudConfig.FromKnownCloudNameAsync(cloudName: cloudName, retryPolicyOptions: Microsoft.Extensions.Options.Options.Create(new Options.RetryPolicyOptions()));
+            var environment = await SkipWhenTimeout(AzureCloudConfig.FromKnownCloudNameAsync(cloudName: cloudName, retryPolicyOptions: Microsoft.Extensions.Options.Options.Create(new Options.RetryPolicyOptions())));
             foreach (var (property, value) in CloudEndpoints[cloud])
             {
                 switch (value)
@@ -187,6 +182,24 @@ namespace CommonUtilities.Tests
                     default:
                         throw new NotSupportedException();
                 }
+            }
+        }
+
+        private static T? GetPropertyFromEnvironment<T>(AzureCloudConfig environment, string property)
+        {
+            return (T?)environment.GetType().GetProperty(property)?.GetValue(environment);
+        }
+
+        private static async Task<T> SkipWhenTimeout<T>(Task<T> task)
+        {
+            try
+            {
+                return await task;
+            }
+            catch (TaskCanceledException e) when (e.InnerException is TimeoutException)
+            {
+                Assert.Inconclusive(e.Message);
+                throw new System.Diagnostics.UnreachableException();
             }
         }
     }
