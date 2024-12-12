@@ -58,7 +58,7 @@ namespace TesApi.Web
         private static readonly TimeSpan queuedRunInterval = TimeSpan.FromMilliseconds(100);
         internal static readonly TimeSpan BatchRunInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs appears to use a 30 second polling interval
         private static readonly TimeSpan shortBackgroundRunInterval = TimeSpan.FromSeconds(1);
-        private static readonly TimeSpan longBackgroundRunInterval = TimeSpan.FromSeconds(1);
+        private static readonly TimeSpan longBackgroundRunInterval = TimeSpan.FromSeconds(2.5);
         private readonly RunnerEventsProcessor nodeEventProcessor = nodeEventProcessor;
 
         /// <summary>

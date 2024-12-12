@@ -1336,9 +1336,6 @@ namespace TesApi.Tests
             return (tesTask.Logs?.LastOrDefault()?.FailureReason, tesTask.Logs?.LastOrDefault()?.SystemLogs?.ToArray());
         }
 
-        private static Task<(string JobId, IEnumerable<CloudTask> CloudTask, BatchAccountPoolData batchModelsPool)> ProcessTesTaskAndGetBatchJobArgumentsAsync()
-            => ProcessTesTaskAndGetBatchJobArgumentsAsync(GetTesTask(), GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.Defaults), GetMockBatchPoolManager(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
-
         private static Task<(string JobId, IEnumerable<CloudTask> CloudTask, BatchAccountPoolData batchModelsPool)> ProcessTesTaskAndGetBatchJobArgumentsAsync(TesTask tesTask, IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, Action<Mock<IBatchPoolManager>> batchPoolManager, AzureProxyReturnValues azureProxyReturnValues, Action<IServiceCollection> additionalActions = default, Action<TestServices.TestServiceProvider<IBatchScheduler>> serviceProviderActions = default)
             => ProcessTesTasksAndGetBatchJobArgumentsAsync([tesTask], configuration, azureProxy, batchPoolManager, azureProxyReturnValues, additionalActions, serviceProviderActions);
 
@@ -1645,7 +1642,7 @@ namespace TesApi.Tests
 
             private readonly async Task RepeatedlyCallPerformBackgroundTasksAsync()
             {
-                using PeriodicTimer timer = new(TimeSpan.FromMilliseconds(50));
+                using PeriodicTimer timer = new(TimeSpan.FromMilliseconds(750));
 
                 while (!cancellationToken.IsCancellationRequested)
                 {
