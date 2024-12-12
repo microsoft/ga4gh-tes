@@ -149,22 +149,26 @@ namespace TesApi.Web.Runner
         /// <param name="path"></param>
         /// <param name="targetUrl"></param>
         /// <param name="fileType"></param>
+        /// <param name="taskOutputs">Host task output if <c>True</c>, container task output if <c>False</c>.</param>
         /// <returns></returns>
         public NodeTaskBuilder WithOutputUsingCombinedTransformationStrategy(string path, string targetUrl,
-            FileType? fileType)
+            FileType? fileType, bool taskOutputs = false)
         {
             ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
             ArgumentException.ThrowIfNullOrEmpty(targetUrl, nameof(targetUrl));
-            nodeTask.Outputs ??= [];
-            nodeTask.Outputs.Add(
-                new FileOutput()
-                {
-                    Path = path,
-                    TargetUrl = targetUrl,
-                    TransformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions(),
-                    FileType = fileType ?? FileType.File
-                }
-                );
+
+            var outputs = taskOutputs
+                ? nodeTask.TaskOutputs ??= []
+                : nodeTask.Outputs ??= [];
+
+            outputs.Add(new FileOutput()
+            {
+                Path = path,
+                TargetUrl = targetUrl,
+                TransformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions(),
+                FileType = fileType ?? FileType.File
+            });
+
             return this;
         }
 

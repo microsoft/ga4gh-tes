@@ -54,11 +54,6 @@ namespace Tes.RunnerCLI.Commands
 
                     await ExecuteAllOperationsAsSubProcessesAsync(nodeTask, file, blockSize, writers, readers, bufferCapacity, apiVersion, dockerUri);
 
-                    {
-                        await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
-                        await executor.AppendMetrics();
-                    }
-
                     await eventsPublisher.PublishTaskCompletionEventAsync(nodeTask, duration.Elapsed,
                         EventsPublisher.SuccessStatus, errorMessage: string.Empty);
                 }
@@ -240,6 +235,15 @@ namespace Tes.RunnerCLI.Commands
             await CommandLauncher.LaunchesExecutorCommandAsSubProcessAsync(nodeTask, file, apiVersion, dockerUri);
 
             await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.UploadCommandName, nodeTask, file, options);
+
+            await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
+            await executor.AppendMetrics();
+
+            _ = await ExecuteTransferTaskAsync(nodeTask, async exec =>
+            {
+                await exec.UploadTaskOutputsAsync(options);
+                return 0;
+            }, apiVersion);
         }
 
         private static async Task<int> ExecuteTransferTaskAsync(Runner.Models.NodeTask nodeTask, Func<Executor, Task<long>> transferOperation, string apiVersion)
@@ -248,7 +252,7 @@ namespace Tes.RunnerCLI.Commands
             {
                 await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
 
-                await transferOperation(executor);
+                _ = await transferOperation(executor);
 
                 return (int)ProcessExitCode.Success;
             }

@@ -28,6 +28,7 @@ namespace Tes.Runner.Models
         public Dictionary<string, string>? ContainerEnv { get; set; }
         public List<FileInput>? Inputs { get; set; }
         public List<FileOutput>? Outputs { get; set; }
+        public List<FileOutput>? TaskOutputs { get; set; }
         public string? MetricsFilename { get; set; }
         public string? InputsMetricsFormat { get; set; }
         public string? OutputsMetricsFormat { get; set; }

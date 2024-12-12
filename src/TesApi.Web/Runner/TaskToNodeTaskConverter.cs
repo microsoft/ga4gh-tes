@@ -189,7 +189,8 @@ namespace TesApi.Web.Runner
                 builder.WithOutputUsingCombinedTransformationStrategy(
                     AppendParentDirectoryIfSet(path, $"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%"),
                     url.AbsoluteUri,
-                    fileType: FileType.File);
+                    fileType: FileType.File,
+                    taskOutputs: true);
             }
         }
 

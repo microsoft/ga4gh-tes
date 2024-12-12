@@ -164,6 +164,36 @@ namespace Tes.Runner
             }
         }
 
+        public async Task UploadTaskOutputsAsync(BlobPipelineOptions blobPipelineOptions)
+        {
+            try
+            {
+                ArgumentNullException.ThrowIfNull(blobPipelineOptions, nameof(blobPipelineOptions));
+
+                var outputs = await CreateUploadTaskOutputsAsync();
+
+                if (outputs is null)
+                {
+                    return;
+                }
+
+                if (outputs.Count == 0)
+                {
+                    logger.LogWarning("No output files were found.");
+                    return;
+                }
+
+                var optimizedOptions = OptimizeBlobPipelineOptionsForUpload(blobPipelineOptions, outputs);
+
+                _ = await UploadOutputsAsync(optimizedOptions, outputs);
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Upload operation failed");
+                throw;
+            }
+        }
+
         private async Task<UploadResults> UploadOutputsAsync(BlobPipelineOptions blobPipelineOptions, List<UploadInfo> outputs)
         {
             var uploader = await transferOperationFactory.CreateBlobUploaderAsync(blobPipelineOptions);
@@ -186,6 +216,19 @@ namespace Tes.Runner
             }
 
             return await operationResolver.ResolveOutputsAsync();
+        }
+
+        private async Task<List<UploadInfo>?> CreateUploadTaskOutputsAsync()
+        {
+            if ((tesNodeTask.Outputs ?? []).Count == 0)
+            {
+                logger.LogDebug("No outputs provided");
+                {
+                    return default;
+                }
+            }
+
+            return await operationResolver.ResolveTaskOutputsAsync();
         }
 
         private BlobPipelineOptions OptimizeBlobPipelineOptionsForUpload(BlobPipelineOptions blobPipelineOptions, List<UploadInfo> outputs)

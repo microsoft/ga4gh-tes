@@ -52,6 +52,13 @@ namespace Tes.Runner.Storage
             return await resolutionPolicyHandler.ApplyResolutionPolicyAsync(expandedOutputs);
         }
 
+        public virtual async Task<List<UploadInfo>?> ResolveTaskOutputsAsync()
+        {
+            var expandedOutputs = ExpandTaskOutputs();
+
+            return await resolutionPolicyHandler.ApplyResolutionPolicyAsync(expandedOutputs);
+        }
+
         private List<FileInput> ExpandInputs()
         {
             List<FileInput> expandedInputs = [];
@@ -93,6 +100,18 @@ namespace Tes.Runner.Storage
         }
 
         private List<FileOutput> ExpandOutputs()
+        {
+            List<FileOutput> outputs = [];
+
+            foreach (var output in nodeTask.Outputs ?? [])
+            {
+                outputs.AddRange(ExpandOutput(output));
+            }
+
+            return outputs;
+        }
+
+        private List<FileOutput> ExpandTaskOutputs()
         {
             List<FileOutput> outputs = [];
 

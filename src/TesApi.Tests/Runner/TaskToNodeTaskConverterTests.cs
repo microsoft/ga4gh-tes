@@ -158,8 +158,9 @@ namespace TesApi.Tests.Runner
             var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
             Assert.IsNotNull(nodeTask);
             Assert.IsNull(nodeTask.Inputs);
-            Assert.AreEqual(3, nodeTask.Outputs.Count);
-            Assert.AreEqual(3, nodeTask.Outputs?.Count(output => output.Path!.StartsWith($"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%")));
+            Assert.AreEqual(0, nodeTask.Outputs?.Count ?? 0);
+            Assert.AreEqual(3, nodeTask.TaskOutputs?.Count(output => output.Path!.StartsWith($"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%")));
+            Assert.AreEqual(3, nodeTask.TaskOutputs?.Count);
         }
 
         [TestMethod]
@@ -176,7 +177,9 @@ namespace TesApi.Tests.Runner
             }
 
             Assert.AreEqual(5, nodeTask.Outputs?.Count(output => output.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar)));
-            Assert.AreEqual(3, nodeTask.Outputs?.Count(output => output.Path!.StartsWith($"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%")));
+            Assert.AreEqual(3, nodeTask.TaskOutputs?.Count(output => output.Path!.StartsWith($"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%")));
+            Assert.AreEqual(5, nodeTask.Outputs?.Count ?? 0);
+            Assert.AreEqual(3, nodeTask.TaskOutputs?.Count ?? 0);
         }
 
         [TestMethod]
@@ -248,7 +251,8 @@ namespace TesApi.Tests.Runner
             var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
             Assert.IsNotNull(nodeTask);
             Assert.IsNull(nodeTask.Inputs);
-            Assert.AreEqual(0, nodeTask.Outputs?.Count(output => output.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar)));
+            Assert.AreEqual(0, nodeTask.Outputs?.Count(output => output.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar)) ?? 0);
+            Assert.AreEqual(0, nodeTask.Outputs?.Count ?? 0);
         }
 
         [TestMethod]
@@ -262,7 +266,8 @@ namespace TesApi.Tests.Runner
 
             Assert.IsNotNull(nodeTask);
             Assert.AreEqual(2, nodeTask.Inputs!.Count);
-            Assert.AreEqual(0, nodeTask.Outputs?.Count(output => output.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar)));
+            Assert.AreEqual(0, nodeTask.Outputs?.Count(output => output.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar)) ?? 0);
+            Assert.AreEqual(0, nodeTask.Outputs?.Count ?? 0);
         }
 
         [TestMethod]
@@ -275,7 +280,8 @@ namespace TesApi.Tests.Runner
             var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
             Assert.IsNotNull(nodeTask);
             Assert.IsNull(nodeTask.Inputs);
-            Assert.AreEqual(0, nodeTask.Outputs?.Count(output => output.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar)));
+            Assert.AreEqual(0, nodeTask.Outputs?.Count(output => output.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar)) ?? 0);
+            Assert.AreEqual(0, nodeTask.Outputs?.Count ?? 0);
         }
 
         [TestMethod]
@@ -299,7 +305,8 @@ namespace TesApi.Tests.Runner
             var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
             Assert.IsNotNull(nodeTask);
             Assert.IsNull(nodeTask.Inputs);
-            Assert.AreEqual(0, nodeTask.Outputs?.Count(output => output.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar)));
+            Assert.AreEqual(0, nodeTask.Outputs?.Count(output => output.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar)) ?? 0);
+            Assert.AreEqual(0, nodeTask.Outputs?.Count ?? 0);
         }
 
         [TestMethod]
