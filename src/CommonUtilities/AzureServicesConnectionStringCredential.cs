@@ -183,7 +183,7 @@ namespace CommonUtilities
 
         internal Azure.Identity.WorkloadIdentityCredential CreateWorkloadIdentityCredential(string appId)
         {
-            return new(ConfigureOptions(new Azure.Identity.WorkloadIdentityCredentialOptions()));
+            return new(ConfigureOptions(new Azure.Identity.WorkloadIdentityCredentialOptions() { ClientId = appId }));
         }
 
         internal Azure.Identity.WorkloadIdentityCredential CreateWorkloadIdentityCredential()
@@ -454,7 +454,8 @@ namespace CommonUtilities
             }
             else if (string.Equals(runAs, Workload, StringComparison.OrdinalIgnoreCase))
             {
-                // If RunAs=Workload use the specified Workload Identity
+                // RunAs=Workload
+                // Use the specified Workload Identity
                 // If AppId key is present, use it as the ClientId
                 if (connectionSettings.TryGetValue(AppId, out var appId))
                 {
