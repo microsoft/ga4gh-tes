@@ -50,6 +50,7 @@ using Microsoft.Graph;
 using Newtonsoft.Json;
 using Polly;
 using Polly.Retry;
+using Polly.Utilities;
 using Tes.Extensions;
 using Tes.Models;
 using Tes.SDK;
@@ -62,13 +63,13 @@ namespace TesDeployer
     {
         private static readonly AsyncRetryPolicy roleAssignmentHashConflictRetryPolicy = Policy
             .Handle<RequestFailedException>(requestFailedException =>
-                "HashConflictOnDifferentRoleAssignmentIds".Equals(requestFailedException.ErrorCode))
+                "HashConflictOnDifferentRoleAssignmentIds".Equals(requestFailedException.ErrorCode, StringComparison.OrdinalIgnoreCase))
             .RetryAsync();
 
         private static readonly AsyncRetryPolicy operationNotAllowedConflictRetryPolicy = Policy
             .Handle<RequestFailedException>(azureException =>
                 (int)HttpStatusCode.Conflict == azureException.Status &&
-                "OperationNotAllowed".Equals(azureException.ErrorCode))
+                "OperationNotAllowed".Equals(azureException.ErrorCode, StringComparison.OrdinalIgnoreCase))
             .WaitAndRetryAsync(30, retryAttempt => TimeSpan.FromSeconds(10));
 
         private static readonly AsyncRetryPolicy generalRetryPolicy = Policy
@@ -78,7 +79,7 @@ namespace TesDeployer
         private static readonly AsyncRetryPolicy internalServerErrorRetryPolicy = Policy
             .Handle<RequestFailedException>(azureException =>
                 (int)HttpStatusCode.OK == azureException.Status &&
-                "InternalServerError".Equals(azureException.ErrorCode))
+                "InternalServerError".Equals(azureException.ErrorCode, StringComparison.OrdinalIgnoreCase))
             .WaitAndRetryAsync(3, retryAttempt => longRetryWaitTime);
 
         private static readonly TimeSpan longRetryWaitTime = TimeSpan.FromSeconds(15);
@@ -1590,7 +1591,16 @@ namespace TesDeployer
                         Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType.User,
                         managedCluster,
                         roleDefinitionId,
-                        message.Replace(@"{Admins}", "deployer user"));
+                        message.Replace(@"{Admins}", "deployer user"),
+                        transformException: e =>
+                        {
+                            if (e is RequestFailedException ex && ex.Status == 403 && "AuthorizationFailed".Equals(ex.ErrorCode, StringComparison.OrdinalIgnoreCase))
+                            {
+                                return new System.ComponentModel.WarningException("Role assignment not authorized. Skipping role assignment to AKS cluster.", e);
+                            }
+
+                            return e;
+                        });
                 }
             }
             else
@@ -1755,7 +1765,7 @@ namespace TesDeployer
         private Task<bool> AssignRoleToResourceAsync(UserAssignedIdentityResource managedIdentity, ArmResource resource, ResourceIdentifier roleDefinitionId, string message)
             => AssignRoleToResourceAsync([managedIdentity.Data.PrincipalId.Value], Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType.ServicePrincipal, resource, roleDefinitionId, message);
 
-        private async Task<bool> AssignRoleToResourceAsync(IEnumerable<Guid> principalIds, Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType principalType, ArmResource resource, ResourceIdentifier roleDefinitionId, string message)
+        private async Task<bool> AssignRoleToResourceAsync(IEnumerable<Guid> principalIds, Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType principalType, ArmResource resource, ResourceIdentifier roleDefinitionId, string message, Func<Exception, Exception> transformException = default)
         {
             var changed = false;
 
@@ -1772,14 +1782,41 @@ namespace TesDeployer
                 }
 
                 changed = true;
-                await Execute(message, () => roleAssignmentHashConflictRetryPolicy.ExecuteAsync(token =>
-                    (Task)resource.GetRoleAssignments().CreateOrUpdateAsync(WaitUntil.Completed, Guid.NewGuid().ToString(),
-                        new(roleDefinitionId, principal)
+                await Execute(message, async () =>
+                {
+                    try
+                    {
+                        await roleAssignmentHashConflictRetryPolicy.ExecuteAsync(token =>
+                            (Task)resource.GetRoleAssignments().CreateOrUpdateAsync(WaitUntil.Completed, Guid.NewGuid().ToString(),
+                                new(roleDefinitionId, principal)
+                                {
+                                    PrincipalType = principalType
+                                },
+                                token),
+                            cts.Token);
+                    }
+                    catch (Exception ex)
+                    {
+                        Exception e;
+
+                        if (transformException is not null)
                         {
-                            PrincipalType = principalType
-                        },
-                        token),
-                    cts.Token));
+                            e = transformException(ex);
+
+                            if (e is null)
+                            {
+                                return;
+                            }
+                        }
+                        else
+                        {
+                            e = ex;
+                        }
+
+                        e.RethrowWithOriginalStackTraceIfDiffersFrom(ex);
+                        throw;
+                    }
+                });
             }
 
             return changed;
@@ -1792,7 +1829,7 @@ namespace TesDeployer
                     {
                         return await resource.GetAsync(cancellationToken: cancellationToken);
                     }
-                    catch (RequestFailedException ex) when ("AuthorizationFailed".Equals(ex.ErrorCode))
+                    catch (RequestFailedException ex) when ("AuthorizationFailed".Equals(ex.ErrorCode, StringComparison.OrdinalIgnoreCase))
                     {
                         return new NullResponse<RoleAssignmentResource>();
                     }
@@ -2624,6 +2661,11 @@ namespace TesDeployer
                     var result = await func();
                     WriteExecutionTime(line, startTime);
                     return result;
+                }
+                catch (System.ComponentModel.WarningException warningException)
+                {
+                    line.Write($" Warning: {warningException.Message}", ConsoleColor.Yellow);
+                    return default;
                 }
                 catch (RequestFailedException requestFailedException) when (requestFailedException.ErrorCode.Equals("ExpiredAuthenticationToken", StringComparison.OrdinalIgnoreCase))
                 {
