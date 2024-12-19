@@ -4,6 +4,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Tes.Models;
+using TesApi.Web.Management.Models.Quotas;
 
 namespace TesApi.Web.Management
 {
@@ -22,6 +23,14 @@ namespace TesApi.Web.Management
         /// <exception cref="AzureBatchLowQuotaException">Thrown when a task requires more cores than total quota available</exception>
         /// <exception cref="AzureBatchQuotaMaxedOutException">Thrown when a max quota condition was identified</exception>
         Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Checks if the current quota allows creation of the requested quantity of new Pools and Jobs.
+        /// </summary>
+        /// <param name="required">The quantity of new pools and jobs that need to be accomodated for success.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns>A <see cref="CheckGroupPoolAndJobQuotaResult"/> that returns the size of the portion of <paramref name="required"/> that would've resulted in the provided <see cref="AzureBatchQuotaMaxedOutException"/>.</returns>
+        Task<CheckGroupPoolAndJobQuotaResult> CheckBatchAccountPoolAndJobQuotasAsync(int required, CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the instance of the batch quota provider.
