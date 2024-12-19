@@ -73,7 +73,7 @@ public abstract class PartsProcessor
 
                     if (!scalingStrategy.IsScalingAllowed(p, currentMaxPartProcessingTime))
                     {
-                        logger.LogInformation("The maximum number of tasks for the transfer operation has been set. Max part processing time is: {currentMaxPartProcessingTimeInMs} ms. Processing tasks count: {processorCount}.", currentMaxPartProcessingTime, p);
+                        logger.LogDebug("The maximum number of tasks for the transfer operation has been set. Max part processing time is: {currentMaxPartProcessingTimeInMs} ms. Processing tasks count: {processorCount}.", currentMaxPartProcessingTime, p);
                         break;
                     }
                 }
@@ -84,13 +84,13 @@ public abstract class PartsProcessor
 
                 if (readFromChannel.Reader.Completion.IsCompleted)
                 {
-                    logger.LogInformation("The readFromChannel is completed, no need to add more processing tasks. Processing tasks count: {processorCount}.", p);
+                    logger.LogDebug("The readFromChannel is completed, no need to add more processing tasks. Processing tasks count: {processorCount}.", p);
                     break;
                 }
 
                 var delay = scalingStrategy.GetScalingDelay(p);
 
-                logger.LogInformation("Increasing the number of processing tasks to {processorCount}", p + 1);
+                logger.LogDebug("Increasing the number of processing tasks to {processorCount}", p + 1);
 
                 tasks.Add(StartProcessorTaskAsync(readFromChannel, processorAsync, cancellationSource));
 

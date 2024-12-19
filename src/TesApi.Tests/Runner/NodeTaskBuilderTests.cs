@@ -41,7 +41,7 @@ namespace TesApi.Tests.Runner
         {
             var workingDir = "/home";
             nodeTaskBuilder.WithContainerMountParentDirectory(workingDir);
-            Assert.AreEqual(workingDir, nodeTaskBuilder.Build().MountParentDirectoryPath);
+            Assert.AreEqual(workingDir, nodeTaskBuilder.Build().RuntimeOptions.MountParentDirectoryPath);
         }
 
         [TestMethod]

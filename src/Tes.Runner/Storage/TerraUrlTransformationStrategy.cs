@@ -80,7 +80,7 @@ namespace Tes.Runner.Storage
         {
             var tokenInfo = await GetWorkspaceSasTokenFromWsmAsync(blobInfo, blobSasPermissions);
 
-            logger.LogInformation("Successfully obtained the SAS URL from Terra. WSM resource ID:{ContainerResourceId}", blobInfo.WsmContainerResourceId);
+            logger.LogDebug("Successfully obtained the SAS URL from Terra. WSM resource ID:{ContainerResourceId}", blobInfo.WsmContainerResourceId);
 
             var uriBuilder = new UriBuilder(tokenInfo.Url);
 
@@ -99,7 +99,7 @@ namespace Tes.Runner.Storage
         {
             var tokenParams = CreateTokenParamsFromOptions(sasBlobPermissions);
 
-            logger.LogInformation(
+            logger.LogDebug(
                 "Getting SAS URL from Terra. WSM workspace ID:{WorkspaceId}", blobInfo.WorkspaceId);
 
             var cacheKey = $"{blobInfo.WorkspaceId}-{blobInfo.WsmContainerResourceId}-{tokenParams.SasPermission}";
@@ -111,7 +111,7 @@ namespace Tes.Runner.Storage
                     throw new InvalidOperationException("The value retrieved from the cache is null");
                 }
 
-                logger.LogInformation("SAS URL found in cache. WSM resource ID:{ContainerResourceId}", blobInfo.WsmContainerResourceId);
+                logger.LogDebug("SAS URL found in cache. WSM resource ID:{ContainerResourceId}", blobInfo.WsmContainerResourceId);
                 return tokenInfo;
             }
 
@@ -196,11 +196,11 @@ namespace Tes.Runner.Storage
 
             CheckIfAccountIsTerraStorageAccount(blobUriBuilder.AccountName);
 
-            logger.LogInformation("Getting Workspace ID from the Container Name: {BlobContainerName}", blobUriBuilder.BlobContainerName);
+            logger.LogDebug("Getting Workspace ID from the Container Name: {BlobContainerName}", blobUriBuilder.BlobContainerName);
 
             var workspaceId = ToWorkspaceId(blobUriBuilder.BlobContainerName);
 
-            logger.LogInformation("Workspace ID to use: {WorkspaceId}", workspaceId);
+            logger.LogDebug("Workspace ID to use: {WorkspaceId}", workspaceId);
 
             var wsmContainerResourceId = await GetWsmContainerResourceIdFromCacheOrWsmAsync(workspaceId, blobUriBuilder.BlobContainerName);
 
@@ -242,7 +242,7 @@ namespace Tes.Runner.Storage
 
         private async Task<Guid> GetWsmContainerResourceIdFromCacheOrWsmAsync(Guid workspaceId, string containerName)
         {
-            logger.LogInformation("Getting container resource information from WSM. Workspace ID: {WorkspaceId} Container Name: {BlobContainerName}", workspaceId, containerName);
+            logger.LogDebug("Getting container resource information from WSM. Workspace ID: {WorkspaceId} Container Name: {BlobContainerName}", workspaceId, containerName);
 
             try
             {
@@ -250,7 +250,7 @@ namespace Tes.Runner.Storage
 
                 if (memoryCache.TryGetValue(cacheKey, out Guid wsmContainerResourceId))
                 {
-                    logger.LogInformation("Found the container resource ID in cache. Resource ID: {ContainerResourceId} Container Name: {BlobContainerName}", wsmContainerResourceId, containerName);
+                    logger.LogDebug("Found the container resource ID in cache. Resource ID: {ContainerResourceId} Container Name: {BlobContainerName}", wsmContainerResourceId, containerName);
                     return wsmContainerResourceId;
                 }
 
@@ -263,7 +263,7 @@ namespace Tes.Runner.Storage
                     r.ResourceAttributes.AzureStorageContainer.StorageContainerName.Equals(containerName,
                         StringComparison.OrdinalIgnoreCase)).Metadata;
 
-                logger.LogInformation("Found the resource ID for storage container resource. Resource ID: {ContainerResourceId} Container Name: {BlobContainerName}", metadata.ResourceId, containerName);
+                logger.LogDebug("Found the resource ID for storage container resource. Resource ID: {ContainerResourceId} Container Name: {BlobContainerName}", metadata.ResourceId, containerName);
 
                 var resourceId = Guid.Parse(metadata.ResourceId);
 
