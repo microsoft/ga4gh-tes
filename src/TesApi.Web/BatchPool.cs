@@ -678,14 +678,12 @@ namespace TesApi.Web
         private const string EjectableComputeNodesFilterClause = @"state eq 'starttaskfailed' or state eq 'preempted' or state eq 'unusable'";
 
         private string EjectableComputeNodesSelectClause()
-            => ScalingMode.AutoScaleDisabled.Equals(_scalingMode) switch
+            => (ScalingMode.AutoScaleDisabled.Equals(_scalingMode), _taskPreviousComputeNodeIds.Count == 0) switch
             {
-                false => _taskPreviousComputeNodeIds.Count == 0 // Not removing compute nodes
-                    ? @"id" // Not servicing tasks by compute node
-                    : @"errors,id,state", // Servicing tasks by compute node
-                true => _taskPreviousComputeNodeIds.Count == 0 // Possibly removing compute nodes
-                    ? @"id,state,startTaskInfo" // Not servicing tasks by compute node
-                    : @"errors,id,state,startTaskInfo", // Servicing tasks by compute node
+                (false, false) => @"errors,id,state", // Not removing compute nodes. Servicing tasks by compute node
+                (false, true) => @"id", // Not removing compute nodes. Not servicing tasks by compute node
+                (true, false) => @"errors,id,state,startTaskInfo", // Possibly removing compute nodes. Servicing tasks by compute node
+                (true, true) => @"id,state,startTaskInfo", // Possibly removing compute nodes. Not servicing tasks by compute node
             };
 
         private async ValueTask<IAsyncEnumerable<ComputeNode>> GetNodesToRemove()

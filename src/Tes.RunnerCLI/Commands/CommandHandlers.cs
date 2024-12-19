@@ -236,14 +236,16 @@ namespace Tes.RunnerCLI.Commands
 
             await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.UploadCommandName, nodeTask, file, options);
 
-            await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
-            await executor.AppendMetrics();
-
-            _ = await ExecuteTransferTaskAsync(nodeTask, async exec =>
+            try
             {
-                await exec.UploadTaskOutputsAsync(options);
-                return 0;
-            }, apiVersion);
+                await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
+                await executor.AppendMetrics();
+                await executor.UploadTaskOutputsAsync(options);
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(e, "Failed to perform transfer. Operation: {TransferOperation}", nameof(Executor.UploadTaskOutputsAsync));
+            }
         }
 
         private static async Task<int> ExecuteTransferTaskAsync(Runner.Models.NodeTask nodeTask, Func<Executor, Task<long>> transferOperation, string apiVersion)

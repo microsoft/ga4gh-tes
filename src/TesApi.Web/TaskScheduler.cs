@@ -56,7 +56,7 @@ namespace TesApi.Web
     {
         private static readonly TimeSpan blobRunInterval = TimeSpan.FromSeconds(15);
         private static readonly TimeSpan queuedRunInterval = TimeSpan.FromMilliseconds(100);
-        internal static readonly TimeSpan BatchRunInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs appears to use a 30 second polling interval
+        internal static readonly TimeSpan BatchRunInterval = TimeSpan.FromSeconds(30); // The very fastest processes inside of Azure Batch accessing anything within pools or jobs appears to use a 30 second polling interval
         private static readonly TimeSpan shortBackgroundRunInterval = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan longBackgroundRunInterval = TimeSpan.FromSeconds(2.5);
         private readonly RunnerEventsProcessor nodeEventProcessor = nodeEventProcessor;
@@ -315,24 +315,25 @@ namespace TesApi.Web
         /// <returns><see cref="TesTask"/>s and <see cref="AzureBatchTaskState"/>s from all events.</returns>
         private async ValueTask<IEnumerable<(TesTask Task, AzureBatchTaskState State, Func<CancellationToken, Task> MarkProcessedAsync)>> ParseAvailableEvents(CancellationToken cancellationToken)
         {
+            var tasks = new ConcurrentDictionary<string, ImmutableList<(RunnerEventsMessage Event, TesTask Task)>>(StringComparer.OrdinalIgnoreCase); // TODO: Are tesTask.Ids case sensitive?
             var messages = new ConcurrentBag<(RunnerEventsMessage Message, TesTask Task, AzureBatchTaskState State, Func<CancellationToken, Task> MarkProcessedAsync)>();
 
-            // Get and parse event blobs
+            // Get tasks for event blobs
             await Parallel.ForEachAsync(BatchScheduler.GetEventMessagesAsync(cancellationToken), cancellationToken, async (eventMessage, token) =>
             {
-                var tesTask = await GetTesTaskAsync(eventMessage.Tags["task-id"], eventMessage.Tags["event-name"]);
-
-                if (tesTask is null)
-                {
-                    return;
-                }
+                TesTask tesTask = default;
 
                 try
                 {
+                    tesTask = await GetTesTaskAsync(eventMessage.Tags["task-id"], eventMessage.Tags["event-name"]);
+
+                    if (tesTask is null)
+                    {
+                        return;
+                    }
+
                     nodeEventProcessor.ValidateMessageMetadata(eventMessage);
-                    eventMessage = await nodeEventProcessor.DownloadAndValidateMessageContentAsync(eventMessage, token);
-                    var state = await nodeEventProcessor.GetMessageBatchStateAsync(eventMessage, tesTask, token);
-                    messages.Add((eventMessage, tesTask, state, ct => nodeEventProcessor.MarkMessageProcessedAsync(eventMessage, ct)));
+                    tasks.AddOrUpdate(tesTask.Id, _ => [(eventMessage, tesTask)], (_, list) => list.Add((eventMessage, tesTask)));
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
@@ -352,6 +353,39 @@ namespace TesApi.Web
                         ]),
                         ct => nodeEventProcessor.RemoveMessageFromReattemptsAsync(eventMessage, ct)));
                 }
+
+                // Helpers
+                async ValueTask<TesTask> GetTesTaskAsync(string id, string @event)
+                {
+                    TesTask tesTask = default;
+                    if (await Repository.TryGetItemAsync(id, token, task => tesTask = task) && tesTask is not null)
+                    {
+                        Logger.LogTrace("Attempting to complete event '{TaskEvent}' for task {TesTask}.", @event, tesTask.Id);
+                        return tesTask;
+                    }
+                    else
+                    {
+                        Logger.LogDebug("Could not find task {TesTask} for event '{TaskEvent}'.", id, @event);
+                        return null;
+                    }
+                }
+            });
+
+            // Parse event blobs, deferring later events for the same TesTask
+            await Parallel.ForEachAsync(tasks.Select(pair => nodeEventProcessor.OrderProcessedByExecutorSequence(pair.Value, m => m.Event).First()), cancellationToken, async (tuple, token) =>
+            {
+                var (eventMessage, tesTask) = tuple;
+
+                try
+                {
+                    eventMessage = await nodeEventProcessor.DownloadAndValidateMessageContentAsync(eventMessage, token);
+                    var state = await nodeEventProcessor.GetMessageBatchStateAsync(eventMessage, tesTask, token);
+                    messages.Add((eventMessage, tesTask, state, ct => nodeEventProcessor.MarkMessageProcessedAsync(eventMessage, ct)));
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     Logger.LogError(ex, @"Downloading and parsing event failed: {ErrorMessage}", ex.Message);
@@ -364,25 +398,9 @@ namespace TesApi.Web
                             "EventParsingFailed",
                             $"{ex.GetType().FullName}: {ex.Message}"
                         ]),
-                        (ex is System.Diagnostics.UnreachableException || ex is RunnerEventsProcessor.DownloadOrParseException)
+                        (ex is System.Diagnostics.UnreachableException || ex is RunnerEventsProcessor.DownloadOrParseException || ex is ArgumentException)
                             ? ct => nodeEventProcessor.MarkMessageProcessedAsync(eventMessage, ct) // Mark event processed to prevent retries
                             : default));  // Retry this event.
-                }
-
-                // Helpers
-                async ValueTask<TesTask> GetTesTaskAsync(string id, string @event)
-                {
-                    TesTask tesTask = default;
-                    if (await Repository.TryGetItemAsync(id, token, task => tesTask = task) && tesTask is not null)
-                    {
-                        Logger.LogTrace("Completing event '{TaskEvent}' for task {TesTask}.", @event, tesTask.Id);
-                        return tesTask;
-                    }
-                    else
-                    {
-                        Logger.LogDebug("Could not find task {TesTask} for event '{TaskEvent}'.", id, @event);
-                        return null;
-                    }
                 }
             });
 
