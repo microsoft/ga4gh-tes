@@ -230,21 +230,26 @@ namespace Tes.RunnerCLI.Commands
                 BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity,
                     apiVersion);
 
-            await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.DownloadCommandName, nodeTask, file, options);
-
-            await CommandLauncher.LaunchesExecutorCommandAsSubProcessAsync(nodeTask, file, apiVersion, dockerUri);
-
-            await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.UploadCommandName, nodeTask, file, options);
-
             try
             {
-                await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
-                await executor.AppendMetrics();
-                await executor.UploadTaskOutputsAsync(options);
+                await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.DownloadCommandName, nodeTask, file, options);
+
+                await CommandLauncher.LaunchesExecutorCommandAsSubProcessAsync(nodeTask, file, apiVersion, dockerUri);
+
+                await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.UploadCommandName, nodeTask, file, options);
             }
-            catch (Exception e)
+            finally
             {
-                Logger.LogError(e, "Failed to perform transfer. Operation: {TransferOperation}", nameof(Executor.UploadTaskOutputsAsync));
+                try
+                {
+                    await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
+                    await executor.AppendMetrics();
+                    await executor.UploadTaskOutputsAsync(options);
+                }
+                catch (Exception e)
+                {
+                    Logger.LogError(e, "Failed to perform transfer. Operation: {TransferOperation}", nameof(Executor.UploadTaskOutputsAsync));
+                }
             }
         }
 

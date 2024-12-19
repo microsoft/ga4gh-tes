@@ -115,7 +115,7 @@ namespace Tes.Runner.Storage
         {
             List<FileOutput> outputs = [];
 
-            foreach (var output in nodeTask.Outputs ?? [])
+            foreach (var output in nodeTask.TaskOutputs ?? [])
             {
                 outputs.AddRange(ExpandOutput(output));
             }
