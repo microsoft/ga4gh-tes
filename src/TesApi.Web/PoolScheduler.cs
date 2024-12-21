@@ -353,7 +353,8 @@ namespace TesApi.Web
                 => new(AzureBatchTaskState.TaskState.NodeStartTaskFailed, Failure: new(failure.TaskFailureInformation.Code, Enumerable.Empty<string>()
                     .Append($"Start task failed ({failure.TaskFailureInformation.Category}): {failure.TaskFailureInformation.Message}")
                     .Concat(failure.TaskFailureInformation.Details?.Select(FormatNameValuePair) ?? [])
-                    .Append(failure.NodeId)));
+                    .Append($"tes-internal/pools/{failure.PoolId}/nodes/{failure.NodeId}/stderr.txt")
+                    .Append($"tes-internal/pools/{failure.PoolId}/nodes/{failure.NodeId}/stdout.txt")));
 
             ResizeError PopNextResizeError()
                 => pool.ResizeErrors.TryDequeue(out var resizeError) ? resizeError : default;

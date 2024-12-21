@@ -219,7 +219,7 @@ namespace TesApi.Web
             {
                 batchTasksToTerminate = await batchClient.JobOperations.ListTasks(jobId, jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken);
             }
-            catch (BatchException ex) when (ex.InnerException is BatchProtocol.Models.BatchErrorException bee && "JobNotFound".Equals(bee.Body?.Code, StringComparison.InvariantCultureIgnoreCase))
+            catch (BatchException ex) when (BatchErrorCodeStrings.JobNotFound.Equals(ex.RequestInformation.BatchError.Code, StringComparison.OrdinalIgnoreCase))
             {
                 logger.LogWarning("Job not found for TES task {TesTask}", tesTaskId);
                 return; // Task cannot exist if the job is not found.

@@ -105,8 +105,9 @@ namespace TesApi.Web
         /// <summary>
         /// <see cref="TaskFailureInformation"/> paired with compute node Id.
         /// </summary>
-        /// <param name="NodeId">Compute node Id</param>
+        /// <param name="PoolId"><see cref="CloudPool.Id"/>.</param>
+        /// <param name="NodeId"><see cref="ComputeNode.Id"/>.</param>
         /// <param name="TaskFailureInformation"><see cref="TaskFailureInformation"/></param>
-        public record class StartTaskFailureInformation(string NodeId, TaskFailureInformation TaskFailureInformation);
+        public record class StartTaskFailureInformation(string PoolId, string NodeId, TaskFailureInformation TaskFailureInformation);
     }
 }

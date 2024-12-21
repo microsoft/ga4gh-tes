@@ -1604,13 +1604,13 @@ namespace TesApi.Web
             static bool TryGetValueAsDateTimeOffset(Dictionary<string, string> dict, string key, out DateTimeOffset result)
             {
                 result = default;
-                return dict.TryGetValue(key, out var valueAsString) && DateTimeOffset.TryParse(valueAsString, out result);
+                return dict.TryGetValue(key, out var valueAsString) && DateTimeOffset.TryParse(valueAsString.Trim(), out result);
             }
 
             static bool TryGetValueAsDouble(Dictionary<string, string> dict, string key, out double result)
             {
                 result = default;
-                return dict.TryGetValue(key, out var valueAsString) && double.TryParse(valueAsString, out result);
+                return dict.TryGetValue(key, out var valueAsString) && double.TryParse(valueAsString.Trim(), out result);
             }
 
             Tes.Models.BatchNodeMetrics batchNodeMetrics = null;
@@ -1644,21 +1644,20 @@ namespace TesApi.Web
 
                         batchNodeMetrics = new()
                         {
-                            BlobXferImagePullDurationInSeconds = GetDurationInSeconds(metrics, "BlobXferPullStart", "BlobXferPullEnd"),
-                            ExecutorImagePullDurationInSeconds = GetDurationInSeconds(metrics, "ExecutorPullStart", "ExecutorPullEnd"),
-                            ExecutorImageSizeInGB = TryGetValueAsDouble(metrics, "ExecutorImageSizeInBytes", out var executorImageSizeInBytes) ? executorImageSizeInBytes / bytesInGB : null,
-                            FileDownloadDurationInSeconds = GetDurationInSeconds(metrics, "DownloadStart", "DownloadEnd"),
+                            /**/ExecutorImagePullDurationInSeconds = [GetDurationInSeconds(metrics, "ExecutorPullStart", "ExecutorPullEnd")],
+                            /**/ExecutorImageSizeInGB = [TryGetValueAsDouble(metrics, "ExecutorImageSizeInBytes", out var executorImageSizeInBytes) ? executorImageSizeInBytes / bytesInGB : null],
+                            /**/FileDownloadDurationInSeconds = GetDurationInSeconds(metrics, "DownloadStart", "DownloadEnd"),
                             FileDownloadSizeInGB = TryGetValueAsDouble(metrics, "FileDownloadSizeInBytes", out var fileDownloadSizeInBytes) ? fileDownloadSizeInBytes / bytesInGB : null,
-                            ExecutorDurationInSeconds = GetDurationInSeconds(metrics, "ExecutorStart", "ExecutorEnd"),
-                            FileUploadDurationInSeconds = GetDurationInSeconds(metrics, "UploadStart", "UploadEnd"),
+                            /**/ExecutorDurationInSeconds = [GetDurationInSeconds(metrics, "ExecutorStart", "ExecutorEnd")],
+                            /**/FileUploadDurationInSeconds = GetDurationInSeconds(metrics, "UploadStart", "UploadEnd"),
                             FileUploadSizeInGB = TryGetValueAsDouble(metrics, "FileUploadSizeInBytes", out var fileUploadSizeInBytes) ? fileUploadSizeInBytes / bytesInGB : null,
                             DiskUsedInGB = diskUsedInGB,
                             DiskUsedPercent = diskUsedInGB.HasValue && diskSizeInGB.HasValue && diskSizeInGB > 0 ? (float?)(diskUsedInGB / diskSizeInGB * 100) : null,
                             VmCpuModelName = metrics.GetValueOrDefault("VmCpuModelName")
                         };
 
-                        taskStartTime = TryGetValueAsDateTimeOffset(metrics, "BlobXferPullStart", out var startTime) ? startTime : null;
-                        taskEndTime = TryGetValueAsDateTimeOffset(metrics, "UploadEnd", out var endTime) ? endTime : null;
+                        /**/taskStartTime = TryGetValueAsDateTimeOffset(metrics, "DownloadStart", out var startTime) ? startTime : null;
+                        /**/taskEndTime = TryGetValueAsDateTimeOffset(metrics, "UploadEnd", out var endTime) ? endTime : null;
                     }
                     catch (Exception ex)
                     {

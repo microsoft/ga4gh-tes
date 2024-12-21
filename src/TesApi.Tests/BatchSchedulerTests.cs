@@ -1074,14 +1074,12 @@ namespace TesApi.Tests
             tesTask.State = TesState.INITIALIZING;
 
             var metricsFileContent = @"
-                BlobXferPullStart=2020-10-08T02:30:39+00:00
-                BlobXferPullEnd=2020-10-08T02:31:39+00:00
-                ExecutorPullStart=2020-10-08T02:32:39+00:00
+                ExecutorPullStart=2020-10-08T02:35:39+00:00
                 ExecutorImageSizeInBytes=3000000000
-                ExecutorPullEnd=2020-10-08T02:34:39+00:00
-                DownloadStart=2020-10-08T02:35:39+00:00
+                ExecutorPullEnd=2020-10-08T02:37:39+00:00
+                DownloadStart=2020-10-08T02:30:39+00:00
                 FileDownloadSizeInBytes=2000000000
-                DownloadEnd=2020-10-08T02:38:39+00:00
+                DownloadEnd=2020-10-08T02:33:39+00:00
                 ExecutorStart=2020-10-08T02:39:39+00:00
                 ExecutorEnd=2020-10-08T02:43:39+00:00
                 UploadStart=2020-10-08T02:44:39+00:00
@@ -1105,11 +1103,10 @@ namespace TesApi.Tests
 
                 var batchNodeMetrics = tesTask.GetOrAddTesTaskLog().BatchNodeMetrics;
                 Assert.IsNotNull(batchNodeMetrics);
-                Assert.AreEqual(60, batchNodeMetrics.BlobXferImagePullDurationInSeconds);
-                Assert.AreEqual(120, batchNodeMetrics.ExecutorImagePullDurationInSeconds);
-                Assert.AreEqual(3, batchNodeMetrics.ExecutorImageSizeInGB);
+                Assert.AreEqual(120, batchNodeMetrics.ExecutorImagePullDurationInSeconds[0]);
+                Assert.AreEqual(3, batchNodeMetrics.ExecutorImageSizeInGB[0]);
                 Assert.AreEqual(180, batchNodeMetrics.FileDownloadDurationInSeconds);
-                Assert.AreEqual(240, batchNodeMetrics.ExecutorDurationInSeconds);
+                Assert.AreEqual(240, batchNodeMetrics.ExecutorDurationInSeconds[0]);
                 Assert.AreEqual(300, batchNodeMetrics.FileUploadDurationInSeconds);
                 Assert.AreEqual(1.024, batchNodeMetrics.DiskUsedInGB);
                 Assert.AreEqual(12.5f, batchNodeMetrics.DiskUsedPercent);

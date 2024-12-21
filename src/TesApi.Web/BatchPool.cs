@@ -68,10 +68,7 @@ namespace TesApi.Web
         private IAsyncEnumerable<CloudTask> GetTasksAsync(string select, string filter)
             => _removedFromService ? AsyncEnumerable.Empty<CloudTask>() : _azureProxy.ListTasksAsync(PoolId, new ODATADetailLevel { SelectClause = select, FilterClause = filter });
 
-        internal IAsyncEnumerable<CloudTask> GetTasksAsync(bool includeCompleted)
-            => _azureProxy.ListTasksAsync(PoolId, new ODATADetailLevel { SelectClause = "id,stateTransitionTime", FilterClause = includeCompleted ? default : "state ne 'completed'" });
-
-        private async ValueTask RemoveNodesAsync(IList<ComputeNode> nodesToRemove, CancellationToken cancellationToken)
+        private async ValueTask RemoveNodesAsync(List<ComputeNode> nodesToRemove, CancellationToken cancellationToken)
         {
             _logger.LogDebug("Removing {Nodes} nodes from {PoolId}", nodesToRemove.Count, PoolId);
             await _azureProxy.DeleteBatchComputeNodesAsync(PoolId, nodesToRemove, cancellationToken);
@@ -339,7 +336,7 @@ namespace TesApi.Web
 
                     case ScalingMode.AutoScaleDisabled:
                         {
-                            var nodesToRemove = Enumerable.Empty<ComputeNode>();
+                            List<ComputeNode> nodesToRemove = [];
 
                             // It's documented that a max of 100 nodes can be removed at a time. Excess eligible nodes will be removed in a future call to this method.
                             await foreach (var node in (await GetNodesToRemove()).Take(MaxComputeNodesToRemoveAtOnce).WithCancellation(cancellationToken))
@@ -352,7 +349,7 @@ namespace TesApi.Web
 
                                     case ComputeNodeState.StartTaskFailed:
                                         _logger.LogTrace("Found starttaskfailed node {NodeId}", node.Id);
-                                        StartTaskFailures.Enqueue(new(node.Id, node.StartTaskInformation.FailureInformation));
+                                        StartTaskFailures.Enqueue(new(PoolId, node.Id, node.StartTaskInformation.FailureInformation));
                                         break;
 
                                     case ComputeNodeState.Preempted:
@@ -363,24 +360,28 @@ namespace TesApi.Web
                                         throw new System.Diagnostics.UnreachableException($"Unexpected compute node state '{node.State}' received while looking for nodes to remove from the pool.");
                                 }
 
-                                nodesToRemove = nodesToRemove.Append(node);
+                                nodesToRemove.Add(node);
                             }
 
-                            nodesToRemove = nodesToRemove.ToList();
-
-                            if (nodesToRemove.Any())
+                            if (nodesToRemove.Count == 0)
+                            {
+                                goto case ScalingMode.RemovingFailedNodes;
+                            }
+                            else
                             {
                                 await nodesToRemove
                                     .Where(node => ComputeNodeState.StartTaskFailed.Equals(node.State))
                                     .SelectMany<ComputeNode, (ComputeNode Node, string Log)>(node => [(node, "stdout.txt"), (node, "stderr.txt")])
-                                    .ForEachAsync((logInfo, token) => TransferStartTaskLogAsync(logInfo.Node, logInfo.Log, token), cancellationToken);
-                                await RemoveNodesAsync((IList<ComputeNode>)nodesToRemove, cancellationToken);
+                                    .ForEachAsync(async (nodeAndLog, token) =>
+                                    {
+                                        var file = await nodeAndLog.Node.GetNodeFileAsync($"startup/{nodeAndLog.Log}", cancellationToken: token);
+                                        var content = await file.ReadAsStringAsync(cancellationToken: token);
+                                        var blobUri = await _storageAccessProvider.GetInternalTesBlobUrlAsync($"/pools/{PoolId}/nodes/{nodeAndLog.Node.Id}/{nodeAndLog.Log}", Azure.Storage.Sas.BlobSasPermissions.Create, token);
+                                        await _azureProxy.UploadBlobAsync(blobUri, content, token);
+                                    }, cancellationToken);
+                                await RemoveNodesAsync(nodesToRemove, cancellationToken);
                                 _resetAutoScalingRequired = false;
                                 _scalingMode = ScalingMode.RemovingFailedNodes;
-                            }
-                            else
-                            {
-                                goto case ScalingMode.RemovingFailedNodes;
                             }
                         }
                         break;
@@ -405,14 +406,6 @@ namespace TesApi.Web
                         _scalingMode = ScalingMode.AutoScaleEnabled;
                         _logger.LogInformation(@"Pool {PoolId} is back to normal resize and monitoring status.", PoolId);
                         break;
-                }
-
-                async ValueTask TransferStartTaskLogAsync(ComputeNode node, string log, CancellationToken cancellationToken)
-                {
-                    var file = await node.GetNodeFileAsync($"startup/{log}", cancellationToken: cancellationToken);
-                    var content = await file.ReadAsStringAsync(cancellationToken: cancellationToken);
-                    var blobUri = await _storageAccessProvider.GetInternalTesBlobUrlAsync($"/pools/{PoolId}/nodes/{node.Id}/{log}", Azure.Storage.Sas.BlobSasPermissions.Create, cancellationToken);
-                    await _azureProxy.UploadBlobAsync(blobUri, content, cancellationToken);
                 }
             }
         }
@@ -503,12 +496,21 @@ namespace TesApi.Web
                 return true;
             }
 
-            if (await GetTasksAsync("id", default).AnyAsync(cancellationToken))
+            try
             {
+                if (await GetTasksAsync("id", default).AnyAsync(cancellationToken))
+                {
+                    return false;
+                }
+
+                return true;
+            }
+            catch (BatchException ex) when (BatchErrorCodeStrings.JobNotFound.Equals(ex.RequestInformation.BatchError.Code))
+            {
+                IsAvailable = false;
+                //_removedFromService = true;
                 return false;
             }
-
-            return true;
         }
 
         /// <summary>
@@ -558,7 +560,16 @@ namespace TesApi.Web
 
                 // List tasks from batch just one time each time we service the pool when called from PoolScheduler
                 _foundTasks.Clear();
-                _foundTasks.AddRange(GetTasksAsync("creationTime,executionInfo,id,nodeInfo,state,stateTransitionTime", null).ToBlockingEnumerable(cancellationToken));
+
+                try
+                {
+                    _foundTasks.AddRange(GetTasksAsync("creationTime,executionInfo,id,nodeInfo,state,stateTransitionTime", null).ToBlockingEnumerable(cancellationToken));
+                }
+                catch (BatchException ex) when (BatchErrorCodeStrings.JobNotFound.Equals(ex.RequestInformation.BatchError.Code))
+                {
+                    IsAvailable = false;
+                }
+
                 _logger.LogTrace("{PoolId}: {TaskCount} tasks discovered.", PoolId, _foundTasks.Count);
 
                 // List nodes from Batch at most one time each time we service the pool
