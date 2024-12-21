@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Collections.Generic;
+
 namespace Tes.Models
 {
     /// <summary>
@@ -9,16 +11,10 @@ namespace Tes.Models
     public class BatchNodeMetrics
     {
         /// <summary>
-        /// BlobXfer docker image pull duration
-        /// </summary>
-        [TesTaskLogMetadataKey("blobxfer_pull_duration_sec")]
-        public double? BlobXferImagePullDurationInSeconds { get; set; }
-
-        /// <summary>
         /// Executor docker image pull duration
         /// </summary>
         [TesTaskLogMetadataKey("executor_pull_duration_sec")]
-        public double? ExecutorImagePullDurationInSeconds { get; set; }
+        public List<double?> ExecutorImagePullDurationInSeconds { get; set; }
 
         /// <summary>
         /// File download duration
@@ -30,7 +26,7 @@ namespace Tes.Models
         /// Main command execution duration
         /// </summary>
         [TesTaskLogMetadataKey("executor_duration_sec")]
-        public double? ExecutorDurationInSeconds { get; set; }
+        public List<double?> ExecutorDurationInSeconds { get; set; }
 
         /// <summary>
         /// File upload duration
@@ -42,7 +38,7 @@ namespace Tes.Models
         /// Executor image size in GB
         /// </summary>
         [TesTaskLogMetadataKey("executor_image_size_gb")]
-        public double? ExecutorImageSizeInGB { get; set; }
+        public List<double?> ExecutorImageSizeInGB { get; set; }
 
         /// <summary>
         /// File download size in GB
