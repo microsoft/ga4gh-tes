@@ -1644,20 +1644,27 @@ namespace TesApi.Web
 
                         batchNodeMetrics = new()
                         {
-                            /**/ExecutorImagePullDurationInSeconds = [GetDurationInSeconds(metrics, "ExecutorPullStart", "ExecutorPullEnd")],
-                            /**/ExecutorImageSizeInGB = [TryGetValueAsDouble(metrics, "ExecutorImageSizeInBytes", out var executorImageSizeInBytes) ? executorImageSizeInBytes / bytesInGB : null],
-                            /**/FileDownloadDurationInSeconds = GetDurationInSeconds(metrics, "DownloadStart", "DownloadEnd"),
+                            /* TODO: Not currently implemented */
+                            ExecutorImagePullDurationInSeconds = [GetDurationInSeconds(metrics, "ExecutorPullStart", "ExecutorPullEnd")],
+                            /* TODO: Not currently implemented */
+                            ExecutorImageSizeInGB = [TryGetValueAsDouble(metrics, "ExecutorImageSizeInBytes", out var executorImageSizeInBytes) ? executorImageSizeInBytes / bytesInGB : null],
+                            /* TODO: Not currently implemented */
+                            FileDownloadDurationInSeconds = GetDurationInSeconds(metrics, "DownloadStart", "DownloadEnd"),
                             FileDownloadSizeInGB = TryGetValueAsDouble(metrics, "FileDownloadSizeInBytes", out var fileDownloadSizeInBytes) ? fileDownloadSizeInBytes / bytesInGB : null,
-                            /**/ExecutorDurationInSeconds = [GetDurationInSeconds(metrics, "ExecutorStart", "ExecutorEnd")],
-                            /**/FileUploadDurationInSeconds = GetDurationInSeconds(metrics, "UploadStart", "UploadEnd"),
+                            /* TODO: Not currently implemented */
+                            ExecutorDurationInSeconds = [GetDurationInSeconds(metrics, "ExecutorStart", "ExecutorEnd")],
+                            /* TODO: Not currently implemented */
+                            FileUploadDurationInSeconds = GetDurationInSeconds(metrics, "UploadStart", "UploadEnd"),
                             FileUploadSizeInGB = TryGetValueAsDouble(metrics, "FileUploadSizeInBytes", out var fileUploadSizeInBytes) ? fileUploadSizeInBytes / bytesInGB : null,
                             DiskUsedInGB = diskUsedInGB,
                             DiskUsedPercent = diskUsedInGB.HasValue && diskSizeInGB.HasValue && diskSizeInGB > 0 ? (float?)(diskUsedInGB / diskSizeInGB * 100) : null,
                             VmCpuModelName = metrics.GetValueOrDefault("VmCpuModelName")
                         };
 
-                        /**/taskStartTime = TryGetValueAsDateTimeOffset(metrics, "DownloadStart", out var startTime) ? startTime : null;
-                        /**/taskEndTime = TryGetValueAsDateTimeOffset(metrics, "UploadEnd", out var endTime) ? endTime : null;
+                        /* TODO: Not currently implemented */
+                        taskStartTime = TryGetValueAsDateTimeOffset(metrics, "DownloadStart", out var startTime) ? startTime : null;
+                        /* TODO: Not currently implemented */
+                        taskEndTime = TryGetValueAsDateTimeOffset(metrics, "UploadEnd", out var endTime) ? endTime : null;
                     }
                     catch (Exception ex)
                     {
