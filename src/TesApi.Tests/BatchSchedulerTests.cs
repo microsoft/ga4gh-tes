@@ -63,7 +63,7 @@ namespace TesApi.Tests
             serviceProvider.BatchPoolManager.Verify(mock => mock.CreateBatchPoolAsync(It.IsAny<BatchAccountPoolData>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Once);
 
             var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(BatchPoolTests.CreatePoolData(name: id)), CancellationToken.None);
-            await pool.ServicePoolAsync();
+            _ = await pool.ServicePoolAsync();
 
             Assert.AreEqual(count, batchScheduler.GetPools().Count());
             Assert.AreEqual(keyCount, batchScheduler.GetPoolGroupKeys().Count());
@@ -85,7 +85,7 @@ namespace TesApi.Tests
             var count = batchScheduler.GetPools().Count();
 
             var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(BatchPoolTests.CreatePoolData(name: id)), CancellationToken.None);
-            await pool.ServicePoolAsync();
+            _ = await pool.ServicePoolAsync();
 
             Assert.AreNotEqual(count, batchScheduler.GetPools().Count());
             Assert.AreEqual(keyCount, batchScheduler.GetPoolGroupKeys().Count());
