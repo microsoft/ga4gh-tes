@@ -71,8 +71,8 @@ namespace TesApi.Web
                     async (pool, token) =>
                     {
                         var orphanedTaskIds = await pool.ServicePoolAsync(token);
+                        List<TesTask> tasks = [];
 
-                        ConcurrentBag<TesTask> tasks = [];
                         await orphanedTaskIds.ToAsyncEnumerable()
                             .ForEachAwaitWithCancellationAsync(async (id, cancellation) => await Repository.TryGetItemAsync(id, cancellation, task =>
                             {
@@ -83,12 +83,23 @@ namespace TesApi.Web
                             }), token);
 
                         var now = DateTimeOffset.UtcNow;
-                        await OrchestrateTesTasksOnBatchAsync(
-                            $"OrphanedTasks ({pool.PoolId})",
-                            _ => ValueTask.FromResult(tasks.ToAsyncEnumerable()),
-                            (tesTasks, token) => TaskScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, tesTasks.Select(_ => new AzureBatchTaskState(AzureBatchTaskState.TaskState.CompletedWithErrors, BatchTaskEndTime: now, Failure: new("RemovedPoolOrJob", ["Batch pool or job was removed."]))).ToArray(), token),
-                            ex => { Logger.LogError(ex, "Repository collision while failing task ('{TesTask}') due to pool or job removal.", ex.RepositoryItem?.Id ?? "<unknown>"); return ValueTask.CompletedTask; },
-                            cancellationToken);
+                        ConcurrentBag<TesTask> tasks2 = [];
+
+                        while (tasks.Count != 0)
+                        {
+                            await OrchestrateTesTasksOnBatchAsync(
+                                $"OrphanedTasks ({pool.PoolId})",
+                                _ => ValueTask.FromResult(tasks.ToAsyncEnumerable()),
+                                (tesTasks, token) => TaskScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, tesTasks.Select(_ => new AzureBatchTaskState(AzureBatchTaskState.TaskState.CompletedWithErrors, BatchTaskEndTime: now, Failure: new("RemovedPoolOrJob", ["Batch pool or job was removed."]))).ToArray(), token),
+                                ex => { Logger.LogError(ex, "Repository collision while failing task ('{TesTask}') due to pool or job removal.", ex.RepositoryItem?.Id ?? "<unknown>"); tasks2.Add(ex.RepositoryItem); return ValueTask.CompletedTask; },
+                                cancellationToken);
+
+                            if (tasks.Count != 0)
+                            {
+                                tasks = [.. tasks2.Where(task => task is not null)];
+                                tasks2.Clear();
+                            }
+                        }
 
                         await ProcessTasksAsync(pool, DateTime.UtcNow, pool.ListCloudTasksAsync(), token);
                     },
