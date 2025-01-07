@@ -68,9 +68,8 @@ namespace TesApi.Web
         /// Updates this instance based on changes to its environment.
         /// </summary>
         /// <param name="cancellationToken"></param>
-        /// <returns><see cref="Tes.Models.TesTask.Id"/>s of orphaned tasks.</returns>
         /// <remarks>Calls each internal servicing method in order. Throws all exceptions gathered from all methods.</remarks>
-        ValueTask<IEnumerable<string>> ServicePoolAsync(CancellationToken cancellationToken = default);
+        ValueTask ServicePoolAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Lists <see cref="CloudTask"/>s running in pool's job.

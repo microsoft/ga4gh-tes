@@ -59,6 +59,7 @@ namespace TesApi.Web
         internal static readonly TimeSpan BatchRunInterval = TimeSpan.FromSeconds(30); // The very fastest processes inside of Azure Batch accessing anything within pools or jobs appears to use a 30 second polling interval
         private static readonly TimeSpan shortBackgroundRunInterval = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan longBackgroundRunInterval = TimeSpan.FromSeconds(2.5);
+        private static readonly TimeSpan orphanedTaskInterval = TimeSpan.FromMinutes(10);
         private readonly RunnerEventsProcessor nodeEventProcessor = nodeEventProcessor;
 
         /// <summary>
@@ -153,6 +154,7 @@ namespace TesApi.Web
             queuedTasks.Add(ExecuteQueuedTesTasksOnBatchAsync(cancellationToken));
             queuedTasks.Add(ExecuteCancelledTesTasksOnBatchAsync(cancellationToken));
             queuedTasks.Add(ExecuteUpdateTesTaskFromEventBlobAsync(cancellationToken));
+            queuedTasks.Add(ExecuteProcessOrphanedTasksAsync(cancellationToken));
 
             if (cancellationToken.IsCancellationRequested)
             {
@@ -265,7 +267,7 @@ namespace TesApi.Web
                         requeues.Clear();
                         await OrchestrateTesTasksOnBatchAsync(
                             "Cancelled",
-                            query,
+                            _ => ValueTask.FromResult(tasks.ToAsyncEnumerable()),
                             (tasks, ct) => ((ITaskScheduler)this).ProcessTesTaskBatchStatesAsync(
                                 tasks,
                                 Enumerable.Repeat<AzureBatchTaskState>(new(AzureBatchTaskState.TaskState.CancellationRequested), tasks.Length).ToArray(),
@@ -499,6 +501,29 @@ namespace TesApi.Web
         void ITaskScheduler.QueueTesTask(TesTask tesTask)
         {
             queuedTesTasks.Enqueue(tesTask);
+        }
+
+        private async Task ExecuteProcessOrphanedTasksAsync(CancellationToken cancellationToken)
+        {
+            List<TesState> statesToSkip = [TesState.QUEUED, TesState.CANCELING];
+            statesToSkip.AddRange(TesTask.TerminalStates);
+
+            await ExecuteActionOnIntervalAsync(orphanedTaskInterval,
+                async token =>
+                {
+                    var pools = BatchScheduler.GetPools().Select(p => p.PoolId).ToArray();
+                    var now = DateTimeOffset.UtcNow;
+
+                    await OrchestrateTesTasksOnBatchAsync(
+                        $"OrphanedTasks",
+                        async cancellation => (await Repository.GetItemsAsync(task => !statesToSkip.Contains(task.State), cancellation))
+                            .Where(task => !pools.Contains(task.PoolId, StringComparer.OrdinalIgnoreCase))
+                            .ToAsyncEnumerable(),
+                        (tesTasks, cancellation) => ((ITaskScheduler)this).ProcessTesTaskBatchStatesAsync(tesTasks, tesTasks.Select(_ => new AzureBatchTaskState(AzureBatchTaskState.TaskState.CompletedWithErrors, BatchTaskEndTime: now, Failure: new(AzureBatchTaskState.SystemError, ["RemovedPoolOrJob", "Batch pool or job was removed."]))).ToArray(), cancellation),
+                        ex => { Logger.LogError(ex, "Repository collision while failing task ('{TesTask}') due to pool or job removal.", ex.RepositoryItem?.Id ?? "<unknown>"); return ValueTask.CompletedTask; },
+                        token);
+                },
+                cancellationToken);
         }
 
         /// <inheritdoc/>

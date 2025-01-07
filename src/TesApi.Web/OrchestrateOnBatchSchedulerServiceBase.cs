@@ -260,7 +260,7 @@ namespace TesApi.Web
                 {
                     var currentTesTask = rce.RepositoryItem;
 
-                    if (currentTesTask is not null)
+                    if (currentTesTask == tesTask)
                     {
                         await requeue(rce);
                     }
@@ -330,7 +330,7 @@ namespace TesApi.Web
 
             if (BatchScheduler.NeedPoolFlush)
             {
-                var pools = (await Repository.GetItemsAsync(task => task.State == TesState.INITIALIZING || task.State == TesState.RUNNING, cancellationToken)).Select(task => task.PoolId).Distinct();
+                var pools = (await Repository.GetItemsAsync(task => task.State == TesState.INITIALIZING || task.State == TesState.RUNNING, cancellationToken)).Select(task => task.PoolId).Distinct(StringComparer.OrdinalIgnoreCase);
                 await BatchScheduler.FlushPoolsAsync(pools, cancellationToken);
             }
 

@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Azure.ResourceManager.Models;
 using Microsoft.Azure.Batch;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
@@ -427,7 +428,14 @@ namespace TesApi.Tests
             return autoScaleRun;
         }
 
-
+        internal static CloudJob GenerateJob(string id, Microsoft.Azure.Batch.Protocol.Models.JobState state, Microsoft.Azure.Batch.Protocol.Models.PoolInformation poolInfo)
+        {
+            var parentClient = CreateMockBatchClient();
+            Microsoft.Azure.Batch.Protocol.Models.CloudJob modelJob = new(id: id, state: state, poolInfo: poolInfo);
+            var job = (CloudJob)typeof(CloudJob).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, [typeof(BatchClient), typeof(Microsoft.Azure.Batch.Protocol.Models.CloudJob), typeof(IEnumerable<BatchClientBehavior>)], default)
+                .Invoke([parentClient, modelJob, null]);
+            return job;
+        }
 
         internal static CloudPool GeneratePool(
             string id,
@@ -442,7 +450,8 @@ namespace TesApi.Tests
             bool? enableAutoScale = default,
             DateTime? creationTime = default,
             IList<MetadataItem> metadata = default,
-            IList<DataDisk> dataDisks = default)
+            IList<DataDisk> dataDisks = default,
+            Microsoft.Azure.Batch.Protocol.Models.BatchPoolIdentity identity = default)
         {
             if (default == creationTime)
             {
@@ -454,18 +463,19 @@ namespace TesApi.Tests
             var parentClient = CreateMockBatchClient();
             Microsoft.Azure.Batch.Protocol.Models.CloudPool modelPool = new(
                 id: id,
+                creationTime: creationTime,
+                allocationState: (Microsoft.Azure.Batch.Protocol.Models.AllocationState)allocationState,
+                allocationStateTransitionTime: allocationStateTransitionTime,
+                virtualMachineConfiguration: new() { DataDisks = dataDisks?.Select(ConvertDataDisk).ToList() ?? [] },
+                resizeErrors: resizeErrors,
                 currentDedicatedNodes: currentDedicatedNodes,
                 currentLowPriorityNodes: currentLowPriorityNodes,
                 targetDedicatedNodes: targetDedicatedNodes,
                 targetLowPriorityNodes: targetLowPriorityNodes,
-                allocationState: (Microsoft.Azure.Batch.Protocol.Models.AllocationState)allocationState,
-                allocationStateTransitionTime: allocationStateTransitionTime,
-                resizeErrors: resizeErrors,
-                autoScaleRun: autoScaleRun,
                 enableAutoScale: enableAutoScale,
-                creationTime: creationTime,
+                autoScaleRun: autoScaleRun,
                 metadata: metadata.Select(ConvertMetadata).ToList(),
-                virtualMachineConfiguration: new() { DataDisks = dataDisks?.Select(ConvertDataDisk).ToList() ?? [] });
+                identity: identity);
             var pool = (CloudPool)typeof(CloudPool).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, [typeof(BatchClient), typeof(Microsoft.Azure.Batch.Protocol.Models.CloudPool), typeof(IEnumerable<BatchClientBehavior>)], default)
                 .Invoke([parentClient, modelPool, null]);
             return pool;

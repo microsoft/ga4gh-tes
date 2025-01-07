@@ -32,6 +32,8 @@ namespace TesApi.Tests
     [TestClass]
     public class BatchSchedulerTests
     {
+        private const string GlobalManagedIdentity = "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/SomeResourceGroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/GlobalManagedIdentity";
+
         [TestMethod]
         public async Task LocalPoolCacheAccessesNewPoolsAfterAllPoolsRemovedWithSameKey()
         {
@@ -63,7 +65,7 @@ namespace TesApi.Tests
             serviceProvider.BatchPoolManager.Verify(mock => mock.CreateBatchPoolAsync(It.IsAny<BatchAccountPoolData>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Once);
 
             var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(BatchPoolTests.CreatePoolData(name: id)), CancellationToken.None);
-            _ = await pool.ServicePoolAsync();
+            await pool.ServicePoolAsync();
 
             Assert.AreEqual(count, batchScheduler.GetPools().Count());
             Assert.AreEqual(keyCount, batchScheduler.GetPoolGroupKeys().Count());
@@ -85,7 +87,7 @@ namespace TesApi.Tests
             var count = batchScheduler.GetPools().Count();
 
             var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(BatchPoolTests.CreatePoolData(name: id)), CancellationToken.None);
-            _ = await pool.ServicePoolAsync();
+            await pool.ServicePoolAsync();
 
             Assert.AreNotEqual(count, batchScheduler.GetPools().Count());
             Assert.AreEqual(keyCount, batchScheduler.GetPoolGroupKeys().Count());
@@ -1011,18 +1013,43 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task TaskGetsCancelled()
         {
-            var tesTask = new TesTask { Id = "test", PoolId = "pool1", State = TesState.CANCELING, Logs = [new()] };
+            var poolId = "pool1-1";
+            var tesTask = new TesTask { Id = "test", State = TesState.CANCELING, Logs = [new()] };
 
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
             azureProxyReturnValues.BatchTaskState = BatchTaskStates.CancellationRequested[0];
+
+            BatchAccountPoolData poolInfo = new()
+            {
+                DeploymentConfiguration = new()
+                {
+                    VmConfiguration = new BatchVmConfiguration(new BatchImageReference(), "batchNodeAgent"),
+                },
+                Identity = new(Azure.ResourceManager.Models.ManagedServiceIdentityType.UserAssigned),
+            };
+
+            poolInfo.Identity.UserAssignedIdentities.Add(new(new(GlobalManagedIdentity), new()));
+            poolInfo.Metadata.Add(new("CoA-TES-Metadata", @"{""hostName"":""hostname"",""isDedicated"":true,""RunnerMD5"":""MD5"",""eventsVersion"":{""EventVersion"":""1.0"",""TesTaskRunnerEntityType"":""TesRunnerTask"",""EventDataVersion"":""1.0""}}"));
+            poolInfo.Metadata.Add(new(string.Empty, poolId));
+            tesTask.PoolId = azureProxyReturnValues.CreateBatchPoolImpl(poolInfo);
+            var job = BatchPoolTests.GenerateJob(tesTask.PoolId, Microsoft.Azure.Batch.Protocol.Models.JobState.Active, new(tesTask.PoolId));
+
             Mock<IAzureProxy> azureProxy = default;
             var azureProxySetter = new Action<Mock<IAzureProxy>>(mock =>
             {
                 GetMockAzureProxy(azureProxyReturnValues)(mock);
+                mock.Setup(m => m.GetBatchJobAsync(poolId, It.IsAny<CancellationToken>(), It.IsAny<DetailLevel>()))
+                    .Returns(Task.FromResult(job));
                 azureProxy = mock;
             });
 
-            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxySetter, GetMockBatchPoolManager(azureProxyReturnValues), azureProxyReturnValues);
+            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(
+                tesTask,
+                GetMockConfig()(),
+                azureProxySetter,
+                GetMockBatchPoolManager(azureProxyReturnValues),
+                azureProxyReturnValues,
+                serviceProviderActions: (_, scheduler) => scheduler.LoadExistingPoolsAsync(CancellationToken.None).GetAwaiter().GetResult());
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
@@ -1183,7 +1210,7 @@ namespace TesApi.Tests
 
             Uri executionDirectoryUri = default;
 
-            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxySetter, GetMockBatchPoolManager(azureProxyReturnValues), azureProxyReturnValues, serviceProviderActions: serviceProvider =>
+            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxySetter, GetMockBatchPoolManager(azureProxyReturnValues), azureProxyReturnValues, serviceProviderActions: (serviceProvider, _) =>
             {
                 var storageAccessProvider = serviceProvider.GetServiceOrCreateInstance<IStorageAccessProvider>();
 
@@ -1333,10 +1360,10 @@ namespace TesApi.Tests
             return (tesTask.Logs?.LastOrDefault()?.FailureReason, tesTask.Logs?.LastOrDefault()?.SystemLogs?.ToArray());
         }
 
-        private static Task<(string JobId, IEnumerable<CloudTask> CloudTask, BatchAccountPoolData batchModelsPool)> ProcessTesTaskAndGetBatchJobArgumentsAsync(TesTask tesTask, IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, Action<Mock<IBatchPoolManager>> batchPoolManager, AzureProxyReturnValues azureProxyReturnValues, Action<IServiceCollection> additionalActions = default, Action<TestServices.TestServiceProvider<IBatchScheduler>> serviceProviderActions = default)
+        private static Task<(string JobId, IEnumerable<CloudTask> CloudTask, BatchAccountPoolData batchModelsPool)> ProcessTesTaskAndGetBatchJobArgumentsAsync(TesTask tesTask, IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, Action<Mock<IBatchPoolManager>> batchPoolManager, AzureProxyReturnValues azureProxyReturnValues, Action<IServiceCollection> additionalActions = default, Action<TestServices.TestServiceProvider<IBatchScheduler>, IBatchScheduler> serviceProviderActions = default)
             => ProcessTesTasksAndGetBatchJobArgumentsAsync([tesTask], configuration, azureProxy, batchPoolManager, azureProxyReturnValues, additionalActions, serviceProviderActions);
 
-        private static async Task<(string JobId, IEnumerable<CloudTask> CloudTasks, BatchAccountPoolData batchModelsPool)> ProcessTesTasksAndGetBatchJobArgumentsAsync(TesTask[] tesTasks, IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, Action<Mock<IBatchPoolManager>> batchPoolManager, AzureProxyReturnValues azureProxyReturnValues, Action<IServiceCollection> additionalActions = default, Action<TestServices.TestServiceProvider<IBatchScheduler>> serviceProviderActions = default)
+        private static async Task<(string JobId, IEnumerable<CloudTask> CloudTasks, BatchAccountPoolData batchModelsPool)> ProcessTesTasksAndGetBatchJobArgumentsAsync(TesTask[] tesTasks, IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, Action<Mock<IBatchPoolManager>> batchPoolManager, AzureProxyReturnValues azureProxyReturnValues, Action<IServiceCollection> additionalActions = default, Action<TestServices.TestServiceProvider<IBatchScheduler>, IBatchScheduler> serviceProviderActions = default)
         {
             using var serviceProvider = GetServiceProvider(
                 configuration,
@@ -1347,7 +1374,7 @@ namespace TesApi.Tests
                 GetMockAllowedVms(configuration),
                 additionalActions: additionalActions);
             var batchScheduler = serviceProvider.GetT();
-            serviceProviderActions?.Invoke(serviceProvider);
+            serviceProviderActions?.Invoke(serviceProvider, batchScheduler);
 
             if (azureProxyReturnValues.BatchTaskState is null)
             {
@@ -1491,7 +1518,7 @@ namespace TesApi.Tests
                     .ReturnsAsync(true);
 
                 azureProxy.Setup(a => a.GetActivePoolsAsync(It.IsAny<string>()))
-                    .Returns(AsyncEnumerable.Empty<CloudPool>());
+                    .Returns(azureProxyReturnValues.GetCloudPools().ToAsyncEnumerable());
 
                 azureProxy.Setup(a => a.GetStorageAccountInfoAsync("defaultstorageaccount", It.IsAny<CancellationToken>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.StorageAccountInfos["defaultstorageaccount"]));
@@ -1536,7 +1563,7 @@ namespace TesApi.Tests
             => new(() =>
             [
                 ("Storage:DefaultAccountName", "defaultstorageaccount"),
-                ("BatchNodes:GlobalManagedIdentity", "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/SomeResourceGroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/GlobalManagedIdentity"),
+                ("BatchNodes:GlobalManagedIdentity", GlobalManagedIdentity),
                 ("BatchScheduling:Prefix", "hostname"),
                 ("BatchImageGen1:Offer", "ubuntu-server-container"),
                 ("BatchImageGen1:Publisher", "microsoft-azure-batch"),
@@ -1762,6 +1789,18 @@ namespace TesApi.Tests
                 pool.Metadata.Remove(poolNameItem);
                 var poolId = poolNameItem.Value;
 
+                if (pool.Identity is not null)
+                {
+                    PoolIdentityValues identityItem = new(pool.Identity.ManagedServiceIdentityType switch
+                    {
+                        var x when x == Azure.ResourceManager.Models.ManagedServiceIdentityType.None => Microsoft.Azure.Batch.Protocol.Models.PoolIdentityType.None,
+                        var x when x == Azure.ResourceManager.Models.ManagedServiceIdentityType.UserAssigned => Microsoft.Azure.Batch.Protocol.Models.PoolIdentityType.UserAssigned,
+                        _ => throw new ArgumentOutOfRangeException(nameof(pool), $"{nameof(BatchAccountPoolData.Identity)}.{nameof(BatchAccountPoolData.Identity.ManagedServiceIdentityType)} has an unsupported value.")
+                    }, pool.Identity.UserAssignedIdentities?.Select(item => new UserAssignedIdentityValues(item.Key.ToString(), item.Value?.ClientId.ToString(), item.Value?.PrincipalId.ToString())).ToArray());
+
+                    pool.Metadata.Add(new(nameof(BatchAccountPoolData.Identity), System.Text.Json.JsonSerializer.Serialize(identityItem, serializerOptions.Value)));
+                }
+
                 poolMetadata.AddOrUpdate(poolId, _ => pool.Metadata?.Select(Convert).ToList(), (_, _) => throw new Exception("Unexpected attempt to modify pool."));
                 return poolId;
 
@@ -1776,8 +1815,52 @@ namespace TesApi.Tests
                     items = null;
                 }
 
-                return BatchPoolTests.GeneratePool(poolId, metadata: items);
+                items = items?.ToList();
+
+                var identityItem = items?.SingleOrDefault(item => nameof(BatchAccountPoolData.Identity).Equals(item.Name, StringComparison.Ordinal));
+
+                if (identityItem is not null)
+                {
+                    items.Remove(identityItem);
+                }
+
+                return BatchPoolTests.GeneratePool(poolId, metadata: items, identity: GetIdentity(identityItem?.Value));
+
+                static Microsoft.Azure.Batch.Protocol.Models.BatchPoolIdentity GetIdentity(string item)
+                {
+                    if (item is null)
+                    {
+                        return default;
+                    }
+
+                    var identityItem = System.Text.Json.JsonSerializer.Deserialize<PoolIdentityValues>(item, serializerOptions.Value);
+
+                    return new()
+                    {
+                        Type = identityItem.Type,
+                        UserAssignedIdentities = identityItem.UserAssignedIdentites.Select(uai => new Microsoft.Azure.Batch.Protocol.Models.UserAssignedIdentity(uai.ResourceId, uai.ClientId, uai.PrincipalId)).ToList()
+                    };
+                }
             }
+
+            private static readonly Lazy<System.Text.Json.JsonSerializerOptions> serializerOptions = new(() =>
+            {
+                System.Text.Json.JsonSerializerOptions options = new()
+                {
+                    //DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault,
+                    PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+                };
+
+                options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase, true));
+
+                return options;
+            });
+
+            internal IEnumerable<CloudPool> GetCloudPools()
+                => poolMetadata.Select(pool => pool.Key).Select(pool => GetBatchPoolImpl(pool));
+
+            private record struct UserAssignedIdentityValues(string ResourceId, string ClientId, string PrincipalId);
+            private record struct PoolIdentityValues(Microsoft.Azure.Batch.Protocol.Models.PoolIdentityType Type, UserAssignedIdentityValues[] UserAssignedIdentites);
         }
 
         private static BatchVmFamilyCoreQuota CreateBatchVmFamilyCoreQuota(string name, int? quota)

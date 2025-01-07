@@ -446,7 +446,6 @@ namespace TesApi.Web
     {
         private static readonly SemaphoreSlim lockObj = new(1, 1);
         private bool _removedFromService = false;
-        private readonly List<string> _orphanedTaskIds = [];
 
         /// <summary>
         /// Types of maintenance calls offered by the <see cref="ServicePoolAsync(ServiceKind, CancellationToken)"/> service method.
@@ -546,7 +545,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async ValueTask<IEnumerable<string>> ServicePoolAsync(CancellationToken cancellationToken)
+        public async ValueTask ServicePoolAsync(CancellationToken cancellationToken)
         {
             ValueTask StandupQueries()
             {
@@ -587,7 +586,6 @@ namespace TesApi.Web
                 return ValueTask.CompletedTask;
             }
 
-            _orphanedTaskIds.Clear();
             var exceptions = new List<Exception>();
 
             // Run each servicing task serially and accumulate the exception, except whenever the pool or the job are not found
@@ -597,11 +595,16 @@ namespace TesApi.Web
             await PerformTask(ServicePoolAsync(ServiceKind.Rotate, cancellationToken), cancellationToken) &&
             await PerformTask(ServicePoolAsync(ServiceKind.RemovePoolIfEmpty, cancellationToken), cancellationToken);
 
-            return exceptions.Count switch
+            switch (exceptions.Count)
             {
-                0 => _orphanedTaskIds,
-                1 => throw exceptions.First(),
-                _ => throw new AggregateException(exceptions.SelectMany(Flatten)),
+                case 0:
+                    return;
+
+                case 1:
+                    throw exceptions.First();
+
+                default:
+                    throw new AggregateException(exceptions.SelectMany(Flatten));
             };
 
             static IEnumerable<Exception> Flatten(Exception ex)
@@ -670,8 +673,7 @@ namespace TesApi.Web
                     {
                         _logger.LogError(batchException, "Batch pool and/or job {PoolId} is missing. Removing them from TES's active pool list.", PoolId);
                         _ = _batchPools.RemovePoolFromList(this);
-                        AssociatedTesTasks.ForEach(entry => _orphanedTaskIds.Add(entry.Key));
-                        await _batchPools.DeletePoolAndJobAsync(this, cancellationToken); // TODO: Consider moving any remaining tasks to another pool, or failing job/tasks explicitly
+                        await _batchPools.DeletePoolAndJobAsync(this, cancellationToken);
                         return true;
                     }
 

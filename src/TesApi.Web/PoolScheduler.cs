@@ -70,37 +70,7 @@ namespace TesApi.Web
                 async token => await ExecuteActionOnPoolsAsync(
                     async (pool, token) =>
                     {
-                        var orphanedTaskIds = await pool.ServicePoolAsync(token);
-                        List<TesTask> tasks = [];
-
-                        await orphanedTaskIds.ToAsyncEnumerable()
-                            .ForEachAwaitWithCancellationAsync(async (id, cancellation) => await Repository.TryGetItemAsync(id, cancellation, task =>
-                            {
-                                if (task.IsActiveState(preemptedIsTerminal: true) && pool.PoolId.Equals(task.PoolId, StringComparison.OrdinalIgnoreCase))
-                                {
-                                    tasks.Add(task);
-                                }
-                            }), token);
-
-                        var now = DateTimeOffset.UtcNow;
-                        ConcurrentBag<TesTask> tasks2 = [];
-
-                        while (tasks.Count != 0)
-                        {
-                            await OrchestrateTesTasksOnBatchAsync(
-                                $"OrphanedTasks ({pool.PoolId})",
-                                _ => ValueTask.FromResult(tasks.ToAsyncEnumerable()),
-                                (tesTasks, token) => TaskScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, tesTasks.Select(_ => new AzureBatchTaskState(AzureBatchTaskState.TaskState.CompletedWithErrors, BatchTaskEndTime: now, Failure: new("RemovedPoolOrJob", ["Batch pool or job was removed."]))).ToArray(), token),
-                                ex => { Logger.LogError(ex, "Repository collision while failing task ('{TesTask}') due to pool or job removal.", ex.RepositoryItem?.Id ?? "<unknown>"); tasks2.Add(ex.RepositoryItem); return ValueTask.CompletedTask; },
-                                cancellationToken);
-
-                            if (tasks.Count != 0)
-                            {
-                                tasks = [.. tasks2.Where(task => task is not null)];
-                                tasks2.Clear();
-                            }
-                        }
-
+                        await pool.ServicePoolAsync(token);
                         await ProcessTasksAsync(pool, DateTime.UtcNow, pool.ListCloudTasksAsync(), token);
                     },
                     token),

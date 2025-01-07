@@ -218,6 +218,7 @@ namespace TesApi.Web
                 var (batchNodeMetrics, taskStartTime, taskEndTime, cromwellRcCode) = newTaskState == TesState.COMPLETE
                     ? await GetBatchNodeMetricsAndCromwellResultCodeAsync(tesTask, cancellationToken)
                     : default;
+
                 var taskAsString = SerializeToString(tesTask);
 
                 lock (setTaskStateLock)
@@ -349,11 +350,21 @@ namespace TesApi.Web
                             return true; // It was never scheduled
 
                         default:
+                            if (!GetPools().Select(pool => pool.PoolId).Contains(tesTask.PoolId, StringComparer.OrdinalIgnoreCase))
+                            {
+                                // Task was orphaned
+                                return true;
+                            }
+
                             await azureProxy.TerminateBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
                             return true;
                     }
                 }
                 catch (BatchException exc) when (BatchErrorCodeStrings.TaskNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+                catch (BatchException exc) when (BatchErrorCodeStrings.JobNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
                 {
                     return true;
                 }
