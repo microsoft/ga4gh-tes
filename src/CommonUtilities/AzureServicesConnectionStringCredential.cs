@@ -71,7 +71,7 @@ namespace CommonUtilities
 
         private void SetInitialState(AzureCloudConfig armEndpoints)
         {
-            (GetEnvironmentVariable("AZURE_ADDITIONALLY_ALLOWED_TENANTS") ?? string.Empty).Split((char[]?)[';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ForEach(AdditionallyAllowedTenants.Add);
+            (GetEnvironmentVariable("AZURE_ADDITIONALLY_ALLOWED_TENANTS") ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ForEach(AdditionallyAllowedTenants.Add);
             TenantId = GetEnvironmentVariable("AZURE_TENANT_ID")!;
             AuthorityHost = armEndpoints.AuthorityHost ?? new(armEndpoints.Authentication?.LoginEndpointUrl ?? throw new ArgumentException("AuthorityHost is missing", nameof(armEndpoints)));
             Audience = armEndpoints.ArmEnvironment?.Audience ?? armEndpoints.Authentication?.Audiences?.LastOrDefault() ?? throw new ArgumentException("Audience is missing", nameof(armEndpoints));
