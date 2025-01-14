@@ -24,6 +24,21 @@ namespace Tes.Models
         ];
 
         /// <summary>
+        /// Optional client-supplied identifier
+        /// </summary>
+        [DataMember(Name = "client_id")]
+        public string ClientId { get; set; }
+
+        /// <summary>
+        /// Optional client-supplied identifier of a parent task.
+        /// The parent task does not need to exist at submission time.
+        /// Task will not execute until the parent task completes successfully.
+        /// If the parent task fails, this task will also fail with SYSTEM_ERROR
+        /// </summary>
+        [DataMember(Name = "parent_client_id")]
+        public string ParentClientId { get; set; }
+
+        /// <summary>
         /// Number of retries attempted
         /// </summary>
         [DataMember(Name = "error_count")]
