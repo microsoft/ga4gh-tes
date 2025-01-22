@@ -30,6 +30,7 @@ static async Task<int> StartUpAsync(string[] args)
 
         if (exitCode != 0 && TimeSpan.TryParseExact(delayOnFailureStr, "c", System.Globalization.CultureInfo.InvariantCulture, out var delayOnFailure))
         {
+            Console.WriteLine($"Delaying for {delayOnFailure} due to DEBUG_DELAY environment variable.");
             await Task.Delay(delayOnFailure);
         }
 
