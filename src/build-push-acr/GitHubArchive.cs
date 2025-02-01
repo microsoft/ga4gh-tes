@@ -127,7 +127,7 @@ namespace BuildPushAcr
                 this.root += '/';
             }
 
-            await(submodulePaths ?? []).ToAsyncEnumerable().ForEachAwaitWithCancellationAsync(async (path, token) =>
+            await (submodulePaths ?? []).ToAsyncEnumerable().ForEachAwaitWithCancellationAsync(async (path, token) =>
             {
                 try
                 {
@@ -151,7 +151,7 @@ namespace BuildPushAcr
 
             reader = new(new GZipStream((await client.Repos[owner][repo].Tarball[@ref].GetAsync(cancellationToken: cancellationToken))!, CompressionMode.Decompress));
 
-            await foreach(var entry in reader
+            await foreach (var entry in reader
                 .GetEntriesAsync(copyData: true, cancellationToken: cancellationToken)
                 .SelectMany(ProcessEntry))
             {

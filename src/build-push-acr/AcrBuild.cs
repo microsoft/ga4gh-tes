@@ -1,15 +1,15 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.IO.Compression;
 using System.Formats.Tar;
+using System.IO.Compression;
 using System.Text.RegularExpressions;
+using Azure.Containers.ContainerRegistry;
 using Azure.Core;
-using Azure.ResourceManager.ContainerRegistry;
 using Azure.ResourceManager;
+using Azure.ResourceManager.ContainerRegistry;
 using Azure.ResourceManager.ContainerRegistry.Models;
 using Azure.Storage.Blobs;
-using Azure.Containers.ContainerRegistry;
 using GitHub.Octokit.Client;
 
 namespace BuildPushAcr
@@ -106,10 +106,10 @@ namespace BuildPushAcr
 
             Console.WriteLine("Determining build revision");
             acr = await (new ArmClient(credential, null, new()
-                {
-                    Environment = environment,
-                    RetryPolicy = new Azure.Core.Pipeline.RetryPolicy(3, DelayStrategy.CreateExponentialDelayStrategy(TimeSpan.FromSeconds(5)))
-                }))
+            {
+                Environment = environment,
+                RetryPolicy = new Azure.Core.Pipeline.RetryPolicy(3, DelayStrategy.CreateExponentialDelayStrategy(TimeSpan.FromSeconds(5)))
+            }))
                 .GetContainerRegistryResource(acrId)
                 .GetAsync(cancellationToken);
 
@@ -269,9 +269,9 @@ namespace BuildPushAcr
             {
                 using var stream = tarFile.OpenRead();
                 await new BlobClient(sourceUpload.Value.UploadUri, new()
-                    {
-                        RetryPolicy = new Azure.Core.Pipeline.RetryPolicy(3, DelayStrategy.CreateExponentialDelayStrategy(TimeSpan.FromSeconds(2)))
-                    })
+                {
+                    RetryPolicy = new Azure.Core.Pipeline.RetryPolicy(3, DelayStrategy.CreateExponentialDelayStrategy(TimeSpan.FromSeconds(2)))
+                })
                     .UploadAsync(BinaryData.FromStream(stream), cancellationToken);
             }
 
