@@ -59,6 +59,9 @@ namespace TesDeployer
         public bool Silent { get; set; }
         public bool RunIntTests { get; set; }
         public bool DeleteResourceGroupOnFailure { get; set; }
+        public string AcrId { get; set; }
+        public string GitHubCommit { get; set; }
+        public string SolutionDir { get; set; }
         public string TesImageName { get; set; }
         public bool SkipTestWorkflow { get; set; } = false;
         public bool Update { get; set; } = false;

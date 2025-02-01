@@ -51,6 +51,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.SDK.Tests", "src\Tes.SD
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.SDK.Examples", "src\Tes.SDK.Examples\Tes.SDK.Examples.csproj", "{08A30572-2C5A-4F61-AF77-36F624A6020B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "build-push-acr", "src\build-push-acr\build-push-acr.csproj", "{9DD148A9-86DA-4BB4-886C-1D29E11A0BB3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -121,6 +123,10 @@ Global
 		{08A30572-2C5A-4F61-AF77-36F624A6020B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{08A30572-2C5A-4F61-AF77-36F624A6020B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{08A30572-2C5A-4F61-AF77-36F624A6020B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9DD148A9-86DA-4BB4-886C-1D29E11A0BB3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9DD148A9-86DA-4BB4-886C-1D29E11A0BB3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9DD148A9-86DA-4BB4-886C-1D29E11A0BB3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9DD148A9-86DA-4BB4-886C-1D29E11A0BB3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -422,6 +422,7 @@ namespace TesDeployer
             var drsHub = GetObjectFromConfig(values, "drsHub") ?? new Dictionary<string, string>();
             var deployment = GetObjectFromConfig(values, "deployment") ?? new Dictionary<string, string>();
 
+            values.Config["acrId"] = GetValueOrDefault(settings, "AcrId");
             values.Config["azureCloudName"] = GetValueOrDefault(settings, "AzureCloudName");
             values.Config["tesOnAzureVersion"] = GetValueOrDefault(settings, "TesOnAzureVersion");
             values.Config["azureServicesAuthConnectionString"] = GetValueOrDefault(settings, "AzureServicesAuthConnectionString");
@@ -497,6 +498,7 @@ namespace TesDeployer
 
             return new()
             {
+                ["AcrId"] = GetValueOrDefault(values.Config, "acrId") as string,
                 ["AzureCloudName"] = GetValueOrDefault(values.Config, "azureCloudName") as string,
                 ["TesOnAzureVersion"] = GetValueOrDefault(values.Config, "tesOnAzureVersion") as string,
                 ["AzureServicesAuthConnectionString"] = GetValueOrDefault(values.Config, "azureServicesAuthConnectionString") as string,
