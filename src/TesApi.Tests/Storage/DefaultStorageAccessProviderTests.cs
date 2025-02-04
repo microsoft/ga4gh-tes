@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using CommonUtilities;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -41,7 +40,7 @@ namespace TesApi.Tests.Storage
                 Id = $"/subscriptions/{subscriptionId}/resourceGroups/mrg/providers/Microsoft.Storage/storageAccounts/{DefaultStorageAccountName}",
                 SubscriptionId = subscriptionId
             };
-            azureProxyMock.Setup(p => p.GetStorageAccountKeyAsync(It.IsAny<StorageAccountInfo>(), It.IsAny<CancellationToken>())).ReturnsAsync(GenerateRandomTestAzureStorageKey());
+            azureProxyMock.Setup(p => p.GetStorageAccountUserKeyAsync(It.IsAny<StorageAccountInfo>(), It.IsAny<CancellationToken>())).ReturnsAsync(GenerateRandomTestAzureStorageKey());
             azureProxyMock.Setup(p => p.GetStorageAccountInfoAsync(It.Is<string>(s => s.Equals(DefaultStorageAccountName)), It.IsAny<CancellationToken>())).ReturnsAsync(storageAccountInfo);
             var config = CommonUtilities.AzureCloud.AzureCloudConfig.ForUnitTesting().AzureEnvironmentConfig;
             defaultStorageAccessProvider = new DefaultStorageAccessProvider(NullLogger<DefaultStorageAccessProvider>.Instance, Options.Create(storageOptions), azureProxyMock.Object, config);
@@ -144,7 +143,7 @@ namespace TesApi.Tests.Storage
             Assert.AreEqual(expectedUrl, url.AbsoluteUri);
         }
 
-        private static string GenerateRandomTestAzureStorageKey()
+        private static Azure.Storage.Blobs.Models.UserDelegationKey GenerateRandomTestAzureStorageKey()
         {
             const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
             var length = 64;
@@ -156,7 +155,26 @@ namespace TesApi.Tests.Storage
                 result.Append(chars[random.Next(chars.Length)]);
             }
 
-            return result.ToString();
+            return GenerateTestAzureStorageKey(result.ToString());
         }
+
+        internal static Azure.Storage.Blobs.Models.UserDelegationKey GenerateTestAzureStorageKey(string value)
+        {
+            return Create(Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), "blob", "2018-11-09", value);
+
+            static Azure.Storage.Blobs.Models.UserDelegationKey Create(string signedObjectId, string signedTenantId, DateTimeOffset signedStartsOn, DateTimeOffset signedExpiresOn, string signedService, string signedVersion, string value)
+            {
+                ArgumentNullException.ThrowIfNull(signedObjectId);
+                ArgumentNullException.ThrowIfNull(signedTenantId);
+                ArgumentNullException.ThrowIfNull(signedService);
+                ArgumentNullException.ThrowIfNull(signedVersion);
+                ArgumentNullException.ThrowIfNull(value);
+
+                return (Azure.Storage.Blobs.Models.UserDelegationKey)typeof(Azure.Storage.Blobs.Models.UserDelegationKey)
+                    .GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, types: [typeof(string), typeof(string), typeof(DateTimeOffset), typeof(DateTimeOffset), typeof(string), typeof(string), typeof(string)])
+                    ?.Invoke([signedObjectId, signedTenantId, signedStartsOn, signedExpiresOn, signedService, signedVersion, value]) ?? throw new InvalidOperationException();
+            }
+        }
+
     }
 }

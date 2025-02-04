@@ -84,12 +84,12 @@ namespace TesApi.Web
         int GetBatchActiveJobCount();
 
         /// <summary>
-        /// Gets the primary key of the given storage account.
+        /// Gets a user delegation for the given storage account.
         /// </summary>
         /// <param name="storageAccountInfo">Storage account info</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>The primary key</returns>
-        Task<string> GetStorageAccountKeyAsync(StorageAccountInfo storageAccountInfo, CancellationToken cancellationToken);
+        /// <returns>The user delegation key</returns>
+        Task<BlobModels.UserDelegationKey> GetStorageAccountUserKeyAsync(StorageAccountInfo storageAccountInfo, CancellationToken cancellationToken);
 
         /// <summary>
         /// Uploads the text content to a blob
