@@ -1,0 +1,49 @@
+# Crankshaft and TES Demonstration
+
+Demostration of use of `crankshaft` or `tes` in your projects.
+
+
+## Client requirements
+
+To use `crankshaft` or `tes`, you'll need to install [Rust](https://www.rust-lang.org/).
+We recommend using [rustup](https://rustup.rs/) to accomplish this. 
+
+Once Rust is installed, you can create a new project and add the latest version of
+`crankshaft` using the following command.
+
+```bash
+cargo add crankshaft
+```
+
+To utilize `tes` in your crates, simply add it to your project.
+
+```bash
+# If you want to use the types.
+cargo add tes
+
+# If you also want to use the provided client.
+cargo add tes --features client,serde
+```
+
+You will need to set the environment variables in your shell.
+```bash
+export STORAGE_ACCT=<STORAGE_ACCT>
+export USER=<TES_USERNAME>
+export PASSWORD=<TES_PASSWORD>
+```
+
+For this demo we have created two projects `tes_example` and  `crankshaft_example`
+for you to use.
+
+## Run TES demo
+
+run the following commands to run BWA example TES Task:
+
+```bash
+cargo build
+cargo run $URL
+```
+
+## Viewing Results
+
+After the pipeline completes, all results will be saved in the Azure Blob Storage container `outputs/curl`. You can access these files through the Azure portal or your command-line tool of choice.
