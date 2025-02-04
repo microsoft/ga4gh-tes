@@ -44,10 +44,17 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetPricingInformationAsync_ReturnsMoreThan100Items()
         {
-            var pages = await pricingApiClient.GetAllPricingInformationAsync("Virtual Machines", "westus2", CancellationToken.None).ToListAsync();
+            try
+            {
+                var pages = await pricingApiClient.GetAllPricingInformationAsync("Virtual Machines", "westus2", CancellationToken.None).ToListAsync();
 
-            Assert.IsNotNull(pages);
-            Assert.IsTrue(pages.Count > 100);
+                Assert.IsNotNull(pages);
+                Assert.IsTrue(pages.Count > 100);
+            }
+            catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+            {
+                Assert.Inconclusive("Too many requests. Please try again later.");
+            }
         }
 
         [TestMethod]
