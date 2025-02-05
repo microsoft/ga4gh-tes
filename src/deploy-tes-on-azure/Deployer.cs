@@ -224,7 +224,7 @@ namespace TesDeployer
 
                     if (!await AssignRoleForDeployerToStorageAccountAsync(storageAccount))
                     {
-                        ConsoleEx.WriteLine("Unable to assign 'Storage Blob Data Contributor' for deployer user to the storage account. If the deployment fails as a result, assign the deploying user the 'Storage Blob Data Contributor' role for the storage account.", ConsoleColor.Yellow);
+                        ConsoleEx.WriteLine("Unable to assign 'Storage Blob Data Contributor' for deployment identity to the storage account. If the deployment fails as a result, assign the deploying user the 'Storage Blob Data Contributor' role for the storage account.", ConsoleColor.Yellow);
                     }
 
                     if (string.IsNullOrWhiteSpace(configuration.AksClusterName))
@@ -600,7 +600,7 @@ namespace TesDeployer
 
                             if (!await AssignRoleForDeployerToStorageAccountAsync(storageAccount))
                             {
-                                ConsoleEx.WriteLine("Unable to assign 'Storage Blob Data Contributor' for deployer user to the storage account. If the deployment fails as a result, the storage account must be precreated and the deploying user must have the 'Storage Blob Data Contributor' role for the storage account.", ConsoleColor.Yellow);
+                                ConsoleEx.WriteLine("Unable to assign 'Storage Blob Data Contributor' for deployment identity to the storage account. If the deployment fails as a result, the storage account must be precreated and the deploying user must have the 'Storage Blob Data Contributor' role for the storage account.", ConsoleColor.Yellow);
                             }
 
                             await WritePersonalizedFilesToStorageAccountAsync(storageAccountData);
@@ -1556,19 +1556,33 @@ namespace TesDeployer
 
         private async Task<bool> AssignRoleForDeployerToStorageAccountAsync(StorageAccountResource storageAccount)
         {
-            var user = await GetUserObjectAsync();
+            Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType type;
+            string id;
 
-            if (user is null)
+            if (string.IsNullOrWhiteSpace(configuration.ServicePrincipalId))
             {
-                return false;
+                id = configuration.ServicePrincipalId;
+                type = Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType.ServicePrincipal;
+            }
+            else
+            {
+                var user = await GetUserObjectAsync();
+
+                if (user is null)
+                {
+                    return false;
+                }
+
+                id = user.Id;
+                type = Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType.User;
             }
 
             await AssignRoleToResourceAsync(
-                        [new Guid(user.Id)],
-                        Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType.User,
+                        [new Guid(id)],
+                        type,
                         storageAccount,
                         GetSubscriptionRoleDefinition(RoleDefinitions.Storage.StorageBlobDataContributor),
-                        $"Assigning '{RoleDefinitions.GetDisplayName(RoleDefinitions.Storage.StorageBlobDataContributor)}' role for the deployer user to Storage Account resource scope...");
+                        $"Assigning '{RoleDefinitions.GetDisplayName(RoleDefinitions.Storage.StorageBlobDataContributor)}' role for the deployment identity to Storage Account resource scope...");
 
             return true;
         }
@@ -1608,7 +1622,7 @@ namespace TesDeployer
                         Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType.User,
                         managedCluster,
                         roleDefinitionId,
-                        message.Replace(@"{Admins}", "deployer user"),
+                        message.Replace(@"{Admins}", "deployment identity"),
                         transformException: e =>
                         {
                             if (e is RequestFailedException ex && ex.Status == 403 && "AuthorizationFailed".Equals(ex.ErrorCode, StringComparison.OrdinalIgnoreCase))
@@ -2010,7 +2024,7 @@ namespace TesDeployer
 
                     properties.AccessPolicies.AddRange(
                     [
-                        new(tenantId.Value, (await GetUserObjectAsync()).Id, permissions),
+                        new(tenantId.Value, string.IsNullOrWhiteSpace(configuration.ServicePrincipalId) ? (await GetUserObjectAsync()).Id : configuration.ServicePrincipalId, permissions),
                         new(tenantId.Value, managedIdentity.Data.PrincipalId.Value.ToString("D"), permissions),
                     ]);
 

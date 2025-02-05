@@ -90,6 +90,7 @@ namespace TesDeployer
         public string DeploymentEnvironment { get; set; }
         public string PrivateTestUbuntuImage { get; set; } = "mcr.microsoft.com/mirror/docker/library/ubuntu:24.04"; // mcr's docker mirror does not host "latest"
         public string PrivatePSQLUbuntuImage { get; set; } = "mcr.microsoft.com/mirror/docker/library/ubuntu:24.04"; // mcr's docker mirror does not host "latest"
+        public string ServicePrincipalId { get; set; }
 
         public static Configuration BuildConfiguration(string[] args)
         {
