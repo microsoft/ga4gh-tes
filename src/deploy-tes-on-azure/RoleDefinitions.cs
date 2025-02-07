@@ -18,7 +18,7 @@ namespace TesDeployer
                     // https://learn.microsoft.com/azure/role-based-access-control/built-in-roles/general#contributor
                     new($"{nameof(General)}.{nameof(General.Contributor)}", new(new("b24988ac-6180-42a0-ab88-20f7382dd24c"), "Contributor")),
 
-                    // https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/general#owner
+                    // https://learn.microsoft.com/azure/role-based-access-control/built-in-roles/general#owner
                     new($"{nameof(General)}.{nameof(General.Owner)}", new(new("8e3af657-a8ff-443c-a75c-2fe8c4bcb635"), "Grants full access to manage all resources, including the ability to assign roles in Azure RBAC.")),
 
                     // https://learn.microsoft.com/azure/role-based-access-control/built-in-roles/networking#network-contributor
@@ -29,6 +29,9 @@ namespace TesDeployer
 
                     // https://learn.microsoft.com/azure/role-based-access-control/built-in-roles/storage#storage-blob-data-owner
                     new($"{nameof(Storage)}.{nameof(Storage.StorageBlobDataOwner)}", new(new("b7e6dc6d-f1e8-4753-8033-0f276bb0955b"), "Storage Blob Data Owner")),
+
+                    // https://learn.microsoft.com/azure/role-based-access-control/built-in-roles/containers#acrpull
+                    new($"{nameof(Containers)}.{nameof(Containers.AcrPull)}", new(new("7f951dda-4ed3-4680-a7ca-43fe172d538d"), "Pull artifacts from a container registry")),
 
                     // https://learn.microsoft.com/azure/role-based-access-control/built-in-roles/containers#azure-kubernetes-service-rbac-cluster-admin
                     new($"{nameof(Containers)}.{nameof(Containers.RbacClusterAdmin)}", new(new("b1ff04bb-8a4e-4dc4-8eb5-8693973ce19b"), "Azure Kubernetes Service RBAC Cluster Admin")),
@@ -76,6 +79,11 @@ namespace TesDeployer
 
         internal static class Containers
         {
+            /// <summary>
+            /// Pull artifacts from a container registry.
+            /// </summary>
+            internal static Guid AcrPull { get; } = _roleDefinitions[$"{nameof(Containers)}.{nameof(AcrPull)}"].Name;
+
             /// <summary>
             /// Azure Kubernetes Fleet Manager RBAC Cluster Admin.
             /// </summary>
