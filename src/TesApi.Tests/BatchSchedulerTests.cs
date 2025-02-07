@@ -23,6 +23,7 @@ using Newtonsoft.Json;
 using Tes.Extensions;
 using Tes.Models;
 using Tes.TaskSubmitters;
+using TesApi.Tests.Storage;
 using TesApi.Web;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Batch;
@@ -1380,8 +1381,8 @@ namespace TesApi.Tests
                 azureProxy.Setup(a => a.GetStorageAccountInfoAsync("storageaccount1", It.IsAny<CancellationToken>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.StorageAccountInfos["storageaccount1"]));
 
-                azureProxy.Setup(a => a.GetStorageAccountKeyAsync(It.IsAny<StorageAccountInfo>(), It.IsAny<CancellationToken>()))
-                    .Returns(Task.FromResult(azureProxyReturnValues.StorageAccountKey));
+                azureProxy.Setup(a => a.GetStorageAccountUserKeyAsync(It.IsAny<StorageAccountInfo>(), It.IsAny<CancellationToken>()))
+                    .Returns(Task.FromResult(DefaultStorageAccessProviderTests.GenerateTestAzureStorageKey(azureProxyReturnValues.StorageAccountKey)));
 
                 azureProxy.Setup(a => a.GetBatchActiveNodeCountByVmSize())
                     .Returns(azureProxyReturnValues.ActiveNodeCountByVmSize);

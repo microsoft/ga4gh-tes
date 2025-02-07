@@ -162,8 +162,8 @@ namespace TesApi.Web.Storage
                 }
 
                 sasBuilder.Protocol = SasProtocol.Https;
-                var accountCredential = new Azure.Storage.StorageSharedKeyCredential(storageAccountInfo.Name, await AzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, cancellationToken));
-                resultPathSegments.SasToken = sasBuilder.ToSasQueryParameters(accountCredential).ToString();
+                var userDelegationKey = await AzureProxy.GetStorageAccountUserKeyAsync(storageAccountInfo, cancellationToken);
+                resultPathSegments.SasToken = sasBuilder.ToSasQueryParameters(userDelegationKey, storageAccountInfo.Name).ToString();
 
                 return resultPathSegments;
             }
