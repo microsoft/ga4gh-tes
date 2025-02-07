@@ -451,7 +451,7 @@ namespace TesDeployer
                             () => Task.Delay(TimeSpan.FromMinutes(10), cts.Token));
                     }
 
-                    await kubernetesManager.UpgradeValuesYamlAsync(storageAccountData, settings);
+                    await kubernetesManager.UpgradeValuesYamlAsync(storageAccountData, settings, installedVersion);
                     await PerformHelmDeploymentAsync(aksCluster, manualPrecommands, asyncTask);
                 }
 
