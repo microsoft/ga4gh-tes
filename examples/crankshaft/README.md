@@ -1,13 +1,19 @@
-# St. Jude TES Demonstration
+# St. Jude Crankshaft and TES Demonstration
 
-Demostration of use of `tes` in your projects from St. Jude
+Demostration of use of `crankshaft` or `tes` in your projects from St. Jude.
 
 
 ## Client requirements
 
-To use `tes`, you'll need to install [Rust](https://www.rust-lang.org/).
+To use `crankshaft` or `tes`, you'll need to install [Rust](https://www.rust-lang.org/).
 We recommend using [rustup](https://rustup.rs/) to accomplish this. 
 
+Once Rust is installed, you can create a new project and add the latest version of
+`crankshaft` using the following command.
+
+```bash
+cargo add crankshaft
+```
 
 To utilize `tes` in your crates, simply add it to your project.
 
@@ -26,7 +32,7 @@ export USER=<TES_USERNAME>
 export PASSWORD=<TES_PASSWORD>
 ```
 
-For this demo we have created two projects `tes_example` 
+For this demo we have created two projects `tes_example` and  `crankshaft_example`
 for you to use.
 
 ## Run TES demo
@@ -39,7 +45,16 @@ cargo build
 cargo run $URL
 ```
 
+## Run crankshaft demo
+
+run the following commands to run BWA example TES Task:
+
+```bash
+cd crankshaft_demo
+cargo build
+cargo run $URL
+```
 
 ## Viewing Results
 
-After the pipeline completes, all results will be saved in the Azure Blob Storage container `outputs/cracrankshaft-tes`. You can access these files through the Azure portal or your command-line tool of choice.
+After the pipeline completes, all results will be saved in the Azure Blob Storage container `outputs/crankshaft-tes`. You can access these files through the Azure portal or your command-line tool of choice.

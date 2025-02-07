@@ -1,0 +1,12 @@
+[package]
+name = "example"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+base64 = "0.21"
+crankshaft = { git = "https://github.com/stjude-rust-labs/crankshaft", rev = "4ad7e01" }
+eyre = "0.6.12"
+nonempty = "0.10.0"
+tokio = { version = "1.40.0", features = ["full"] }
+url = "2.5.4"
