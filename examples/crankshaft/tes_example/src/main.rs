@@ -83,7 +83,7 @@ async fn main() -> Result<()> {
     }
 
     let storage_acct = storage_acct.unwrap_or_else(|| "default-storage".to_string());
-    let output_url = format!("/{}/outputs/cranshaft-tes/H06HDADXX130110.1.ATCACGAT.20k.bam", storage_acct);
+    let output_url = format!("/{}/outputs/crankshaft-tes/H06HDADXX130110.1.ATCACGAT.20k.bam", storage_acct);
 
     let client = builder.try_build().expect("could not build client");
 
@@ -91,9 +91,9 @@ async fn main() -> Result<()> {
         name: Some(String::from("bwa-alignment-task")),
         description: Some(String::from("Run BWA MEM on input fastq files")),
         resources: Some(Resources {
-            cpu_cores: Some(16),
-            ram_gb: Some(OrderedFloat(32.0)),
-            preemptible: Some(false),
+            cpu_cores: Some(32),
+            ram_gb: Some(OrderedFloat(64.0)),
+            preemptible: Some(true),
             ..Default::default()
         }),
         executors: vec![Executor {
@@ -101,8 +101,7 @@ async fn main() -> Result<()> {
             command: vec![
                 String::from("/bin/sh"),
                 String::from("-c"),
-                String::from("bwa index /data/Homo_sapiens_assembly38.fasta &&"),
-                String::from("bwa mem -t 16 /data/Homo_sapiens_assembly38.fasta /data/H06HDADXX130110.1.ATCACGAT.20k_reads_1.fastq /data/H06HDADXX130110.1.ATCACGAT.20k_reads_2.fastq > /data/H06HDADXX130110.1.ATCACGAT.20k.bam"),
+                String::from("bwa index /data/Homo_sapiens_assembly38.fasta && bwa mem -t 16 /data/Homo_sapiens_assembly38.fasta /data/H06HDADXX130110.1.ATCACGAT.20k_reads_1.fastq /data/H06HDADXX130110.1.ATCACGAT.20k_reads_2.fastq > /data/H06HDADXX130110.1.ATCACGAT.20k.bam"),
             ],
             workdir: Some(String::from("/data")),
             ..Default::default()
