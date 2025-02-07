@@ -91,8 +91,8 @@ async fn main() -> Result<()> {
         name: Some(String::from("bwa-alignment-task")),
         description: Some(String::from("Run BWA MEM on input fastq files")),
         resources: Some(Resources {
-            cpu_cores: Some(32),
-            ram_gb: Some(OrderedFloat(64.0)),
+            cpu_cores: Some(16),
+            ram_gb: Some(OrderedFloat(32.0)),
             preemptible: Some(true),
             ..Default::default()
         }),
