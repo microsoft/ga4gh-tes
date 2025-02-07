@@ -57,7 +57,7 @@ namespace TesApi.Web.Management.Batch
         /// <exception cref="InvalidOperationException">When pool is not found</exception>
         public virtual async ValueTask<string> GetMetadataValueAsync(string poolId, string key, CancellationToken cancellationToken)
         {
-            logger.LogInformation(@"Getting metadata from pool {PoolId}. Key {MetadataKey}", poolId, key);
+            logger.LogDebug(@"Getting metadata from pool {PoolId}. Key {MetadataKey}", poolId, key);
 
             var poolMetadata = (await azureProxy.GetBatchPoolAsync(poolId, cancellationToken: cancellationToken, new ODATADetailLevel { SelectClause = "metadata" }))?.Metadata;
 
