@@ -41,7 +41,9 @@ echo "Using TES instance: $tes_instance"
 # Construct task payload
 output_url="/${TES_OUTPUT_STORAGE_ACCT}/outputs/curl/H06HDADXX130110.1.ATCACGAT.20k.bam"
 
-task_payload='
+echo "$output_url"
+
+task_payload=$(jq -n --arg output_url "$output_url" '
 {
   "inputs": [
     {
@@ -64,7 +66,7 @@ task_payload='
     {
       "name": "H06HDADXX130110.1.ATCACGAT.20k.bam",
       "path": "/data/H06HDADXX130110.1.ATCACGAT.20k.bam",
-      "url": "$output_url"
+      "url": $output_url
     }
   ],
   "executors": [
@@ -81,7 +83,8 @@ task_payload='
     "cpu_cores": 16,
     "ram_gb": 32
   }
-}'
+}')
+
 
 # Submit task and capture the full response
 echo "Submitting task to TES instance: $tes_instance"

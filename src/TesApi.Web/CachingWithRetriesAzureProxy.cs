@@ -124,9 +124,9 @@ namespace TesApi.Web
         Task<IEnumerable<string>> IAzureProxy.GetPoolIdsReferencedByJobsAsync(CancellationToken cancellationToken) => cachingAsyncRetry.ExecuteWithRetryAsync(azureProxy.GetPoolIdsReferencedByJobsAsync, cancellationToken);
 
         /// <inheritdoc/>
-        Task<string> IAzureProxy.GetStorageAccountKeyAsync(StorageAccountInfo storageAccountInfo, CancellationToken cancellationToken)
+        Task<BlobModels.UserDelegationKey> IAzureProxy.GetStorageAccountUserKeyAsync(StorageAccountInfo storageAccountInfo, CancellationToken cancellationToken)
             => cachingAsyncRetry.ExecuteWithRetryAndCachingAsync($"{nameof(CachingWithRetriesAzureProxy)}:{storageAccountInfo.Id}",
-                ct => azureProxy.GetStorageAccountKeyAsync(storageAccountInfo, ct), DateTimeOffset.Now.AddHours(1), cancellationToken);
+                ct => azureProxy.GetStorageAccountUserKeyAsync(storageAccountInfo, ct), DateTimeOffset.Now.AddHours(0.75), cancellationToken);
 
         /// <inheritdoc/>
         async Task<StorageAccountInfo> IAzureProxy.GetStorageAccountInfoAsync(string storageAccountName, CancellationToken cancellationToken)
