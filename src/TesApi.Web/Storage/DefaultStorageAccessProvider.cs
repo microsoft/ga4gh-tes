@@ -43,7 +43,7 @@ namespace TesApi.Web.Storage
             this.storageOptions = storageOptions.Value;
             this.azureEnvironmentConfig = azureEnvironmentConfig;
 
-            externalStorageContainers = storageOptions.Value.ExternalStorageContainers?.Split([',', ';', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            externalStorageContainers = storageOptions.Value.ExternalStorageContainers?.Split((char[])[',', ';', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
                 .Select(uri =>
                 {
                     if (StorageAccountUrlSegments.TryCreate(uri, out var s))
