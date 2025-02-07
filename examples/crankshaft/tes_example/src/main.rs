@@ -7,7 +7,7 @@
 //! export PASSWORD="<PASSWORD>"
 //! export RUST_LOG="tes=debug"
 //!
-//! cargo run --release --features=client,serde --example task-submit <URL>
+//! cargo run <URL>
 //! ```
 
 use anyhow::Context;
@@ -133,10 +133,6 @@ async fn main() -> Result<()> {
         }]),
         ..Default::default()
     };
-
-    //let response = client.create_task(task).await.context("submitting a task")?;
-    //let task_id = response.id.as_ref().ok_or_else(|| anyhow::anyhow!("Task ID missing in response"))?.to_string();
-
 
     let response = client
     .create_task(task)
