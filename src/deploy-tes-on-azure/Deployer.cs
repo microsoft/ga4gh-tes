@@ -126,7 +126,6 @@ namespace TesDeployer
         private bool isResourceGroupCreated { get; set; }
         private KubernetesManager kubernetesManager { get; set; }
         internal static AzureCloudConfig azureCloudConfig { get; private set; }
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<ResourceIdentifier, Azure.Storage.StorageSharedKeyCredential> storageKeys = [];
 
         private static async Task<T> EnsureResourceDataAsync<T>(T resource, Predicate<T> HasData, Func<T, Func<CancellationToken, Task<Response<T>>>> GetAsync, CancellationToken cancellationToken, Action<T> OnAcquisition = null) where T : ArmResource
         {
@@ -148,7 +147,7 @@ namespace TesDeployer
         {
             return new(new BlobUriBuilder(storageAccount.PrimaryEndpoints.BlobUri) { BlobContainerName = containerName, BlobName = blobName }.ToUri(),
                 tokenCredential,
-                new() { Audience = storageAccount.PrimaryEndpoints.BlobUri.AbsoluteUri });
+                new() { Audience = Azure.Storage.Blobs.Models.BlobAudience.DefaultAudience }); // https://github.com/Azure/azure-cli/issues/28708#issuecomment-2047256166
         }
 
         public async Task<int> DeployAsync()
@@ -224,9 +223,17 @@ namespace TesDeployer
 
                     storageAccountData = (await FetchResourceDataAsync(ct => storageAccount.GetAsync(cancellationToken: ct), cts.Token, account => storageAccount = account)).Data;
 
-                    if (!await AssignRoleForDeployerToStorageAccountAsync(storageAccount))
+                    switch (await AssignRoleForDeployerToStorageAccountAsync(storageAccount))
                     {
-                        ConsoleEx.WriteLine("Unable to assign 'Storage Blob Data Contributor' for deployment identity to the storage account. If the deployment fails as a result, assign the deploying user the 'Storage Blob Data Contributor' role for the storage account.", ConsoleColor.Yellow);
+                        case true:
+                            // 10 minutes for propagation https://learn.microsoft.com/azure/role-based-access-control/troubleshooting
+                            await Execute("Waiting 5 minutes for role assignment propagation...",
+                                () => Task.Delay(TimeSpan.FromMinutes(5), cts.Token));
+                            break;
+
+                        case null:
+                            ConsoleEx.WriteLine("Unable to assign 'Storage Blob Data Contributor' for deployment identity to the storage account. If the deployment fails as a result, assign the deploying user the 'Storage Blob Data Contributor' role for the storage account.", ConsoleColor.Yellow);
+                            break;
                     }
 
                     if (string.IsNullOrWhiteSpace(configuration.AksClusterName))
@@ -351,7 +358,7 @@ namespace TesDeployer
                     IEnumerable<string> manualPrecommands = null;
                     Func<IKubernetes, Task> asyncTask = null;
 
-                    if (!string.IsNullOrWhiteSpace(configuration.AcrId) && settings.ContainsKey("AcrId"))
+                    if (!string.IsNullOrWhiteSpace(configuration.AcrId) && settings.TryGetValue("AcrId", out var acrId) && !string.IsNullOrEmpty(acrId))
                     {
                         throw new ValidationException("AcrId must not be set if previously configured.", displayExample: false);
                     }
@@ -612,7 +619,7 @@ namespace TesDeployer
                             await CreateDefaultStorageContainersAsync(storageAccount);
                             storageAccountData = storageAccount.Data;
 
-                            if (!await AssignRoleForDeployerToStorageAccountAsync(storageAccount))
+                            if (await AssignRoleForDeployerToStorageAccountAsync(storageAccount) is null)
                             {
                                 ConsoleEx.WriteLine("Unable to assign 'Storage Blob Data Contributor' for deployment identity to the storage account. If the deployment fails as a result, the storage account must be precreated and the deploying user must have the 'Storage Blob Data Contributor' role for the storage account.", ConsoleColor.Yellow);
                             }
@@ -1265,7 +1272,7 @@ namespace TesDeployer
         {
             ContainerRegistryResource acr = default;
 
-            if (settings.TryGetValue("AcrId", out var acrId))
+            if (settings.TryGetValue("AcrId", out var acrId) && !string.IsNullOrEmpty(acrId))
             {
                 acr = await EnsureResourceDataAsync(armClient.GetContainerRegistryResource(new(acrId)), r => r.HasData, r => r.GetAsync, cts.Token);
             }
@@ -1456,7 +1463,7 @@ namespace TesDeployer
             _ = settings.TryGetValue(key, out var installed);
             _ = defaults.TryGetValue(key, out var @default);
 
-            if (settings.TryGetValue("AcrId", out var acrId))
+            if (settings.TryGetValue("AcrId", out var acrId) && !string.IsNullOrEmpty(acrId))
             {
                 var id = ResourceIdentifier.Parse(acrId);
 
@@ -1700,7 +1707,7 @@ namespace TesDeployer
             }
         }
 
-        private async Task<bool> AssignRoleForDeployerToStorageAccountAsync(StorageAccountResource storageAccount)
+        private async Task<bool?> AssignRoleForDeployerToStorageAccountAsync(StorageAccountResource storageAccount)
         {
             Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType type;
             string id;
@@ -1711,7 +1718,7 @@ namespace TesDeployer
 
                 if (user is null)
                 {
-                    return false;
+                    return null;
                 }
 
                 id = user.Id;
@@ -1723,14 +1730,12 @@ namespace TesDeployer
                 type = Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType.ServicePrincipal;
             }
 
-            await AssignRoleToResourceAsync(
+            return await AssignRoleToResourceAsync(
                         [new Guid(id)],
                         type,
                         storageAccount,
                         GetSubscriptionRoleDefinition(RoleDefinitions.Storage.StorageBlobDataContributor),
                         $"Assigning '{RoleDefinitions.GetDisplayName(RoleDefinitions.Storage.StorageBlobDataContributor)}' role for the deployment identity to Storage Account resource scope...");
-
-            return true;
         }
 
         private Task AssignManagedIdAcrPullToResourceAsync(UserAssignedIdentityResource managedIdentity, ContainerRegistryResource resource)
@@ -1965,8 +1970,7 @@ namespace TesDeployer
                     continue;
                 }
 
-                changed = true;
-                await Execute(message, async () =>
+                changed |= await Execute(message, async () =>
                 {
                     try
                     {
@@ -1978,6 +1982,8 @@ namespace TesDeployer
                                 },
                                 token),
                             cts.Token);
+
+                        return true;
                     }
                     catch (Exception ex)
                     {
@@ -1989,7 +1995,7 @@ namespace TesDeployer
 
                             if (e is null)
                             {
-                                return;
+                                return false;
                             }
                         }
                         else
