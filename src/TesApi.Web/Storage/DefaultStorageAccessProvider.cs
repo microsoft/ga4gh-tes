@@ -42,7 +42,7 @@ namespace TesApi.Web.Storage
             this.storageOptions = storageOptions.Value;
             this.azureEnvironmentConfig = azureEnvironmentConfig;
 
-            externalStorageContainers = storageOptions.Value.ExternalStorageContainers?.Split([',', ';', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            externalStorageContainers = storageOptions.Value.ExternalStorageContainers?.Split((char[])[',', ';', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
                 .Select(uri =>
                 {
                     if (StorageAccountUrlSegments.TryCreate(uri, out var s))
@@ -195,8 +195,8 @@ namespace TesApi.Web.Storage
                 sasBuilder.Resource = pathSegments.IsContainer || sasBuilder.Permissions.Contains('l') ? "c" : "b";
                 sasBuilder.BlobContainerName = pathSegments.ContainerName;
                 sasBuilder.Protocol = SasProtocol.Https;
-                var accountCredential = new Azure.Storage.StorageSharedKeyCredential(storageAccountInfo.Name, await AzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, cancellationToken));
-                resultPathSegments.SasToken = sasBuilder.ToSasQueryParameters(accountCredential).ToString();
+                var userDelegationKey = await AzureProxy.GetStorageAccountUserKeyAsync(storageAccountInfo, cancellationToken);
+                resultPathSegments.SasToken = sasBuilder.ToSasQueryParameters(userDelegationKey, storageAccountInfo.Name).ToString();
 
                 return resultPathSegments;
             }

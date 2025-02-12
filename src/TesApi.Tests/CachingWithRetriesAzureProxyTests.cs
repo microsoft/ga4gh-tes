@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Polly.Utilities;
+using TesApi.Tests.Storage;
 using TesApi.Web;
 using TesApi.Web.Storage;
 
@@ -22,15 +23,15 @@ namespace TesApi.Tests
             using var serviceProvider = new TestServices.TestServiceProvider<CachingWithRetriesAzureProxy>(azureProxy: a =>
             {
                 PrepareAzureProxy(a);
-                a.Setup(a => a.GetStorageAccountKeyAsync(It.IsAny<StorageAccountInfo>(), It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult(storageAccountKey));
+                a.Setup(a => a.GetStorageAccountUserKeyAsync(It.IsAny<StorageAccountInfo>(), It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult(DefaultStorageAccessProviderTests.GenerateTestAzureStorageKey(storageAccountKey)));
             });
             var cachingAzureProxy = (IAzureProxy)serviceProvider.GetT();
 
-            var key1 = await cachingAzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, System.Threading.CancellationToken.None);
-            var key2 = await cachingAzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, System.Threading.CancellationToken.None);
+            var key1 = await cachingAzureProxy.GetStorageAccountUserKeyAsync(storageAccountInfo, System.Threading.CancellationToken.None);
+            var key2 = await cachingAzureProxy.GetStorageAccountUserKeyAsync(storageAccountInfo, System.Threading.CancellationToken.None);
 
-            serviceProvider.AzureProxy.Verify(mock => mock.GetStorageAccountKeyAsync(storageAccountInfo, It.IsAny<System.Threading.CancellationToken>()), Times.Once());
-            Assert.AreEqual(storageAccountKey, key1);
+            serviceProvider.AzureProxy.Verify(mock => mock.GetStorageAccountUserKeyAsync(storageAccountInfo, It.IsAny<System.Threading.CancellationToken>()), Times.Once());
+            Assert.AreEqual(storageAccountKey, key1.Value);
             Assert.AreEqual(key1, key2);
         }
 

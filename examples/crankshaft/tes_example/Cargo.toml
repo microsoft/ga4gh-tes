@@ -1,0 +1,20 @@
+[package]
+name = "tes_example"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = { version = "1.0.87"}
+chrono = { version = "0.4.38", features = ["serde"] }
+ordered-float = { version = "4.2.2", features = ["serde"] }
+reqwest = { version = "0.12.7", features = ["json"] }
+reqwest-middleware = "0.3.3"
+reqwest-retry = "0.6.1"
+serde = { version = "1.0.209", features = ["derive"], optional = true }
+serde_json = { version = "1.0.128", optional = true }
+tokio = { version = "1.40.0", features = ["full", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+base64 = "0.21"
+tes = { version = "0.3.0", features = ["client", "serde"] }
+

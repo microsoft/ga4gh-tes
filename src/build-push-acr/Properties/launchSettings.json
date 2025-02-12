@@ -1,0 +1,7 @@
+{
+  "profiles": {
+    "build-push-acr": {
+      "commandName": "Project"
+    }
+  }
+}

@@ -307,14 +307,33 @@ namespace TesDeployer
             await Deployer.UploadTextToStorageAccountAsync(getBlobClient(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml"), valuesString, cancellationToken);
         }
 
-        public async Task UpgradeValuesYamlAsync(Azure.ResourceManager.Storage.StorageAccountData storageAccount, Dictionary<string, string> settings)
+        public async Task UpgradeValuesYamlAsync(Azure.ResourceManager.Storage.StorageAccountData storageAccount, Dictionary<string, string> settings, Version previousVersion)
         {
             var blobClient = getBlobClient(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml");
             var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(blobClient, cancellationToken));
             UpdateValuesFromSettings(values, settings);
+            ProcessHelmValuesUpdates(values, previousVersion);
             var valuesString = KubernetesYaml.Serialize(values);
             await File.WriteAllTextAsync(TempHelmValuesYamlPath, valuesString, cancellationToken);
             await Deployer.UploadTextToStorageAccountAsync(blobClient, valuesString, cancellationToken);
+        }
+
+        private static void ProcessHelmValuesUpdates(HelmValues values, Version previousVersion)
+        {
+            if (previousVersion is null || previousVersion < new Version(5, 5, 2))
+            {
+                var datasettestinputs = values.ExternalSasContainers?.SingleOrDefault(container => container.TryGetValue("accountName", out var name) && "datasettestinputs".Equals(name, StringComparison.OrdinalIgnoreCase));
+
+                if (datasettestinputs is not null)
+                {
+                    _ = values.ExternalSasContainers.Remove(datasettestinputs);
+
+                    if (values.ExternalSasContainers.Count == 0)
+                    {
+                        values.ExternalSasContainers = null;
+                    }
+                }
+            }
         }
 
         public async Task<FileInfo> ConfigureAltLocalValuesYamlAsync(string altName, Action<HelmValues> configure)
@@ -426,6 +445,7 @@ namespace TesDeployer
             var drsHub = GetObjectFromConfig(values, "drsHub") ?? new Dictionary<string, string>();
             var deployment = GetObjectFromConfig(values, "deployment") ?? new Dictionary<string, string>();
 
+            values.Config["acrId"] = GetValueOrDefault(settings, "AcrId");
             values.Config["azureCloudName"] = GetValueOrDefault(settings, "AzureCloudName");
             values.Config["tesOnAzureVersion"] = GetValueOrDefault(settings, "TesOnAzureVersion");
             values.Config["azureServicesAuthConnectionString"] = GetValueOrDefault(settings, "AzureServicesAuthConnectionString");
@@ -501,6 +521,7 @@ namespace TesDeployer
 
             return new()
             {
+                ["AcrId"] = GetValueOrDefault(values.Config, "acrId") as string,
                 ["AzureCloudName"] = GetValueOrDefault(values.Config, "azureCloudName") as string,
                 ["TesOnAzureVersion"] = GetValueOrDefault(values.Config, "tesOnAzureVersion") as string,
                 ["AzureServicesAuthConnectionString"] = GetValueOrDefault(values.Config, "azureServicesAuthConnectionString") as string,

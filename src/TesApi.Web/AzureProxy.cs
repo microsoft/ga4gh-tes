@@ -8,7 +8,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Azure.Core;
 using Azure.ResourceManager;
-using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Storage;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
@@ -26,6 +25,7 @@ using TesApi.Web.Management.Configuration;
 using TesApi.Web.Storage;
 using static CommonUtilities.RetryHandler;
 using BatchProtocol = Microsoft.Azure.Batch.Protocol;
+using BlobModels = Azure.Storage.Blobs.Models;
 using CloudTask = Microsoft.Azure.Batch.CloudTask;
 using OnAllTasksComplete = Microsoft.Azure.Batch.Common.OnAllTasksComplete;
 
@@ -289,19 +289,17 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task<string> GetStorageAccountKeyAsync(StorageAccountInfo storageAccountInfo, CancellationToken cancellationToken)
+        public async Task<BlobModels.UserDelegationKey> GetStorageAccountUserKeyAsync(StorageAccountInfo storageAccountInfo, CancellationToken cancellationToken)
         {
             try
             {
-                ResourceIdentifier storageAccountId = new(storageAccountInfo.Id);
-                var azureClient = GetAzureManagementClient().GetResourceGroupResource(ResourceGroupResource.CreateResourceIdentifier(storageAccountId.SubscriptionId, storageAccountId.ResourceGroupName));
-                var storageAccount = (await azureClient.GetStorageAccountAsync(storageAccountId.Name, cancellationToken: cancellationToken)).Value;
-
-                return (await storageAccount.GetKeysAsync(cancellationToken: cancellationToken).FirstAsync(key => Azure.ResourceManager.Storage.Models.StorageAccountKeyPermission.Full.Equals(key.Permissions), cancellationToken)).Value;
+                BlobServiceClient azureClient = new(storageAccountInfo.BlobEndpoint, GetTokenCredential(), new() { Audience = BlobModels.BlobAudience.CreateBlobServiceAccountAudience(storageAccountInfo.Name)/*, RetryPolicy*/ }); //TODO: Add retry policy
+                var now = DateTimeOffset.UtcNow;
+                return await azureClient.GetUserDelegationKeyAsync(startsOn: now.Subtract(TimeSpan.FromMinutes(15)), expiresOn: now.AddHours(1), cancellationToken: cancellationToken);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, @"An exception occurred when getting the storage account key for account {StorageAccountName}.", storageAccountInfo.Name);
+                logger.LogError(ex, "An exception occurred when getting the user delegation key for account {StorageAccountName}.", storageAccountInfo.Name);
                 throw;
             }
         }
@@ -378,9 +376,15 @@ namespace TesApi.Web
         /// <returns>An authenticated Azure Client instance</returns>
         private ArmClient GetAzureManagementClient()
         {
-            return new(new AzureServicesConnectionStringCredential(credentialOptions),
+            return new(GetTokenCredential(),
                 default,
                 new ArmClientOptions { Environment = armEnvironment });
+        }
+
+
+        private TokenCredential GetTokenCredential()
+        {
+            return new AzureServicesConnectionStringCredential(credentialOptions);
         }
 
         /// <inheritdoc/>

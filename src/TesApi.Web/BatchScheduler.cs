@@ -87,6 +87,7 @@ namespace TesApi.Web
         private readonly bool disableBatchNodesPublicIpAddress;
         private readonly TimeSpan poolLifetime;
         private readonly TimeSpan taskMaxWallClockTime;
+        private readonly TimeSpan? debugDelay;
         private readonly BatchNodeInfo gen2BatchNodeInfo;
         private readonly BatchNodeInfo gen1BatchNodeInfo;
         private readonly string defaultStorageAccountName;
@@ -159,6 +160,7 @@ namespace TesApi.Web
             this.disableBatchNodesPublicIpAddress = batchNodesOptions.Value.DisablePublicIpAddress;
             this.poolLifetime = TimeSpan.FromDays(batchSchedulingOptions.Value.PoolRotationForcedDays == 0 ? Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays : batchSchedulingOptions.Value.PoolRotationForcedDays);
             this.taskMaxWallClockTime = TimeSpan.FromDays(batchSchedulingOptions.Value.TaskMaxWallClockTimeDays == 0 ? Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays : batchSchedulingOptions.Value.TaskMaxWallClockTimeDays);
+            this.debugDelay = batchNodesOptions.Value.DebugDelayInMinutes is null ? default : TimeSpan.FromMinutes((double)batchNodesOptions.Value.DebugDelayInMinutes!);
             this.defaultStorageAccountName = storageOptions.Value.DefaultAccountName;
             logger.LogDebug(@"Default storage account: {DefaultStorageAccountName}", defaultStorageAccountName);
             this.globalStartTaskPath = StandardizeStartTaskPath(batchNodesOptions.Value.GlobalStartTask, this.defaultStorageAccountName);
@@ -1091,7 +1093,9 @@ namespace TesApi.Web
             {
                 Constraints = new(maxWallClockTime: taskMaxWallClockTime, retentionTime: TimeSpan.Zero, maxTaskRetryCount: 0),
                 UserIdentity = new(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
-                EnvironmentSettings = assets.Environment?.Select(pair => new EnvironmentSetting(pair.Key, pair.Value)).ToList(),
+                EnvironmentSettings = assets.Environment.Select(pair => new EnvironmentSetting(pair.Key, pair.Value))
+                    .Concat(Enumerable.Repeat<EnvironmentSetting>(new("DEBUG_DELAY", debugDelay?.ToString("c")), debugDelay is null ? 0 : 1))
+                    .ToList(),
             };
         }
 
