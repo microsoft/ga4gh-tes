@@ -13,6 +13,12 @@
     <Title>Azure ACR image build and push utility for $(Product)</Title>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <AssemblyName Condition="'$(Configuration)' == 'win'">build-push-acr-win</AssemblyName>
+    <AssemblyName Condition="'$(Configuration)' == 'linux'">build-push-acr-linux</AssemblyName>
+    <AssemblyName Condition="'$(Configuration)' == 'osx'">build-push-acr-osx.app</AssemblyName>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Azure.Containers.ContainerRegistry" Version="1.1.1" />
     <PackageReference Include="Azure.ResourceManager.ContainerRegistry" Version="1.2.1" />
