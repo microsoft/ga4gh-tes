@@ -6,7 +6,7 @@ using CommonUtilities.AzureCloud;
 
 namespace CommonUtilities.Tests
 {
-    [TestClass]
+    [TestClass, TestCategory("Integration")]
     public class ArmEnvironmentEndpointsTests
     {
         public enum Cloud

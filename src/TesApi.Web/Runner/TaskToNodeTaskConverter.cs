@@ -260,7 +260,7 @@ namespace TesApi.Web.Runner
                     inputs.AddRange(distinctAdditionalInputs);
                 }
 
-                await MapInputsAsync(inputs, pathParentDirectory, builder);
+                await MapInputsAsync(inputs, pathParentDirectory, builder, cancellationToken);
             }
         }
 
@@ -332,19 +332,33 @@ namespace TesApi.Web.Runner
 
         private async Task ResolveInputType(TesInput input, CancellationToken cancellationToken)
         {
-            var uri = await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, default, default, getContainerSas: true);
+            if (input.Type != default)
+            {
+                return; // Already set
+            }
+
+            var uri = (await storageAccessProvider.IsPublicHttpUrlAsync(input.Url, cancellationToken))
+                ? new(input.Url)
+                : await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, cancellationToken, default, getContainerSas: true);
 
             if (uri is null)
             {
                 return; // Not azure storage. We'll let other parts of the system handle it.
             }
 
-            input.Type = (await storageAccessProvider.GetBlobUrlsAsync(
-                    uri,
-                    cancellationToken))
-                .Any()
-                ? TesFileType.DIRECTORY
-                : TesFileType.FILE;
+            try
+            {
+                input.Type = (await storageAccessProvider.GetBlobUrlsAsync(
+                        uri,
+                        cancellationToken))
+                    .Any()
+                    ? TesFileType.DIRECTORY
+                    : TesFileType.FILE;
+            }
+            catch (Azure.RequestFailedException)
+            {
+                input.Type = TesFileType.FILE; // Likely not azure storage. We only support directory URLs in known blob-style storage containers.
+            }
         }
 
         /// <summary>
@@ -537,7 +551,7 @@ namespace TesApi.Web.Runner
             });
         }
 
-        private async Task MapInputsAsync(List<TesInput> inputs, string pathParentDirectory, NodeTaskBuilder builder)
+        private async Task MapInputsAsync(List<TesInput> inputs, string pathParentDirectory, NodeTaskBuilder builder, CancellationToken cancellationToken)
         {
             if (inputs is null || inputs.Count == 0)
             {
@@ -555,17 +569,25 @@ namespace TesApi.Web.Runner
                     // Nextflow directory example
                     // input.Url = /storageaccount/work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
                     // input.Path = /work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
-                    var blobDirectoryUrlWithSasToken = await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, default, default, getContainerSas: true);
+                    var blobDirectoryUrlWithSasToken = await storageAccessProvider.IsPublicHttpUrlAsync(input.Url, cancellationToken)
+                        ? new(input.Url)
+                        : await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, cancellationToken, default, getContainerSas: true);
                     var blobDirectoryUrlWithoutSasToken = blobDirectoryUrlWithSasToken.GetLeftPart(UriPartial.Path);
-                    var blobAbsoluteUrls = await storageAccessProvider.GetBlobUrlsAsync(blobDirectoryUrlWithSasToken, default);
+                    IList<Uri> blobAbsoluteUrls;
 
-                    if (input.Type == default)
+                    try
                     {
-                        if (blobAbsoluteUrls.Count == 0)
-                        {
-                            AddInputToBuilder(input.Path, input.Url);
-                            continue;
-                        }
+                        blobAbsoluteUrls = await storageAccessProvider.GetBlobUrlsAsync(blobDirectoryUrlWithSasToken, cancellationToken);
+                    }
+                    catch (Azure.RequestFailedException)
+                    {
+                        blobAbsoluteUrls = [new(input.Url)]; // Pass this off to the runner if the input type has not been specified or determined
+                    }
+
+                    if (input.Type == default && blobAbsoluteUrls.Count == 0)
+                    {
+                        AddInputToBuilder(input.Path, input.Url);
+                        continue;
                     }
 
                     foreach (var blobAbsoluteUrl in blobAbsoluteUrls)

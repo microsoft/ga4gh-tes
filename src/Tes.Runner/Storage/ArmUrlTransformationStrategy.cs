@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Net;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
@@ -15,6 +16,7 @@ namespace Tes.Runner.Storage
         const string BlobUrlPrefix = ".blob."; // "core.windows.net";
         private const int BlobSasTokenExpirationInHours = 24 * 7; //7 days which is the Azure Batch node runtime;
         const int UserDelegationKeyExpirationInHours = 1;
+        private static readonly Lazy<BlobApiHttpUtils> blobApiHttpUtilsFactory = new(() => new());
 
         private readonly ILogger logger = PipelineLoggerFactory.Create<ArmUrlTransformationStrategy>();
         private readonly Dictionary<string, UserDelegationKey> userDelegationKeyDictionary = [];
@@ -22,8 +24,9 @@ namespace Tes.Runner.Storage
         private readonly Func<Uri, BlobServiceClient> blobServiceClientFactory;
         private readonly RuntimeOptions runtimeOptions;
         private readonly string storageHostSuffix;
+        private readonly BlobApiHttpUtils blobApiHttpUtils;
 
-        public ArmUrlTransformationStrategy(Func<Uri, BlobServiceClient> blobServiceClientFactory, RuntimeOptions runtimeOptions)
+        public ArmUrlTransformationStrategy(Func<Uri, BlobServiceClient> blobServiceClientFactory, RuntimeOptions runtimeOptions, BlobApiHttpUtils? blobApiHttpUtils = default)
         {
             ArgumentNullException.ThrowIfNull(blobServiceClientFactory);
             ArgumentNullException.ThrowIfNull(runtimeOptions);
@@ -31,6 +34,7 @@ namespace Tes.Runner.Storage
             this.blobServiceClientFactory = blobServiceClientFactory;
             this.runtimeOptions = runtimeOptions;
             storageHostSuffix = BlobUrlPrefix + this.runtimeOptions!.AzureEnvironmentConfig!.StorageUrlSuffix;
+            this.blobApiHttpUtils = blobApiHttpUtils ?? blobApiHttpUtilsFactory.Value;
         }
 
         public async Task<Uri> TransformUrlWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions)
@@ -60,8 +64,15 @@ namespace Tes.Runner.Storage
         {
             try
             {
-                var blobUrl = new BlobUriBuilder(new Uri(sourceUrl));
+                Uri uri = new(sourceUrl);
+                var blobUrl = new BlobUriBuilder(uri);
                 var blobServiceClient = blobServiceClientFactory(new Uri($"https://{blobUrl.Host}"));
+
+                if ((permissions & ~(BlobSasPermissions.Read | BlobSasPermissions.List | BlobSasPermissions.Execute)) == 0 && await blobApiHttpUtils.IsEndPointPublic(uri))
+                {
+                    logger.LogWarning("The URL provided is not a storage account the managed identity can access. The resolution strategy won't be applied. Host: {Host}", blobUrl.Host);
+                    return uri;
+                }
 
                 var userKey = await GetUserDelegationKeyAsync(blobServiceClient, blobUrl.AccountName);
 
@@ -73,13 +84,9 @@ namespace Tes.Runner.Storage
                 };
 
                 sasBuilder.SetPermissions(permissions);
+                blobUrl.Sas = sasBuilder.ToSasQueryParameters(userKey, blobUrl.AccountName);
 
-                var blobUriWithSas = new BlobUriBuilder(blobUrl.ToUri())
-                {
-                    Sas = sasBuilder.ToSasQueryParameters(userKey, blobUrl.AccountName)
-                };
-
-                return blobUriWithSas.ToUri();
+                return blobUrl.ToUri();
             }
             catch (Exception e)
             {

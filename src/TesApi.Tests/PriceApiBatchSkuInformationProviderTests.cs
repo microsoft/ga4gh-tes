@@ -33,7 +33,7 @@ namespace TesApi.Tests
 
             cachingRetryHandler = new CachingRetryPolicyBuilder(appCache, mockRetryOptions.Object);
             pricingApiClient = new PriceApiClient(cachingRetryHandler, new NullLogger<PriceApiClient>());
-            var config = ExpensiveObjectTestUtility.AzureCloudConfig;
+            var config = CommonUtilities.AzureCloud.AzureCloudConfig.FromKnownCloudNameAsync().Result;
             provider = new PriceApiBatchSkuInformationProvider(pricingApiClient, config, new NullLogger<PriceApiBatchSkuInformationProvider>());
             //using var serviceProvider = new TestServices.TestServiceProvider<PriceApiBatchSkuInformationProvider>();
             //var provider = serviceProvider.GetT();

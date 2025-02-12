@@ -1,1 +1,1 @@
-TesOnAzureVersion=5.4.5
+TesOnAzureVersion=5.5.1
