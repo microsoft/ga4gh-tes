@@ -72,7 +72,7 @@ namespace BuildPushAcr
                         ? new Microsoft.Kiota.Abstractions.Authentication.AnonymousAuthenticationProvider()
                         : new GitHub.Octokit.Client.Authentication.TokenAuthProvider(tokenProvider))
                     .WithUserAgent("microsoft-ga4gh-tes", string.Empty)
-                    .WithRequestTimeout(TimeSpan.FromSeconds(100))
+                    .WithRequestTimeout(TimeSpan.FromHours(1.5))
                     //.WithBaseUrl("https://api.github.com")
                     .Build()),
                 "microsoft",
