@@ -1,0 +1,24 @@
+storage foo:
+    provider="azure",
+    account_name="<Storage Account Name>"
+
+storage http:
+    provider="http"
+
+rule bwa_map:
+    input:
+        fastq1=storage.http("https://datasettestinputs.blob.core.windows.net/dataset/seq-format-conversion/NA12878_20k/H06HDADXX130110.1.ATCACGAT.20k_reads_1.fastq"),
+        fastq2=storage.http("https://datasettestinputs.blob.core.windows.net/dataset/seq-format-conversion/NA12878_20k/H06HDADXX130110.1.ATCACGAT.20k_reads_2.fastq"),
+        ref=storage.http("https://datasettestinputs.blob.core.windows.net/dataset/references/hg38/v0/Homo_sapiens_assembly38.fasta")
+    output: 
+        bam=storage.foo(f"az://outputs/snakemake/H06HDADXX130110.1.ATCACGAT.20k.bam"),
+    conda:
+        "envs/mapping.yaml"
+    resources:
+        _cores=32,       
+        mem_mb=32000
+    shell:
+        """
+       bwa index {input.ref} && \
+       bwa mem -t 16 {input.ref} {input.fastq1} {input.fastq2} > {output.bam}
+        """
