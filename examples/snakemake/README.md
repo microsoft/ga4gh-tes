@@ -1,4 +1,4 @@
-# Snakemake DemoDemonstraion
+# Snakemake Demonstration
 
 This guide will help you set up **Snakemake** and configure it to run with a **Task Execution Service (TES)**. Follow the steps below to install Snakemake, set up the environment, and configure TES for running workflows.
 
