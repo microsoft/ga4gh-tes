@@ -172,9 +172,9 @@ namespace TesApi.Web
 
                 return validateEventsVersion
                     ? !NormalizeForValidation(Events.RunnerEventsMessage.EventsVersion).OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
-                        .SequenceEqual(NormalizeForValidation(EventsVersion).OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase))
+                        .SequenceEqual(NormalizeForValidation(EventsVersion ?? new Dictionary<string, object>()).OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase))
                     : Events.RunnerEventsMessage.EventsVersion.Keys.Order(StringComparer.OrdinalIgnoreCase)
-                        .SequenceEqual(EventsVersion.Keys.Order(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+                        .SequenceEqual((EventsVersion ?? new Dictionary<string, object>()).Keys.Order(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
             }
 
             static Dictionary<string, object> NormalizeForValidation(IDictionary<string, object> value)

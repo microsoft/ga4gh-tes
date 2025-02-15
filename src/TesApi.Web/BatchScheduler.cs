@@ -233,9 +233,9 @@ namespace TesApi.Web
                     tesTaskLog.EndTime ??= batchInfo.BatchTaskEndTime ?? taskEndTime;
                     tesTaskLog.StartTime ??= batchInfo.BatchTaskStartTime ?? taskStartTime;
 
-                    if (batchInfo.ExecutorIndex is not null || batchInfo.ExecutorEndTime is not null || batchInfo.ExecutorStartTime is not null || batchInfo.ExecutorExitCode is not null)
+                    if (batchInfo.ExecutorIndex is not null && (batchInfo.ExecutorEndTime is not null || batchInfo.ExecutorStartTime is not null || batchInfo.ExecutorExitCode is not null))
                     {
-                        var tesTaskExecutorLog = tesTaskLog.GetOrAddExecutorLog(batchInfo.ExecutorIndex);
+                        var tesTaskExecutorLog = tesTaskLog.GetOrAddExecutorLog(batchInfo.ExecutorIndex.Value);
                         tesTaskExecutorLog.StartTime ??= batchInfo.ExecutorStartTime;
                         tesTaskExecutorLog.EndTime ??= batchInfo.ExecutorEndTime;
                         tesTaskExecutorLog.ExitCode ??= batchInfo.ExecutorExitCode;
@@ -246,13 +246,6 @@ namespace TesApi.Web
                                 .Concat(DeserializeJsonStringArray(tesTaskExecutorLog.Stderr) ?? [])
                                 .Concat(DeserializeJsonStringArray(tesTaskExecutorLog.Stdout) ?? []));
                         }
-                    }
-                    else if (!tesTask.IsActiveState(/*TODO*/) && (tesTaskLog.Logs?.Any(log => log.ExitCode is null || log.EndTime is null) ?? true))
-                    {
-                        var tesTaskExecutorLog = tesTaskLog.GetOrAddExecutorLog();
-                        tesTaskExecutorLog.StartTime ??= batchInfo.BatchTaskStartTime ?? taskStartTime ?? tesTaskLog.StartTime;
-                        tesTaskExecutorLog.EndTime ??= batchInfo.BatchTaskEndTime ?? taskEndTime ?? tesTaskLog.EndTime;
-                        tesTaskExecutorLog.ExitCode ??= batchInfo.BatchTaskExitCode;
                     }
 
                     if (batchInfo.OutputFileLogs is not null)

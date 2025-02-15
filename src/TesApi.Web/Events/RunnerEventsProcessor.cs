@@ -252,7 +252,7 @@ namespace TesApi.Web.Events
                     : message.RunnerEventMessage.Name);
 
             static int ThenByIndex(RunnerEventsMessage message)
-                => int.Parse(message.RunnerEventMessage?.EventData.FirstOrDefault(p => "executor".Equals(p.Key)).Value ?? "0");
+                => message.RunnerEventMessage?.EventData is null ? 0 : ParseExecutorIndex(message.RunnerEventMessage?.EventData) ?? 0;
 
             static int ParseEventName(string eventName)
                 => EventsInOrder.TryGetValue(eventName, out var result) ? result : 0;
@@ -263,6 +263,13 @@ namespace TesApi.Web.Events
             public TOrder OrderBy(TItem item)
                 => adapter(messageGetter(item));
         }
+
+        static int? ParseExecutorIndex(IDictionary<string, string> eventData)
+            // Maintain format with TesApi.Web.Events.RunnerEventsProcessor.ExecutorFormatted()
+            => (eventData?.TryGetValue("executor", out var value) ?? false) &&
+                int.TryParse(value.Split('/', 2, StringSplitOptions.TrimEntries)[0], out var result)
+                ? result - 1
+                : default;
 
         /// <summary>
         /// Gets the task status details from this event message.
@@ -369,13 +376,6 @@ namespace TesApi.Web.Events
             };
 
             // Helpers
-            static int? ParseExecutorIndex(IDictionary<string, string> eventData)
-                // Maintain format with TesApi.Web.Events.RunnerEventsProcessor.ExecutorFormatted()
-                => (eventData?.TryGetValue("executor", out var value) ?? false) &&
-                    int.TryParse(value.Split('/', 2, StringSplitOptions.TrimEntries)[0], out var result)
-                    ? result
-                    : default;
-
             static IEnumerable<AzureBatchTaskState.OutputFileLog> GetOutputFileLogs(IDictionary<string, string> eventData)
             {
                 if (eventData is null || !eventData.TryGetValue("fileLog-Count", out var fileCount))
@@ -449,7 +449,7 @@ namespace TesApi.Web.Events
 
             async ValueTask AddProcessLogsAsync(Tes.Models.TesTask tesTask, int index, CancellationToken cancellationToken)
             {
-                if (index < 0)
+                if (int.IsNegative(index))
                 {
                     return;
                 }

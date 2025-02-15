@@ -26,6 +26,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <InvariantGlobalization>true</InvariantGlobalization>
     <AssemblyName>tes-runner</AssemblyName>
     <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
     <PublishSingleFile>true</PublishSingleFile>

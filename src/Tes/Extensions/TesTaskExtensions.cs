@@ -135,25 +135,16 @@ namespace Tes.Extensions
         /// <param name="tesTaskLog"><see cref="TesTaskLog"/></param>
         /// <param name="index">Index of corresponding <see cref="TesExecutor"></param>
         /// <returns>Initialized <see cref="TesExecutorLog"/></returns>
-        public static TesExecutorLog GetOrAddExecutorLog(this TesTaskLog tesTaskLog, int? index = default)
+        public static TesExecutorLog GetOrAddExecutorLog(this TesTaskLog tesTaskLog, int index)
         {
-            if (index is null)
-            {
-                if ((tesTaskLog.Logs?.Count ?? 0) == 0)
-                {
-                    TesExecutorLog log = new();
-                    tesTaskLog.Logs = [log];
-                    return log;
-                }
+            tesTaskLog.Logs ??= [];
 
-                return tesTaskLog.Logs.Last();
-            }
-            else
+            while (tesTaskLog.Logs.Count <= index)
             {
-                tesTaskLog.Logs ??= [];
-                tesTaskLog.Logs.EnsureCapacity(index.Value);
-                return tesTaskLog.Logs[index.Value] ??= new();
+                tesTaskLog.Logs.Add(null);
             }
+
+            return tesTaskLog.Logs[index] ??= new();
         }
 
         /// <summary>

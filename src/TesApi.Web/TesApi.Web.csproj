@@ -5,6 +5,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PreserveCompilationContext>true</PreserveCompilationContext>
+    <InvariantGlobalization>true</InvariantGlobalization>
     <AssemblyName>tesapi</AssemblyName>
     <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
     <Title>GA4GH Task Execution Service</Title>

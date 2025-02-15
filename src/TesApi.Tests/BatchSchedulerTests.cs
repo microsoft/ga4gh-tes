@@ -36,6 +36,18 @@ namespace TesApi.Tests
         private const string GlobalManagedIdentity = "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/SomeResourceGroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/GlobalManagedIdentity";
 
         [TestMethod]
+        public void GetOrAddExecutorLogCreatesLogAtIndex()
+        {
+            var index = 3;
+            TesTask tesTask = new() { Logs = [new()] };
+
+            var log = tesTask.Logs.Last().GetOrAddExecutorLog(index);
+
+            Assert.IsNotNull(log);
+            Assert.AreSame(log, tesTask.Logs.Last().Logs[index]);
+        }
+
+        [TestMethod]
         public async Task LocalPoolCacheAccessesNewPoolsAfterAllPoolsRemovedWithSameKey()
         {
             using var serviceProvider = GetServiceProvider();
