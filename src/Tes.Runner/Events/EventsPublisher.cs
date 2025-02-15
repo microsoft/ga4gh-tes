@@ -123,6 +123,10 @@ public class EventsPublisher : IAsyncDisposable
         await PublishAsync(eventMessage);
     }
 
+    private static string ExecutorFormatted(NodeTask nodeTask, int selector)
+        // Maintain format with TesApi.Web.Events.RunnerEventsProcessor.GetMessageBatchStateAsync+ParseExecutorIndex()
+        => $"{selector + 1}/{nodeTask.Executors?.Count ?? 0}";
+
     public virtual async Task PublishExecutorStartEventAsync(NodeTask nodeTask, int selector)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, ExecutorStartEvent, StartedStatus,
@@ -133,7 +137,7 @@ public class EventsPublisher : IAsyncDisposable
 
         eventMessage.EventData = new()
         {
-            { "executor", $"{selector + 1}/{nodeTask.Executors?.Count ?? 0}" },
+            { "executor", ExecutorFormatted(nodeTask, selector) },
             { "image", executor?.ImageName ?? string.Empty},
             { "imageTag", executor?.ImageTag ?? string.Empty},
             { "commands", string.Join(' ', commands) }
@@ -150,7 +154,7 @@ public class EventsPublisher : IAsyncDisposable
 
         eventMessage.EventData = new()
         {
-            { "executor", $"{selector + 1}/{nodeTask.Executors?.Count ?? 0}" },
+            { "executor", ExecutorFormatted(nodeTask, selector) },
             { "image", executor?.ImageName ?? string.Empty},
             { "imageTag", executor?.ImageTag ?? string.Empty},
             { "exitCode", exitCode.ToString()},
@@ -243,8 +247,14 @@ public class EventsPublisher : IAsyncDisposable
         await Task.WhenAll(stopTasks).WaitAsync(TimeSpan.FromSeconds(waitTimeInSeconds));
     }
 
-    public async ValueTask DisposeAsync()
+    protected async virtual ValueTask DisposeAsyncCore()
     {
         await FlushPublishersAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await DisposeAsyncCore();
+        GC.SuppressFinalize(this);
     }
 }

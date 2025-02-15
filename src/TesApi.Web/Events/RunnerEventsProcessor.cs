@@ -238,24 +238,30 @@ namespace TesApi.Web.Events
             ArgumentNullException.ThrowIfNull(source);
             ArgumentNullException.ThrowIfNull(messageGetter);
 
-            return source.OrderBy(OrderByT).ThenBy(ThenByT);
+            return source
+                .OrderBy(new OrderByAdapter<T, DateTime>(OrderByCreated, messageGetter).OrderBy)
+                .ThenBy(new OrderByAdapter<T, int>(ThenByName, messageGetter).OrderBy)
+                .ThenBy(new OrderByAdapter<T, int>(ThenByIndex, messageGetter).OrderBy);
 
-            DateTime OrderByT(T item)
-                => OrderBy(messageGetter(item));
-
-            int ThenByT(T item)
-                => ThenBy(messageGetter(item));
-
-            static DateTime OrderBy(RunnerEventsMessage message)
+            static DateTime OrderByCreated(RunnerEventsMessage message)
                 => (message.RunnerEventMessage?.Created ?? DateTime.Parse(message.Tags["created"])).ToUniversalTime();
 
-            static int ThenBy(RunnerEventsMessage message)
+            static int ThenByName(RunnerEventsMessage message)
                 => ParseEventName(message.RunnerEventMessage is null
                     ? message.Tags["event-name"]
                     : message.RunnerEventMessage.Name);
 
+            static int ThenByIndex(RunnerEventsMessage message)
+                => int.Parse(message.RunnerEventMessage?.EventData.FirstOrDefault(p => "executor".Equals(p.Key)).Value ?? "0");
+
             static int ParseEventName(string eventName)
                 => EventsInOrder.TryGetValue(eventName, out var result) ? result : 0;
+        }
+
+        private readonly struct OrderByAdapter<TItem, TOrder>(Func<RunnerEventsMessage, TOrder> adapter, Func<TItem, RunnerEventsMessage> messageGetter)
+        {
+            public TOrder OrderBy(TItem item)
+                => adapter(messageGetter(item));
         }
 
         /// <summary>
@@ -295,26 +301,30 @@ namespace TesApi.Web.Events
                     _ => throw new System.Diagnostics.UnreachableException(),
                 },
 
-                Tes.Runner.Events.EventsPublisher.ExecutorStartEvent => new(AzureBatchTaskState.TaskState.Running,
+                Tes.Runner.Events.EventsPublisher.ExecutorStartEvent => new(
+                    AzureBatchTaskState.TaskState.Running,
+                    ExecutorIndex: ParseExecutorIndex(nodeMessage.EventData),
                     ExecutorStartTime: nodeMessage.Created),
 
                 Tes.Runner.Events.EventsPublisher.ExecutorEndEvent => nodeMessage.StatusMessage switch
                 {
                     Tes.Runner.Events.EventsPublisher.SuccessStatus => await new AzureBatchTaskState(
                         AzureBatchTaskState.TaskState.InfoUpdate,
+                        ExecutorIndex: ParseExecutorIndex(nodeMessage.EventData),
                         ExecutorEndTime: nodeMessage.Created,
                         ExecutorExitCode: int.Parse(nodeMessage.EventData["exitCode"]))
-                        .WithActionAsync(() => AddProcessLogsAsync(tesTask, cancellationToken)),
+                        .WithActionAsync(state => AddProcessLogsAsync(tesTask, state.ExecutorIndex ?? -1, cancellationToken)),
 
                     Tes.Runner.Events.EventsPublisher.FailedStatus => await new AzureBatchTaskState(
                         AzureBatchTaskState.TaskState.InfoUpdate,
+                        ExecutorIndex: ParseExecutorIndex(nodeMessage.EventData),
                         Failure: new(AzureBatchTaskState.ExecutorError,
                         Enumerable.Empty<string>()
                             .Append(nodeMessage.EventData["errorMessage"])
                             .Concat(await AddProcessLogsIfAvailableAsync(nodeMessage, tesTask, cancellationToken))),
                         ExecutorEndTime: nodeMessage.Created,
                         ExecutorExitCode: int.Parse(nodeMessage.EventData["exitCode"]))
-                        .WithActionAsync(() => AddProcessLogsAsync(tesTask, cancellationToken)),
+                        .WithActionAsync(state => AddProcessLogsAsync(tesTask, state.ExecutorIndex ?? -1, cancellationToken)),
 
                     _ => throw new System.Diagnostics.UnreachableException(),
                 },
@@ -359,6 +369,13 @@ namespace TesApi.Web.Events
             };
 
             // Helpers
+            static int? ParseExecutorIndex(IDictionary<string, string> eventData)
+                // Maintain format with TesApi.Web.Events.RunnerEventsProcessor.ExecutorFormatted()
+                => (eventData?.TryGetValue("executor", out var value) ?? false) &&
+                    int.TryParse(value.Split('/', 2, StringSplitOptions.TrimEntries)[0], out var result)
+                    ? result
+                    : default;
+
             static IEnumerable<AzureBatchTaskState.OutputFileLog> GetOutputFileLogs(IDictionary<string, string> eventData)
             {
                 if (eventData is null || !eventData.TryGetValue("fileLog-Count", out var fileCount))
@@ -379,7 +396,7 @@ namespace TesApi.Web.Events
 
             async ValueTask<IEnumerable<string>> AddProcessLogsIfAvailableAsync(Tes.Runner.Events.EventMessage message, Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
             {
-                var processLogs = await GetProcessLogsAsync(message.Name, tesTask, cancellationToken).ToListAsync(cancellationToken);
+                var processLogs = await GetProcessLogsAsync(message, tesTask, cancellationToken).ToListAsync(cancellationToken);
 
                 if (processLogs.Any())
                 {
@@ -389,12 +406,12 @@ namespace TesApi.Web.Events
                 return processLogs;
             }
 
-            IAsyncEnumerable<string> GetProcessLogsAsync(string messageName, Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
+            IAsyncEnumerable<string> GetProcessLogsAsync(Tes.Runner.Events.EventMessage message, Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
             {
-                var blobNameStartsWith = messageName switch
+                var blobNameStartsWith = message.Name switch
                 {
                     Tes.Runner.Events.EventsPublisher.DownloadEndEvent => "download_std",
-                    Tes.Runner.Events.EventsPublisher.ExecutorEndEvent => "exec_std",
+                    Tes.Runner.Events.EventsPublisher.ExecutorEndEvent => $"exec-{ParseExecutorIndex(message.EventData):D3}_std",
                     Tes.Runner.Events.EventsPublisher.UploadEndEvent => "upload_std",
                     _ => string.Empty,
                 };
@@ -430,14 +447,18 @@ namespace TesApi.Web.Events
                 }
             }
 
-            async ValueTask AddProcessLogsAsync(Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
+            async ValueTask AddProcessLogsAsync(Tes.Models.TesTask tesTask, int index, CancellationToken cancellationToken)
             {
+                if (index < 0)
+                {
+                    return;
+                }
+
                 var stderr = Enumerable.Empty<string>();
                 var stdout = Enumerable.Empty<string>();
 
-                await foreach (var (uri, label) in GetAvailableProcessLogsAsync("task-executor-1", tesTask, cancellationToken).WithCancellation(cancellationToken))
+                await foreach (var (uri, label) in GetAvailableProcessLogsAsync($"task-executor-{index:D}_std", tesTask, cancellationToken).WithCancellation(cancellationToken))
                 {
-
                     switch (label)
                     {
                         case "stderr":
@@ -455,7 +476,7 @@ namespace TesApi.Web.Events
 
                 if (stderr.Any() || stdout.Any())
                 {
-                    var log = tesTask.GetOrAddTesTaskLog().GetOrAddExecutorLog();
+                    var log = tesTask.GetOrAddTesTaskLog().GetOrAddExecutorLog(index);
 
                     if (stderr.Any())
                     {
@@ -528,9 +549,9 @@ namespace TesApi.Web.Events
 
     internal static partial class Extensions
     {
-        public static async ValueTask<AzureBatchTaskState> WithActionAsync(this AzureBatchTaskState state, Func<ValueTask> action)
+        public static async ValueTask<AzureBatchTaskState> WithActionAsync(this AzureBatchTaskState state, Func<AzureBatchTaskState, ValueTask> action)
         {
-            await action();
+            await action(state);
             return state;
         }
     }

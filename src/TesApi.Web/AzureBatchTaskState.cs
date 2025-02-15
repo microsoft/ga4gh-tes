@@ -17,6 +17,7 @@ namespace TesApi.Web
     /// <param name="Failure">Failure information.</param>
     /// <param name="CloudTaskCreationTime"><see cref="Microsoft.Azure.Batch.CloudTask.CreationTime"/>.</param>
     /// <param name="BatchTaskStartTime"><see cref="Microsoft.Azure.Batch.TaskExecutionInformation.StartTime"/>.</param>
+    /// <param name="ExecutorIndex">index of <see cref="TesExecutor"/> referred to in this record.</param>
     /// <param name="ExecutorStartTime"><see cref="TesExecutorLog.StartTime"/>.</param>
     /// <param name="ExecutorEndTime"><see cref="TesExecutorLog.EndTime"/>.</param>
     /// <param name="ExecutorExitCode"><see cref="TesExecutorLog.ExitCode"/>.</param>
@@ -29,6 +30,7 @@ namespace TesApi.Web
         FailureInformation? Failure = default,
         DateTimeOffset? CloudTaskCreationTime = default,
         DateTimeOffset? BatchTaskStartTime = default,
+        int? ExecutorIndex = default,
         DateTimeOffset? ExecutorStartTime = default,
         DateTimeOffset? ExecutorEndTime = default,
         int? ExecutorExitCode = default,

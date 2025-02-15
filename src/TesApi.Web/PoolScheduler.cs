@@ -193,7 +193,7 @@ namespace TesApi.Web
                     await OrchestrateTesTasksOnBatchAsync(
                         $"NodeState ({poolId})",
                         _ => ValueTask.FromResult(tasks.ToAsyncEnumerable()),
-                        (tesTasks, token) => TaskScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, tesTasks.Select(task => statesByTask[task.Id]).ToArray(), token),
+                        (tesTasks, token) => TaskScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, [.. tesTasks.Select(task => statesByTask[task.Id])], token),
                         ex => { requeues.Add(ex.RepositoryItem.Id); return ValueTask.CompletedTask; }, cancellationToken);
 
                     // Fetch updated TesTasks from the repository
@@ -267,10 +267,10 @@ namespace TesApi.Web
 
             {
                 var tasksWithNodeIds = tasks.ToList();
-                taskListWithComputeNodeInfo = tasksWithNodeIds.Where(task => !string.IsNullOrWhiteSpace(task.PreviousComputeNodeId)).ToList();
+                taskListWithComputeNodeInfo = [.. tasksWithNodeIds.Where(task => !string.IsNullOrWhiteSpace(task.PreviousComputeNodeId))];
                 var taskList = tasksWithNodeIds.Select(task => task.CloudTask).ToList();
                 activeTaskList = [.. taskList.Where(ActiveTaskListPredicate).OrderByDescending(task => task.StateTransitionTime?.ToUniversalTime())];
-                completedTaskList = taskList.Where(task => CompletedTaskListPredicate(task, now)).ToList();
+                completedTaskList = [.. taskList.Where(task => CompletedTaskListPredicate(task, now))];
             }
 
             if (taskListWithComputeNodeInfo.Count > 0)
