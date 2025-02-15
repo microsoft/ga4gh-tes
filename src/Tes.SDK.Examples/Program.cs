@@ -43,9 +43,6 @@ namespace TES.SDK.Examples
                 case "bwa":
                     await tesExamples.RunBwaMemAsync();
                     break;
-                case "createtaskignoreerror":
-                    await tesExamples.CreateTaskIgnoreError();
-                    break;
                 default:
                     Console.WriteLine("Unknown command. Please use 'prime' for RunPrimeSieveAsync or 'bwa' for RunBwaMemAsync.");
                     break;

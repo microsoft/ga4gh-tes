@@ -120,32 +120,6 @@ namespace TES.SDK.Examples
             await RunTasks(new List<TesTask> { task });
         }
 
-        internal async Task CreateTaskIgnoreError()
-        {
-            using ITesClient tesClient = new TesClient(_tesCredentials);
-            var task = await tesClient.CreateAndWaitTilDoneAsync(new TesTask()
-            {
-                Name = "CompTest",
-                Description = "CompTest",
-                Executors =
-                [
-                    new()
-                    {
-                        Image = "alpine",
-                        Command = [ "ERROR" ],
-                        IgnoreError = true
-                    },
-                    new()
-                    {
-                        Image = "alpine",
-                        Command = [ "echo", "hello" ]
-                    }
-                ]
-            });
-
-            task = await tesClient.GetTaskAsync(task.Id, view: TesView.FULL);
-        }
-
         private async Task RunTasks(List<TesTask> tasks)
         {
             var sw = Stopwatch.StartNew();
