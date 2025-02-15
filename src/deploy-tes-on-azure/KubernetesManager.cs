@@ -14,11 +14,11 @@ using System.Threading.Tasks;
 using Azure.ResourceManager.ContainerService;
 using Azure.ResourceManager.ManagedServiceIdentities;
 using Azure.Storage.Blobs;
+using CommonUtilities;
 using CommonUtilities.AzureCloud;
 using k8s;
 using k8s.Models;
-using Polly;
-using Polly.Retry;
+using static CommonUtilities.RetryHandler;
 
 namespace TesDeployer
 {
@@ -27,13 +27,17 @@ namespace TesDeployer
     /// </summary>
     public class KubernetesManager
     {
-        private static readonly AsyncRetryPolicy WorkloadReadyRetryPolicy = Policy
-            .Handle<Exception>()
-            .WaitAndRetryAsync(80, retryAttempt => TimeSpan.FromSeconds(15));
+        private static readonly AsyncRetryHandlerPolicy WorkloadReadyRetryPolicy = new RetryPolicyBuilder(Microsoft.Extensions.Options.Options.Create(new CommonUtilities.Options.RetryPolicyOptions()))
+            .PolicyBuilder.OpinionatedRetryPolicy()
+            .WithCustomizedRetryPolicyOptionsWait(80, (_, _) => TimeSpan.FromSeconds(15))
+            .SetOnRetryBehavior()
+            .AsyncBuild();
 
-        private static readonly AsyncRetryPolicy KubeExecRetryPolicy = Policy
-                    .Handle<WebSocketException>(ex => ex.WebSocketErrorCode == WebSocketError.NotAWebSocket)
-                    .WaitAndRetryAsync(200, retryAttempt => TimeSpan.FromSeconds(5));
+        private static readonly AsyncRetryHandlerPolicy KubeExecRetryPolicy = new RetryPolicyBuilder(Microsoft.Extensions.Options.Options.Create(new CommonUtilities.Options.RetryPolicyOptions()))
+            .PolicyBuilder.OpinionatedRetryPolicy(Polly.Policy.Handle<WebSocketException>(ex => ex.WebSocketErrorCode == WebSocketError.NotAWebSocket))
+            .WithCustomizedRetryPolicyOptionsWait(200, (_, _) => TimeSpan.FromSeconds(5))
+            .SetOnRetryBehavior()
+            .AsyncBuild();
 
         private const string NginxIngressRepo = "https://kubernetes.github.io/ingress-nginx";
         private const string NginxIngressVersion = "4.7.1";
@@ -396,7 +400,7 @@ namespace TesDeployer
                 }
             }, cancellationToken);
 
-            if (result.Outcome != OutcomeType.Successful && result.FinalException is not null)
+            if (result.Outcome != Polly.OutcomeType.Successful && result.FinalException is not null)
             {
                 throw result.FinalException;
             }
@@ -673,7 +677,7 @@ namespace TesDeployer
                 }
             }, cancellationToken);
 
-            return result.Outcome == OutcomeType.Successful;
+            return result.Outcome == Polly.OutcomeType.Successful;
         }
 
         public class HelmValues

@@ -100,7 +100,9 @@ IArchive GetLocalGitArchive(System.CommandLine.Invocation.InvocationContext cont
     => AcrBuild.GetLocalGitArchiveAsync(context.ParseResult.GetValueForOption(directoryOption)!);
 
 IArchive GetGitHubArchive(System.CommandLine.Invocation.InvocationContext context)
-    => AcrBuild.GetGitHubArchive(context.ParseResult.GetValueForOption(buildTypeOption), context.ParseResult.GetValueForOption(tagOption)!.ToString(3));
+    => AcrBuild.GetGitHubArchive(context.ParseResult.GetValueForOption(buildTypeOption),
+        context.ParseResult.GetValueForOption(tagOption)!.ToString(3),
+        GitHubArchive.GetAccessTokenProvider());
 
 githubCommand.SetHandler(context => Handler(context, GetGitHubArchive));
 localCommand.SetHandler(context => Handler(context, GetLocalGitArchive));

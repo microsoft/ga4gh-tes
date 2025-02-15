@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
 
-namespace TesApi.Web.Controllers
+namespace TesApi.Web
 {
     /// <summary>
     /// Global filter that handles <see cref="OperationCanceledException"/>.
@@ -28,7 +28,7 @@ namespace TesApi.Web.Controllers
         {
             if (context.Exception is OperationCanceledException)
             {
-                _logger.LogInformation(context.Exception, "Request was cancelled");
+                _logger.LogDebug(context.Exception, "Request was cancelled");
                 // TODO: 503? If so, how to add "Retry-After" and ensure that caching-related headers are not enabling caching of this result?
                 // Alternatively: 429? Microsoft.AspNetCore.Http.StatusCodes.Status429TooManyRequests
                 // If we are overloaded we do want to signal readiness for a retry, but this may also signal the service being shutdown.
