@@ -274,9 +274,9 @@ namespace TesApi.Web
                     {
                         tesTask.SetFailureReason(
                             batchInfo.Failure.Value.Reason,
-                            ([.. batchInfo.Failure.Value.SystemLogs ?? (string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem)
+                            [.. (batchInfo.Failure.Value.SystemLogs ?? (string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem)
                                     ? []
-                                    : Enumerable.Empty<string>().Append(batchInfo.AlternateSystemLogItem))]));
+                                    : Enumerable.Empty<string>().Append(batchInfo.AlternateSystemLogItem)))]);
                     }
                     else if (!(string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem) || tesTask.IsActiveState() || new[] { TesState.COMPLETE, TesState.CANCELED }.Contains(tesTask.State)))
                     {
