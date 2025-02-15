@@ -4,9 +4,9 @@
 using System;
 using System.Text;
 using Microsoft.Extensions.Options;
-using Tes.Models;
+using Tes.Repository.Models;
 
-namespace Tes.Utilities
+namespace Tes.Repository.Utilities
 {
     public static class ConnectionStringUtility
     {

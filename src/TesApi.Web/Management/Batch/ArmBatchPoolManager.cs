@@ -45,18 +45,18 @@ namespace TesApi.Web.Management.Batch
 
                 var batchManagementClient = azureClientsFactory.CreateBatchAccountManagementClient();
 
-                logger.LogInformation("Creating manual batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", nameItem.Value, poolSpec.VmSize, isPreemptable);
+                logger.LogDebug("Creating batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", nameItem.Value, poolSpec.VmSize, isPreemptable);
 
                 _ = await batchManagementClient.GetBatchAccountPools().CreateOrUpdateAsync(Azure.WaitUntil.Completed, nameItem.Value, poolSpec, cancellationToken: cancellationToken);
 
-                logger.LogInformation("Successfully created manual batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", nameItem.Value, poolSpec.VmSize, isPreemptable);
+                logger.LogDebug("Successfully created batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", nameItem.Value, poolSpec.VmSize, isPreemptable);
 
                 return nameItem.Value;
             }
             catch (Exception exc)
             {
-                var batchError = Newtonsoft.Json.JsonConvert.SerializeObject((exc as Microsoft.Azure.Batch.Common.BatchException)?.RequestInformation?.BatchError);
-                logger.LogError(exc, "Error trying to create manual batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}. Batch error: {BatchError}", nameItem.Value, poolSpec.VmSize, isPreemptable, batchError);
+                var batchError = (exc as Azure.RequestFailedException)?.ErrorCode ?? "<unknown>";
+                logger.LogError(exc, "Error trying to create batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}. Batch error: {BatchError}", nameItem.Value, poolSpec.VmSize, isPreemptable, batchError);
                 throw;
             }
         }
@@ -68,19 +68,28 @@ namespace TesApi.Web.Management.Batch
             {
                 var batchManagementClient = azureClientsFactory.CreateBatchAccountManagementClient();
 
-                logger.LogInformation(
+                logger.LogDebug(
                     @"Deleting pool with the id/name:{PoolName} in Batch account:{BatchAccountName}", poolId, azureClientsFactory.BatchAccountInformation.Name);
 
                 _ = await batchManagementClient.GetBatchAccountPools().Get(poolId, cancellationToken: cancellationToken).Value
                     .DeleteAsync(Azure.WaitUntil.Completed, cancellationToken);
 
-                logger.LogInformation(
+                logger.LogDebug(
                     @"Successfully deleted pool with the id/name:{PoolName} in Batch account:{BatchAccountName}", poolId, azureClientsFactory.BatchAccountInformation.Name);
             }
-            catch (Exception e)
+            catch (Exception exc)
             {
-                logger.LogError(e, @"Error trying to delete pool named {PoolName}", poolId);
+                var batchErrorCode = (exc as Azure.RequestFailedException)?.ErrorCode ?? "<unknown>";
 
+                if (batchErrorCode?.Trim().Equals("PoolBeingDeleted", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    // Do not throw if it's a deletion race condition
+                    // Docs: https://learn.microsoft.com/en-us/rest/api/batchservice/Pool/Delete?tabs=HTTP
+
+                    return;
+                }
+
+                logger.LogError(exc, @"Error trying to delete pool named {PoolName}", poolId);
                 throw;
             }
         }

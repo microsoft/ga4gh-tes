@@ -52,6 +52,8 @@ public class BatchQuotaVerifierTests
     {
         var vmInfo = new VirtualMachineInformation();
 
+        batchVmFamilyQuotas = null;
+
         await batchQuotaVerifier.CheckBatchAccountQuotasAsync(vmInfo, true, System.Threading.CancellationToken.None);
 
 #pragma warning disable CA2254 // Template should be a static expression

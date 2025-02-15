@@ -28,7 +28,6 @@ using Tes.Repository;
 using Tes.TaskSubmitters;
 using TesApi.Attributes;
 using TesApi.Web;
-using TesApi.Web.Storage;
 
 namespace TesApi.Controllers
 {
@@ -36,18 +35,18 @@ namespace TesApi.Controllers
     /// API endpoints for <see cref="TesTask"/>s.
     /// </summary>
     /// <remarks>
-    /// Contruct a <see cref="TaskServiceApiController"/>
+    /// Construct a <see cref="TaskServiceApiController"/>
     /// </remarks>
     /// <param name="repository">The main <see cref="TesTask"/> database repository</param>
-    /// <param name="storageAccessProvider">The storage access provider</param>
-    /// <param name="logger">The logger instance</param>
+    /// <param name="taskScheduler">The task scheduler</param>
     /// <param name="serviceInfo">The GA4GH TES service information</param>
-    public class TaskServiceApiController(IRepository<TesTask> repository, IStorageAccessProvider storageAccessProvider, ILogger<TaskServiceApiController> logger, TesServiceInfo serviceInfo)
+    /// <param name="logger">The logger instance</param>
+    public class TaskServiceApiController(IRepository<TesTask> repository, ITaskScheduler taskScheduler, TesServiceInfo serviceInfo, ILogger<TaskServiceApiController> logger)
         : ControllerBase
     {
         //private const string rootExecutionPath = "/cromwell-executions";
         private readonly IRepository<TesTask> repository = repository;
-        private readonly IStorageAccessProvider storageAccessProvider = storageAccessProvider;
+        private readonly ITaskScheduler taskScheduler = taskScheduler;
         private readonly ILogger<TaskServiceApiController> logger = logger;
         private readonly TesServiceInfo serviceInfo = serviceInfo;
 
@@ -82,21 +81,22 @@ namespace TesApi.Controllers
             {
                 if (tesTask.State == TesState.COMPLETE ||
                     tesTask.State == TesState.EXECUTOR_ERROR ||
-                    tesTask.State == TesState.SYSTEM_ERROR)
+                    tesTask.State == TesState.SYSTEM_ERROR ||
+                    tesTask.State == TesState.PREEMPTED ||
+                    tesTask.State == TesState.CANCELING)
                 {
                     logger.LogInformation("Task {TesTask} cannot be canceled because it is in {TesTaskState} state.", id, tesTask.State);
                 }
                 else if (tesTask.State != TesState.CANCELED)
                 {
-                    logger.LogInformation("Canceling task");
-                    tesTask.IsCancelRequested = true;
-                    tesTask.State = TesState.CANCELED;
+                    logger.LogInformation("Canceling task {TesTask}", id);
+                    tesTask.State = TesState.CANCELING;
 
                     try
                     {
                         await repository.UpdateItemAsync(tesTask, cancellationToken);
                     }
-                    catch (RepositoryCollisionException exc)
+                    catch (RepositoryCollisionException<TesTask> exc)
                     {
                         logger.LogError(exc, "RepositoryCollisionException in CancelTask for {TesTask}", id);
                         return Conflict(new { message = "The task could not be updated due to a conflict with the current state; please retry." });
@@ -266,7 +266,8 @@ namespace TesApi.Controllers
             }
 
             logger.LogDebug("Creating task with id {TesTask} state {TesTaskState}", tesTask.Id, tesTask.State);
-            await repository.CreateItemAsync(tesTask, cancellationToken);
+            tesTask = await repository.CreateItemAsync(tesTask, cancellationToken);
+            taskScheduler.QueueTesTask(tesTask);
             return StatusCode(200, new TesCreateTaskResponse { Id = tesTask.Id });
         }
 
@@ -281,7 +282,7 @@ namespace TesApi.Controllers
         [SwaggerResponse(statusCode: 200, type: typeof(TesServiceInfo), description: "")]
         public virtual IActionResult GetServiceInfo()
         {
-            logger.LogInformation("Id: {ServiceInfoId} Name: {ServiceInfoName} Type: {ServiceInfoType} Description: {ServiceInfoDescription} Organization: {ServiceInfoOrganization} ContactUrl: {ServiceInfoContactUrl} DocumentationUrl: {ServiceInfoDocumentationUrl} CreatedAt:{ServiceInfoCreatedAt} UpdatedAt:{ServiceInfoUpdatedAt} Environment: {ServiceInfoEnvironment} Version: {ServiceInfoVersion} Storage: {ServiceInfoStorage} TesResourcesSupportedBackendParameters: {ServiceInfoTesResourcesSupportedBackendParameters}",
+            logger.LogDebug("Id: {ServiceInfoId} Name: {ServiceInfoName} Type: {ServiceInfoType} Description: {ServiceInfoDescription} Organization: {ServiceInfoOrganization} ContactUrl: {ServiceInfoContactUrl} DocumentationUrl: {ServiceInfoDocumentationUrl} CreatedAt:{ServiceInfoCreatedAt} UpdatedAt:{ServiceInfoUpdatedAt} Environment: {ServiceInfoEnvironment} Version: {ServiceInfoVersion} Storage: {ServiceInfoStorage} TesResourcesSupportedBackendParameters: {ServiceInfoTesResourcesSupportedBackendParameters}",
                 serviceInfo.Id, serviceInfo.Name, serviceInfo.Type, serviceInfo.Description, serviceInfo.Organization, serviceInfo.ContactUrl, serviceInfo.DocumentationUrl, serviceInfo.CreatedAt, serviceInfo.UpdatedAt, serviceInfo.Environment, serviceInfo.Version, string.Join(",", serviceInfo.Storage ?? []), string.Join(",", serviceInfo.TesResourcesSupportedBackendParameters ?? []));
             return StatusCode(200, serviceInfo);
         }

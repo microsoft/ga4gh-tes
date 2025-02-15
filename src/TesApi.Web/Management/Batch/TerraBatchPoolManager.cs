@@ -127,14 +127,14 @@ namespace TesApi.Web.Management.Batch
 
             try
             {
-                logger.LogInformation(
+                logger.LogDebug(
                     "Deleting pool with the ID/name: {PoolId}", poolId);
 
                 var wsmResourceId = await GetWsmResourceIdFromBatchPoolMetadataAsync(poolId, cancellationToken);
 
                 await terraWsmApiClient.Value.DeleteBatchPoolAsync(Guid.Parse(terraOptions.WorkspaceId), wsmResourceId, cancellationToken);
 
-                logger.LogInformation(
+                logger.LogDebug(
                     "Successfully deleted pool with the ID/name via WSM: {PoolId}", poolId);
             }
             catch (Exception e)

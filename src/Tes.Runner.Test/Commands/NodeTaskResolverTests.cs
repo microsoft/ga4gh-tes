@@ -133,7 +133,7 @@ namespace Tes.Runner.Test.Commands
         public async Task ResolveNodeTaskAsyncWithUriWhenFileNotExistsDoesDownload()
         {
             ConfigureBlobApiHttpUtils((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(@"{}") }));
-            SetEnvironment(new() { RuntimeOptions = new() });
+            SetEnvironment(new() { RuntimeOptions = new() { MountParentDirectoryPath = Environment.CurrentDirectory + "/task" } });
             taskFile = new(Path.Combine(Environment.CurrentDirectory, CommandFactory.DefaultTaskDefinitionFile));
             Assert.IsFalse(taskFile.Exists);
 
@@ -147,7 +147,7 @@ namespace Tes.Runner.Test.Commands
         public async Task ResolveNodeTaskAsyncWithUriWhenFileNotExistsDoesSave()
         {
             ConfigureBlobApiHttpUtils((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(@"{}") }));
-            SetEnvironment(new() { RuntimeOptions = new() });
+            SetEnvironment(new() { RuntimeOptions = new() { MountParentDirectoryPath = Environment.CurrentDirectory + "/task" } });
             taskFile = new(Path.Combine(Environment.CurrentDirectory, CommandFactory.DefaultTaskDefinitionFile));
             Assert.IsFalse(taskFile.Exists);
 
@@ -165,7 +165,7 @@ namespace Tes.Runner.Test.Commands
             var sendGetCalled = false;
 
             ConfigureBlobApiHttpUtils((request, _) => Task.FromResult(Send(request)), (options, apiVersion) => new MockableResolutionPolicyHandler(ApplySasResolutionToUrl, options, apiVersion));
-            SetEnvironment(new() { RuntimeOptions = new() { Terra = new() }, TransformationStrategy = TransformationStrategy.CombinedTerra });
+            SetEnvironment(new() { RuntimeOptions = new() { Terra = new(), MountParentDirectoryPath = Environment.CurrentDirectory + "/task" }, TransformationStrategy = TransformationStrategy.CombinedTerra });
             taskFile = new(Path.Combine(Environment.CurrentDirectory, CommandFactory.DefaultTaskDefinitionFile));
 
             var result = await nodeTaskResolver.ResolveNodeTaskAsync(file: taskFile, uri: new("http://localhost/task.json"), apiVersion: BlobPipelineOptions.DefaultApiVersion, saveDownload: false);

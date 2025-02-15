@@ -16,7 +16,7 @@ namespace TesApi.Web
     /// <param name="CurrentLowPriority">Gets the number of low-priority compute nodes currently in the pool.</param>
     /// <param name="TargetDedicated">Gets the desired number of dedicated compute nodes in the pool.</param>
     /// <param name="CurrentDedicated">Gets the number of dedicated compute nodes currently in the pool.</param>
-    public record FullBatchPoolAllocationState(AllocationState? AllocationState, DateTime? AllocationStateTransitionTime, bool? AutoScaleEnabled, int? TargetLowPriority, int? CurrentLowPriority, int? TargetDedicated, int? CurrentDedicated)
+    public record struct FullBatchPoolAllocationState(AllocationState? AllocationState, DateTime? AllocationStateTransitionTime, bool? AutoScaleEnabled, int? TargetLowPriority, int? CurrentLowPriority, int? TargetDedicated, int? CurrentDedicated)
     {
     }
 }

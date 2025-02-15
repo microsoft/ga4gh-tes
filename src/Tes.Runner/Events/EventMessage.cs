@@ -27,13 +27,15 @@ public sealed class EventMessage
 
     [JsonPropertyName("resources")]
     public List<string>? Resources { get; set; }
+
     [JsonPropertyName("created")]
     public DateTime Created { get; set; }
+
     [JsonPropertyName("eventVersion")]
-    public string EventVersion { get; set; } = null!;
+    public Version EventVersion { get; set; } = null!;
 
     [JsonPropertyName("eventDataVersion")]
-    public string EventDataVersion { get; set; } = null!;
+    public Version EventDataVersion { get; set; } = null!;
 
     [JsonPropertyName("eventData")]
     public Dictionary<string, string>? EventData { get; set; }

@@ -35,7 +35,19 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetPricingInformationPageAsync_ReturnsSinglePageWithItemsWithMaxPageSize()
         {
-            var page = await pricingApiClient.GetPricingInformationPageAsync(DateTime.UtcNow, 0, "Virtual Machines", "westus2", CancellationToken.None);
+            Models.Pricing.RetailPricingData? page = default;
+
+            try
+            {
+                page = await pricingApiClient.GetPricingInformationPageAsync(DateTime.UtcNow, 0, "Virtual Machines", "westus2", CancellationToken.None);
+            }
+            catch (HttpRequestException ex)
+            {
+                if (ex.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    Assert.Inconclusive();
+                }
+            }
 
             Assert.IsNotNull(page);
             Assert.IsTrue(page.Items.Length > 0);
@@ -60,9 +72,21 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync_ReturnsOnlyNonWindowsAndNonSpotInstances()
         {
-            var pages = await pricingApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync("westus2", CancellationToken.None).ToListAsync();
+            List<Models.Pricing.PricingItem>? pages = default;
 
-            Assert.IsTrue(pages.Count > 0);
+            try
+            {
+                pages = await pricingApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync("westus2", CancellationToken.None).ToListAsync();
+            }
+            catch (HttpRequestException ex)
+            {
+                if (ex.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    Assert.Inconclusive();
+                }
+            }
+
+            Assert.IsTrue(pages?.Count > 0);
             Assert.IsFalse(pages.Any(r => r.productName.Contains(" Windows")));
             Assert.IsFalse(pages.Any(r => r.productName.Contains(" Spot")));
         }

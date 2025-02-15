@@ -50,11 +50,11 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        async Task IAzureProxy.AddBatchTaskAsync(string tesTaskId, CloudTask cloudTask, string jobId, CancellationToken cancellationToken)
+        async Task IAzureProxy.AddBatchTasksAsync(IEnumerable<CloudTask> cloudTasks, string jobId, CancellationToken cancellationToken)
         {
             try
             {
-                await cachingAsyncRetryExceptWhenExists.ExecuteWithRetryAsync(ct => azureProxy.AddBatchTaskAsync(tesTaskId, cloudTask, jobId, ct), cancellationToken);
+                await cachingAsyncRetryExceptWhenExists.ExecuteWithRetryAsync(ct => azureProxy.AddBatchTasksAsync(cloudTasks, jobId, ct), cancellationToken);
             }
             catch (BatchException exc) when (BatchErrorCodeStrings.TaskExists.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
             { }
@@ -72,13 +72,24 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        async Task IAzureProxy.DeleteBatchTaskAsync(string taskId, string poolId, CancellationToken cancellationToken)
+        async Task IAzureProxy.DeleteBatchTaskAsync(string cloudTaskId, string jobId, CancellationToken cancellationToken)
         {
             try
             {
-                await cachingAsyncRetryExceptWhenNotFound.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchTaskAsync(taskId, poolId, ct), cancellationToken);
+                await cachingAsyncRetryExceptWhenNotFound.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchTaskAsync(cloudTaskId, jobId, ct), cancellationToken);
             }
-            catch (BatchException exc) when (BatchErrorCodeStrings.TaskNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
+            catch (BatchException exc) when (BatchErrorCodeStrings.TaskNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase) || BatchErrorCodeStrings.JobNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
+            { }
+        }
+
+        /// <inheritdoc/>
+        public async Task TerminateBatchTaskAsync(string tesTaskId, string jobId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await cachingAsyncRetryExceptWhenNotFound.ExecuteWithRetryAsync(ct => azureProxy.TerminateBatchTaskAsync(tesTaskId, jobId, ct), cancellationToken);
+            }
+            catch (BatchException exc) when (BatchErrorCodeStrings.TaskNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase) || BatchErrorCodeStrings.JobNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
             { }
         }
 
@@ -102,9 +113,6 @@ namespace TesApi.Web
         Task<bool> IAzureProxy.BlobExistsAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken) => cachingAsyncRetry.ExecuteWithRetryAsync(ct => azureProxy.BlobExistsAsync(blobAbsoluteUri, ct), cancellationToken);
 
         /// <inheritdoc/>
-        Task<IEnumerable<string>> IAzureProxy.GetActivePoolIdsAsync(string prefix, TimeSpan minAge, CancellationToken cancellationToken) => cachingAsyncRetry.ExecuteWithRetryAsync(ct => azureProxy.GetActivePoolIdsAsync(prefix, minAge, ct), cancellationToken);
-
-        /// <inheritdoc/>
         IAsyncEnumerable<CloudPool> IAzureProxy.GetActivePoolsAsync(string hostName) => cachingRetry.ExecuteWithRetry(() => azureProxy.GetActivePoolsAsync(hostName));
 
 
@@ -116,12 +124,6 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         int IAzureProxy.GetBatchActivePoolCount() => cachingRetry.ExecuteWithRetry(azureProxy.GetBatchActivePoolCount);
-
-        /// <inheritdoc/>
-        Task<AzureBatchJobAndTaskState> IAzureProxy.GetBatchJobAndTaskStateAsync(Tes.Models.TesTask tesTask, CancellationToken cancellationToken) => cachingAsyncRetry.ExecuteWithRetryAsync(ct => azureProxy.GetBatchJobAndTaskStateAsync(tesTask, ct), cancellationToken);
-
-        /// <inheritdoc/>
-        Task<IEnumerable<string>> IAzureProxy.GetPoolIdsReferencedByJobsAsync(CancellationToken cancellationToken) => cachingAsyncRetry.ExecuteWithRetryAsync(azureProxy.GetPoolIdsReferencedByJobsAsync, cancellationToken);
 
         /// <inheritdoc/>
         Task<BlobModels.UserDelegationKey> IAzureProxy.GetStorageAccountUserKeyAsync(StorageAccountInfo storageAccountInfo, CancellationToken cancellationToken)
@@ -148,7 +150,13 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        Task<IEnumerable<BlobModels.BlobItem>> IAzureProxy.ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken) => cachingAsyncRetry.ExecuteWithRetryAsync(ct => azureProxy.ListBlobsAsync(directoryUri, ct), cancellationToken);
+        IAsyncEnumerable<BlobNameAndUri> IAzureProxy.ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken) => cachingAsyncRetry.ExecuteWithRetryAsync(() => azureProxy.ListBlobsAsync(directoryUri, cancellationToken), cachingRetry);
+
+        /// <inheritdoc/>
+        IAsyncEnumerable<Azure.Storage.Blobs.Models.BlobItem> IAzureProxy.ListBlobsWithTagsAsync(Uri containerUri, string prefix, CancellationToken cancellationToken) => cachingAsyncRetry.ExecuteWithRetryAsync(() => azureProxy.ListBlobsWithTagsAsync(containerUri, prefix, cancellationToken), cachingRetry);
+
+        /// <inheritdoc/>
+        Task IAzureProxy.SetBlobTags(Uri blobAbsoluteUri, IDictionary<string, string> tags, CancellationToken cancellationToken) => cachingAsyncRetry.ExecuteWithRetryAsync(ct => azureProxy.SetBlobTags(blobAbsoluteUri, tags, ct), cancellationToken);
 
         /// <inheritdoc/>
         Task IAzureProxy.UploadBlobAsync(Uri blobAbsoluteUri, string content, CancellationToken cancellationToken) => cachingAsyncRetry.ExecuteWithRetryAsync(ct => azureProxy.UploadBlobAsync(blobAbsoluteUri, content, ct), cancellationToken);
@@ -170,7 +178,8 @@ namespace TesApi.Web
             => cachingAsyncRetry.ExecuteWithRetryAndCachingAsync(
                 $"{nameof(CachingWithRetriesAzureProxy)}:{poolId}",
                 ct => azureProxy.GetFullAllocationStateAsync(poolId, ct),
-                DateTimeOffset.Now.Add(BatchPoolService.RunInterval).Subtract(TimeSpan.FromSeconds(1)), cancellationToken);
+                DateTimeOffset.UtcNow.Add(PoolScheduler.RunInterval.Divide(2)),
+                cancellationToken);
 
         /// <inheritdoc/>
         IAsyncEnumerable<ComputeNode> IAzureProxy.ListComputeNodesAsync(string poolId, DetailLevel detailLevel) => cachingAsyncRetry.ExecuteWithRetryAsync(() => azureProxy.ListComputeNodesAsync(poolId, detailLevel), cachingRetry);
@@ -179,9 +188,9 @@ namespace TesApi.Web
         IAsyncEnumerable<CloudTask> IAzureProxy.ListTasksAsync(string jobId, DetailLevel detailLevel) => cachingAsyncRetry.ExecuteWithRetryAsync(() => azureProxy.ListTasksAsync(jobId, detailLevel), cachingRetry);
 
         /// <inheritdoc/>
-        Task IAzureProxy.DisableBatchPoolAutoScaleAsync(string poolId, CancellationToken cancellationToken) => azureProxy.DisableBatchPoolAutoScaleAsync(poolId, cancellationToken);
+        Task IAzureProxy.DisableBatchPoolAutoScaleAsync(string poolId, CancellationToken cancellationToken) => cachingAsyncRetry.ExecuteWithRetryAsync(ct => azureProxy.DisableBatchPoolAutoScaleAsync(poolId, ct), cancellationToken);
 
         /// <inheritdoc/>
-        Task IAzureProxy.EnableBatchPoolAutoScaleAsync(string poolId, bool preemptable, TimeSpan interval, IAzureProxy.BatchPoolAutoScaleFormulaFactory formulaFactory, CancellationToken cancellationToken) => azureProxy.EnableBatchPoolAutoScaleAsync(poolId, preemptable, interval, formulaFactory, cancellationToken);
+        Task IAzureProxy.EnableBatchPoolAutoScaleAsync(string poolId, bool preemptable, TimeSpan interval, IAzureProxy.BatchPoolAutoScaleFormulaFactory formulaFactory, Func<int, ValueTask<int>> currentTargetFunc, CancellationToken cancellationToken) => cachingAsyncRetry.ExecuteWithRetryAsync(ct => azureProxy.EnableBatchPoolAutoScaleAsync(poolId, preemptable, interval, formulaFactory, currentTargetFunc, ct), cancellationToken);
     }
 }

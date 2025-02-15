@@ -39,7 +39,7 @@ namespace TesApi.Web
         {
             try
             {
-                logger.LogInformation("Executing allowed vm sizes config setup");
+                logger.LogDebug("Executing allowed vm sizes config setup");
                 allowedVmSizes = await configUtils.ProcessAllowedVmSizesConfigurationFileAsync(cancellationToken);
             }
             catch (Exception e)

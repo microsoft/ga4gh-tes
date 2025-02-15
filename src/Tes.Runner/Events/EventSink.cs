@@ -26,7 +26,7 @@ namespace Tes.Runner.Events
 
         public void Start()
         {
-            logger.LogDebug("Starting events processing handler");
+            logger.LogTrace("Starting events processing handler");
 
             eventHandlerTask = Task.Run(async () => await EventHandlerAsync());
         }
@@ -41,7 +41,7 @@ namespace Tes.Runner.Events
 
             if (eventHandlerTask.IsCompleted)
             {
-                logger.LogDebug("Task already completed");
+                logger.LogTrace("Task already completed");
                 return;
             }
 
@@ -51,19 +51,17 @@ namespace Tes.Runner.Events
             await eventHandlerTask.WaitAsync(TimeSpan.FromSeconds(StopWaitDurationInSeconds));
         }
 
-        protected IDictionary<string, string> ToEventTag(EventMessage eventMessage)
+        protected static IDictionary<string, string> ToEventTag(EventMessage eventMessage)
         {
             return new Dictionary<string, string>
             {
-                { "event_name", eventMessage.Name },
-                { "event_id", eventMessage.Id },
-                { "entity_type", eventMessage.EntityType },
-                { "task_id", eventMessage.EntityId },
-                { "workflow_id", eventMessage.CorrelationId },
-                //format date to ISO 8601, which is URL friendly
+                { "task-id", eventMessage.EntityId },
+                { "workflow-id", eventMessage.CorrelationId },
+                { "event-name", eventMessage.Name },
                 { "created", eventMessage.Created.ToString(Iso8601DateFormat) }
             };
         }
+
         private async Task EventHandlerAsync()
         {
             while (await events.Reader.WaitToReadAsync())
@@ -72,11 +70,11 @@ namespace Tes.Runner.Events
                 {
                     try
                     {
-                        logger.LogDebug($"Handling event. Event Name: {eventMessage.Name} Event ID: {eventMessage.Id} ");
+                        logger.LogTrace($"Handling event. Event Name: {eventMessage.Name} Event ID: {eventMessage.Id} ");
 
                         await HandleEventAsync(eventMessage);
 
-                        logger.LogDebug($"Event handled. Event Name: {eventMessage.Name} Event ID: {eventMessage.Id} ");
+                        logger.LogTrace($"Event handled. Event Name: {eventMessage.Name} Event ID: {eventMessage.Id} ");
                     }
                     catch (Exception e)
                     {

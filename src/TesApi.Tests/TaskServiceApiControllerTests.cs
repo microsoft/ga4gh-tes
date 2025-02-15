@@ -23,6 +23,11 @@ namespace TesApi.Tests
     [TestClass]
     public class TaskServiceApiControllerTests
     {
+        private void SetRepository(Mock<IRepository<TesTask>> mock)
+        {
+            mock.Setup(x => x.CreateItemAsync(It.IsAny<TesTask>(), It.IsAny<CancellationToken>())).Returns<TesTask, CancellationToken>((tesTask, _) => Task.FromResult(tesTask));
+        }
+
         [TestCategory("TES 1.1")]
         [TestMethod]
         public async Task TES_Supports_BackendParameter_vmsize()
@@ -40,7 +45,7 @@ namespace TesApi.Tests
                 Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
-            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: SetRepository);
             var controller = services.GetT();
 
             var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as ObjectResult;
@@ -70,7 +75,7 @@ namespace TesApi.Tests
                 Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
-            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: SetRepository);
             var controller = services.GetT();
 
             var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as ObjectResult;
@@ -100,7 +105,7 @@ namespace TesApi.Tests
                 Resources = new() { BackendParameters = backendParameters }
             };
 
-            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: SetRepository);
             var controller = services.GetT();
 
             var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as ObjectResult;
@@ -132,7 +137,7 @@ namespace TesApi.Tests
                 Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
-            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: SetRepository);
             var controller = services.GetT();
 
             var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as BadRequestObjectResult;
@@ -164,7 +169,7 @@ namespace TesApi.Tests
                 Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
-            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: SetRepository);
             var controller = services.GetT();
 
             var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as BadRequestObjectResult;
@@ -178,7 +183,7 @@ namespace TesApi.Tests
         public async Task CreateTaskAsync_ReturnsBadRequest_ForInvalidId()
         {
             var tesTask = new TesTask { Id = "ClientProvidedId", Executors = [new() { Image = "ubuntu", Command = ["cmd"] }] };
-            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: SetRepository);
             var controller = services.GetT();
 
             var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as BadRequestObjectResult;
@@ -191,7 +196,7 @@ namespace TesApi.Tests
         public async Task CreateTaskAsync_ReturnsBadRequest_ForMissingDockerImage()
         {
             TesTask tesTask = new() { Executors = [new() { Command = ["cmd"] }] };
-            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: SetRepository);
             var controller = services.GetT();
 
             var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as ObjectResult;
@@ -204,7 +209,7 @@ namespace TesApi.Tests
         public async Task CreateTaskAsync_ReturnsBadRequest_ForRelativeInputPath()
         {
             TesTask tesTask = new() { Inputs = [new() { Path = "xyz/path" }], Executors = [new() { Image = "image", Command = ["cmd"] }] };
-            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: SetRepository);
             var controller = services.GetT();
 
             var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as ObjectResult;
@@ -217,7 +222,7 @@ namespace TesApi.Tests
         public async Task CreateTaskAsync_ReturnsBadRequest_ForInputMissingContentAndPath()
         {
             TesTask tesTask = new() { Inputs = [new() { Url = "http://host/path" }], Executors = [new() { Image = "image", Command = ["cmd"] }] };
-            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: SetRepository);
             var controller = services.GetT();
 
             var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as ObjectResult;
@@ -230,7 +235,7 @@ namespace TesApi.Tests
         public async Task CreateTaskAsync_ReturnsBadRequest_ForInputContentAndPath()
         {
             TesTask tesTask = new() { Inputs = [new() { Url = "http://host/path", Path = "/path/file", Content = "content" }], Executors = [new() { Image = "image", Command = ["cmd"] }] };
-            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: SetRepository);
             var controller = services.GetT();
 
             var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as ObjectResult;
@@ -244,7 +249,7 @@ namespace TesApi.Tests
         {
             var tesTask = new TesTask() { Executors = [new() { Image = "ubuntu", Command = ["cmd"] }] };
 
-            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: SetRepository);
             var controller = services.GetT();
 
             var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as ObjectResult;
@@ -306,12 +311,12 @@ namespace TesApi.Tests
             {
                 // Mock TryGetItemAsync to return true and provide a TesTask object
                 r.Setup(repo => repo.TryGetItemAsync(tesTaskId, It.IsAny<CancellationToken>(), It.IsAny<Action<TesTask>>()))
-                .Callback((string id, CancellationToken ct, Action<TesTask> action) => action(mockTesTask))
-                .ReturnsAsync(true);
+                    .Callback((string id, CancellationToken ct, Action<TesTask> action) => action(mockTesTask))
+                    .ReturnsAsync(true);
 
                 // Mock UpdateItemAsync to throw a RepositoryCollisionException
                 r.Setup(repo => repo.UpdateItemAsync(It.IsAny<TesTask>(), It.IsAny<CancellationToken>()))
-                .ThrowsAsync(new RepositoryCollisionException());
+                    .ThrowsAsync(new RepositoryCollisionException<TesTask>(default));
             });
 
             var controller = services.GetT();
@@ -340,7 +345,7 @@ namespace TesApi.Tests
 
             Assert.IsNotNull(result);
             Assert.AreEqual(200, result.StatusCode);
-            Assert.AreEqual(TesState.CANCELED, tesTask.State);
+            Assert.AreEqual(TesState.CANCELING, tesTask.State);
             services.TesTaskRepository.Verify(x => x.UpdateItemAsync(tesTask, It.IsAny<CancellationToken>()));
         }
 
@@ -588,7 +593,7 @@ namespace TesApi.Tests
                     new(null, []));
                 r.Setup(repo => repo
                     .JsonFormattableRawString(It.IsAny<string>(), It.IsAny<FormattableString>()))
-                .Returns((string property, FormattableString sql) => new PostgreSqlCachingRepository<TesTaskDatabaseItem>.PrependableFormattableString($"{property}:", sql));
+                .Returns((string property, FormattableString sql) => new Tes.Repository.Utilities.PrependableFormattableString($"{property}:", sql));
             });
 
         private static Task<IActionResult> ListTasksWithTagArgumentsAsync(TaskServiceApiController controller, string query)
@@ -691,7 +696,7 @@ namespace TesApi.Tests
                 Executors = [new() { Image = "ubuntu", Command = ["cmd"] }]
             };
 
-            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: SetRepository);
             var controller = services.GetT();
 
             await controller.CreateTaskAsync(tesTask1, CancellationToken.None);
@@ -754,7 +759,7 @@ namespace TesApi.Tests
                 ]
             };
 
-            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: SetRepository);
             var controller = services.GetT();
 
             await controller.CreateTaskAsync(tesTask, CancellationToken.None);
@@ -783,7 +788,7 @@ namespace TesApi.Tests
                 ]
             };
 
-            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: SetRepository);
             var controller = services.GetT();
 
             await controller.CreateTaskAsync(tesTask, CancellationToken.None);
@@ -812,7 +817,7 @@ namespace TesApi.Tests
                 ]
             };
 
-            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: SetRepository);
             var controller = services.GetT();
 
             await controller.CreateTaskAsync(tesTask, CancellationToken.None);

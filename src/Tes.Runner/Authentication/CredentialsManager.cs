@@ -3,12 +3,12 @@
 
 using Azure.Core;
 using Azure.Identity;
+using CommonUtilities;
 using Microsoft.Extensions.Logging;
-using Polly;
-using Polly.Retry;
 using Tes.Runner.Exceptions;
 using Tes.Runner.Models;
 using Tes.Runner.Transfer;
+using static CommonUtilities.RetryHandler;
 
 namespace Tes.Runner.Authentication
 {
@@ -16,24 +16,16 @@ namespace Tes.Runner.Authentication
     {
         private readonly ILogger logger = PipelineLoggerFactory.Create<CredentialsManager>();
 
-        private readonly RetryPolicy retryPolicy;
+        private readonly RetryHandlerPolicy retryPolicy;
         private const int MaxRetryCount = 7;
         private const int ExponentialBackOffExponent = 2;
 
         public CredentialsManager()
         {
-            retryPolicy = Policy
-                    .Handle<Exception>()
-                    .WaitAndRetry(MaxRetryCount,
-                    SleepDurationHandler);
-        }
-
-        private TimeSpan SleepDurationHandler(int attempt)
-        {
-            logger.LogInformation("Attempt {Attempt} to get token credential", attempt);
-            var duration = TimeSpan.FromSeconds(Math.Pow(ExponentialBackOffExponent, attempt));
-            logger.LogInformation("Waiting {Duration} before retrying", duration);
-            return duration;
+            retryPolicy = new RetryPolicyBuilder(Microsoft.Extensions.Options.Options.Create(new CommonUtilities.Options.RetryPolicyOptions() { ExponentialBackOffExponent = ExponentialBackOffExponent, MaxRetryCount = MaxRetryCount }))
+                .DefaultRetryPolicyBuilder()
+                .SetOnRetryBehavior(logger)
+                .SyncBuild();
         }
 
         public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions, string? tokenScope = default)
@@ -56,7 +48,7 @@ namespace Tes.Runner.Authentication
             tokenScope ??= runtimeOptions.AzureEnvironmentConfig!.TokenScope!;
             try
             {
-                return retryPolicy.Execute(() => GetTokenCredentialImpl(managedIdentityResourceId, tokenScope, runtimeOptions.AzureEnvironmentConfig!.AzureAuthorityHostUrl!));
+                return retryPolicy.ExecuteWithRetry(() => GetTokenCredentialImpl(managedIdentityResourceId, tokenScope, runtimeOptions.AzureEnvironmentConfig!.AzureAuthorityHostUrl!));
             }
             catch
             {
@@ -73,7 +65,7 @@ namespace Tes.Runner.Authentication
 
                 if (!string.IsNullOrWhiteSpace(managedIdentityResourceId))
                 {
-                    logger.LogInformation("Token credentials with Managed Identity and resource ID: {NodeManagedIdentityResourceId}", managedIdentityResourceId);
+                    logger.LogDebug("Token credentials with Managed Identity and resource ID: {NodeManagedIdentityResourceId}", managedIdentityResourceId);
                     var tokenCredentialOptions = new TokenCredentialOptions { AuthorityHost = authorityHost };
 
                     tokenCredential = new ManagedIdentityCredential(
@@ -82,7 +74,7 @@ namespace Tes.Runner.Authentication
                 }
                 else
                 {
-                    logger.LogInformation("Token credentials with DefaultAzureCredential");
+                    logger.LogDebug("Token credentials with DefaultAzureCredential");
                     var defaultAzureCredentialOptions = new DefaultAzureCredentialOptions { AuthorityHost = authorityHost };
                     tokenCredential = new DefaultAzureCredential(defaultAzureCredentialOptions);
                 }

@@ -85,7 +85,7 @@ namespace TesApi.Web.Management
                 return await GetVmSizesAndPricesImplAsync(region, cancellationToken);
             }
 
-            logger.LogInformation("Trying to get pricing information from the cache for region: {Region}.", region);
+            logger.LogDebug("Trying to get pricing information from the cache for region: {Region}.", region);
 
             return await appCache.GetOrCreateAsync(VmSizesAndPricesKey(region), async entry => { entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1); return await GetVmSizesAndPricesImplAsync(region, cancellationToken); });
         }
@@ -103,26 +103,26 @@ namespace TesApi.Web.Management
                 return await GetStorageDisksAndPricesImplAsync(region, capacity, maxDataDiskCount, cancellationToken);
             }
 
-            logger.LogInformation("Trying to get pricing information from the cache for region: {Region}.", region);
+            logger.LogDebug("Trying to get pricing information from the cache for region: {Region}.", region);
 
             return await appCache.GetOrCreateAsync(StorageDisksAndPricesKey(region, capacity, maxDataDiskCount), async entry => { entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1); return await GetStorageDisksAndPricesImplAsync(region, capacity, maxDataDiskCount, cancellationToken); });
         }
 
         private async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesImplAsync(string region, CancellationToken cancellationToken)
         {
-            logger.LogInformation("Getting VM sizes and price information for region: {Region}", region);
+            logger.LogDebug("Getting VM sizes and price information for region: {Region}", region);
 
             var localVmSizeInfoForBatchSupportedSkus = (await GetLocalDataAsync<VirtualMachineInformation>($"BatchSupportedVmSizeInformation_{azureCloudConfig.Name.ToUpperInvariant()}.json", "Reading local VM size information from file: {LocalVmPriceList}", cancellationToken))
                 .Where(x => x.RegionsAvailable.Contains(region, StringComparer.OrdinalIgnoreCase))
                 .ToList();
 
-            logger.LogInformation("localVmSizeInfoForBatchSupportedSkus.Count: {CountOfPrepreparedSkuRecordsInRegion}", localVmSizeInfoForBatchSupportedSkus.Count);
+            logger.LogDebug("localVmSizeInfoForBatchSupportedSkus.Count: {CountOfPrepreparedSkuRecordsInRegion}", localVmSizeInfoForBatchSupportedSkus.Count);
 
             try
             {
                 var pricingItems = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(region, cancellationToken).ToListAsync(cancellationToken);
 
-                logger.LogInformation("Received {CountOfSkuPrice} SKU pricing items", pricingItems.Count);
+                logger.LogDebug("Received {CountOfSkuPrice} SKU pricing items", pricingItems.Count);
 
                 if (pricingItems == null || pricingItems.Count == 0)
                 {
@@ -178,16 +178,16 @@ namespace TesApi.Web.Management
 
         private async Task<List<VmDataDisks>> GetStorageDisksAndPricesImplAsync(string region, double capacity, int maxDataDiskCount, CancellationToken cancellationToken)
         {
-            logger.LogInformation("Getting VM sizes and price information for region: {Region}", region);
+            logger.LogDebug("Getting VM sizes and price information for region: {Region}", region);
 
             var localStorageDisksAndPrices = (await GetLocalDataAsync<StorageDiskPriceInformation>("BatchDataDiskInformation.json", "Reading local storage disk information from file: {LocalStoragePriceList}", cancellationToken)).Where(disk => disk.CapacityInGiB > 0).ToList();
 
-            logger.LogInformation("localStorageDisksAndPrices.Count: {CountOfLocalStorageDisks}", localStorageDisksAndPrices.Count);
+            logger.LogDebug("localStorageDisksAndPrices.Count: {CountOfLocalStorageDisks}", localStorageDisksAndPrices.Count);
 
             try
             {
                 var pricingItems = await (appCache?.GetOrCreateAsync(StorageDisksAndPricesKey(region), async entry => { entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1); return await GetPricingData(priceApiClient, region, cancellationToken); }) ?? GetPricingData(priceApiClient, region, cancellationToken));
-                logger.LogInformation("Received {CountOfDataDiskPrice} Storage pricing items", pricingItems.Count);
+                logger.LogDebug("Received {CountOfDataDiskPrice} Storage pricing items", pricingItems.Count);
 
                 if (pricingItems.Count == 0)
                 {
@@ -249,7 +249,7 @@ namespace TesApi.Web.Management
         {
             var filePath = Path.Combine(AppContext.BaseDirectory, fileName);
 #pragma warning disable CA2254 // Template should be a static expression
-            logger.LogInformation(logMessage, filePath);
+            logger.LogDebug(logMessage, filePath);
 #pragma warning restore CA2254 // Template should be a static expression
 
             return JsonConvert.DeserializeObject<List<T>>(

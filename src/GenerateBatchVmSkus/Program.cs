@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using Azure;

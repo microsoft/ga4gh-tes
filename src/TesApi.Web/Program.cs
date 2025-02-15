@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Azure.ResourceManager;
 using CommonUtilities;
 using CommonUtilities.AzureCloud;
+using CommonUtilities.Options;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -109,6 +110,14 @@ namespace TesApi.Web
                 {
                     if (context.HostingEnvironment.IsProduction())
                     {
+                        // This configures Container logging in AKS
+                        logging.AddSimpleConsole(options =>
+                        {
+                            options.IncludeScopes = true;
+                            options.SingleLine = true;
+                            options.UseUtcTimestamp = true;
+                        });
+                        logging.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Warning);
 
                         if (!string.IsNullOrEmpty(applicationInsightsOptions?.ConnectionString))
                         {
@@ -152,10 +161,18 @@ namespace TesApi.Web
 
             static AzureCloudConfig GetAzureCloudConfig(IConfiguration configuration)
             {
-                var tesOptions = new GeneralOptions();
+                GeneralOptions tesOptions = new();
                 configuration.Bind(GeneralOptions.SectionName, tesOptions);
                 Console.WriteLine($"tesOptions.AzureCloudName: {tesOptions.AzureCloudName}");
-                return AzureCloudConfig.FromKnownCloudNameAsync(cloudName: tesOptions.AzureCloudName, azureCloudMetadataUrlApiVersion: tesOptions.AzureCloudMetadataUrlApiVersion).Result;
+
+                RetryPolicyOptions retryPolicy = new();
+                configuration.Bind(RetryPolicyOptions.SectionName, retryPolicy);
+
+                return AzureCloudConfig.FromKnownCloudNameAsync(
+                        cloudName: tesOptions.AzureCloudName,
+                        azureCloudMetadataUrlApiVersion: tesOptions.AzureCloudMetadataUrlApiVersion,
+                        retryPolicyOptions: Microsoft.Extensions.Options.Options.Create(retryPolicy))
+                    .Result;
             }
         }
     }

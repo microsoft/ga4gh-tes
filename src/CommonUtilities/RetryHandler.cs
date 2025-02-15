@@ -6,7 +6,7 @@ using Polly;
 namespace CommonUtilities;
 
 /// <summary>
-/// Utility class that facilitates the retry policy implementations for HTTP clients. 
+/// Utility class that facilitates the retry policy implementations for HTTP clients.
 /// </summary>
 public static class RetryHandler
 {
@@ -14,10 +14,15 @@ public static class RetryHandler
     /// Polly Context key for caller method name
     /// </summary>
     public const string CallerMemberNameKey = $"Tes.ApiClients.{nameof(RetryHandler)}.CallerMemberName";
+
     /// <summary>
     /// Polly Context key for backup skip increment setting
     /// </summary>
     public const string BackupSkipProvidedIncrementKey = $"Tes.ApiClients.{nameof(RetryHandler)}.BackupSkipProvidedIncrementCount";
+
+    /// Polly Context key combined sleep method and enumerable duration policies
+    /// </summary>
+    public const string CombineSleepDurationsKey = $"Tes.ApiClients.{nameof(RetryHandler)}.CombineSleepDurations";
 
     #region RetryHandlerPolicies
     /// <summary>
@@ -100,7 +105,6 @@ public static class RetryHandler
         /// <remarks>For mocking</remarks>
         public AsyncRetryHandlerPolicy() { }
 
-
         /// <summary>
         /// Executes a delegate with the configured async policy.
         /// </summary>
@@ -155,6 +159,20 @@ public static class RetryHandler
             ArgumentNullException.ThrowIfNull(action);
 
             return retryPolicy.ExecuteAsync((_, ct) => action(ct), PrepareContext(caller), cancellationToken);
+        }
+
+        /// <summary>
+        /// Executes the specified asynchronous action within the policy and returns the captured result.
+        /// </summary>
+        /// <param name="action">The action to perform.</param>
+        /// <param name="cancellationToken">A cancellation token which can be used to cancel the action.  When a retry policy in use, also cancels any further retries.</param>
+        /// <param name="caller">Name of method originating the retriable operation.</param>
+        /// <returns>The captured result.</returns>
+        public virtual Task<PolicyResult> ExecuteAndCaptureAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+
+            return retryPolicy.ExecuteAndCaptureAsync((_, token) => action(token), PrepareContext(caller), cancellationToken);
         }
     }
 
@@ -277,6 +295,6 @@ public static class RetryHandler
 
     public static Context PrepareContext(string? caller) => new()
     {
-        [CallerMemberNameKey] = caller
+        [CallerMemberNameKey] = caller ?? throw new ArgumentNullException(nameof(caller))
     };
 }

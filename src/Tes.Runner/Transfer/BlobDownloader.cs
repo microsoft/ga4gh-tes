@@ -108,7 +108,7 @@ public class BlobDownloader : BlobOperationPipeline
     /// <returns></returns>
     public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash, string? contentMd5)
     {
-        Logger.LogInformation($"Completed download. Total bytes: {length:n0} Filename: {fileName}");
+        Logger.LogDebug($"Completed download. Total bytes: {length:n0} Filename: {fileName}");
 
         return Task.CompletedTask;
     }

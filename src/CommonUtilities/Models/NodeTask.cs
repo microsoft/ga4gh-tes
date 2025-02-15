@@ -15,12 +15,12 @@ namespace Tes.Runner.Models
         public List<string>? ContainerVolumes { get; set; }
         public List<FileInput>? Inputs { get; set; }
         public List<FileOutput>? Outputs { get; set; }
+        public List<FileOutput>? TaskOutputs { get; set; }
         public string? MetricsFilename { get; set; }
         public string? InputsMetricsFormat { get; set; }
         public string? OutputsMetricsFormat { get; set; }
         public List<string>? TimestampMetricsFormats { get; set; }
         public List<string>? BashScriptMetricsFormats { get; set; }
-        public string? MountParentDirectoryPath { get; set; }
         public RuntimeOptions RuntimeOptions { get; set; } = null!;
     }
 
@@ -80,6 +80,7 @@ namespace Tes.Runner.Models
         public AzureEnvironmentConfig? AzureEnvironmentConfig { get; set; }
 
         public bool? SetContentMd5OnUpload { get; set; }
+        public string? MountParentDirectoryPath { get; set; }
     }
 
     public class StorageTargetLocation

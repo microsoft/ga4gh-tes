@@ -20,14 +20,18 @@ namespace Tes.ApiClients
         private static readonly HttpClient HttpClient = new();
         private readonly TokenCredential tokenCredential = null!;
         private readonly SHA256 sha256 = SHA256.Create();
-        /// <summary>
-        /// Logger instance
-        /// </summary>
-        protected readonly ILogger Logger = null!;
         private readonly string tokenScope = null!;
         private readonly SemaphoreSlim semaphore = new(1, 1);
         private AccessToken accessToken;
 
+        /// <summary>
+        /// Logger instance
+        /// </summary>
+        protected readonly ILogger Logger = null!;
+
+        /// <summary>
+        /// <see cref="HttpResponseMessage"/> retry handler
+        /// </summary>
         protected readonly CachingRetryHandler.CachingAsyncRetryHandlerPolicy<HttpResponseMessage> cachingRetryHandler;
 
         /// <summary>
@@ -81,7 +85,8 @@ namespace Tes.ApiClients
         /// </summary>
         /// <returns><see cref="RetryHandler.OnRetryHandler{HttpResponseMessage}"/></returns>
         private RetryHandler.OnRetryHandler<HttpResponseMessage> LogRetryErrorOnRetryHttpResponseMessageHandler()
-            => (result, timeSpan, retryCount, correlationId, caller) =>
+        {
+            return new((result, timeSpan, retryCount, correlationId, caller) =>
             {
                 if (result.Exception is null)
                 {
@@ -93,7 +98,8 @@ namespace Tes.ApiClients
                     Logger?.LogError(result.Exception, @"Retrying in {Method} due to '{Message}': RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId}",
                         caller, result.Exception.Message, retryCount, timeSpan.ToString("c"), correlationId.ToString("D"));
                 }
-            };
+            });
+        }
 
         /// <summary>
         /// Sends request with a retry policy
@@ -105,7 +111,8 @@ namespace Tes.ApiClients
         /// <returns></returns>
         protected async Task<HttpResponseMessage> HttpSendRequestWithRetryPolicyAsync(
             Func<HttpRequestMessage> httpRequestFactory, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
-            => await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
+        {
+            return await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
             {
                 var request = httpRequestFactory();
 
@@ -116,6 +123,7 @@ namespace Tes.ApiClients
 
                 return await HttpClient.SendAsync(request, ct);
             }, cancellationToken);
+        }
 
         /// <summary>
         /// Sends a Http Get request to the URL and deserializes the body response to the specified type
@@ -128,14 +136,15 @@ namespace Tes.ApiClients
         /// <typeparam name="TResponse">Response's content deserialization type.</typeparam>
         /// <returns></returns>
         protected async Task<TResponse> HttpGetRequestAsync<TResponse>(Uri requestUrl, bool setAuthorizationHeader,
-            bool cacheResults, JsonTypeInfo<TResponse> typeInfo, CancellationToken cancellationToken)
+            bool cacheResults, JsonTypeInfo<TResponse> typeInfo, CancellationToken cancellationToken,
+            [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
         {
             if (cacheResults)
             {
-                return await HttpGetRequestWithCachingAndRetryPolicyAsync(requestUrl, typeInfo, cancellationToken, setAuthorizationHeader);
+                return await HttpGetRequestWithCachingAndRetryPolicyAsync(requestUrl, typeInfo, cancellationToken, setAuthorizationHeader, caller);
             }
 
-            return await HttpGetRequestWithRetryPolicyAsync(requestUrl, typeInfo, cancellationToken, setAuthorizationHeader);
+            return await HttpGetRequestWithRetryPolicyAsync(requestUrl, typeInfo, cancellationToken, setAuthorizationHeader, caller);
         }
 
         /// <summary>
@@ -148,7 +157,8 @@ namespace Tes.ApiClients
         /// <typeparam name="TResponse">Response's content deserialization type.</typeparam>
         /// <returns></returns>
         protected async Task<TResponse> HttpGetRequestWithCachingAndRetryPolicyAsync<TResponse>(Uri requestUrl,
-            JsonTypeInfo<TResponse> typeInfo, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
+            JsonTypeInfo<TResponse> typeInfo, CancellationToken cancellationToken, bool setAuthorizationHeader = false,
+            [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
         {
             var cacheKey = await ToCacheKeyAsync(requestUrl, setAuthorizationHeader, cancellationToken);
 
@@ -159,7 +169,8 @@ namespace Tes.ApiClients
 
                 return await HttpClient.SendAsync(httpRequest, ct);
             },
-            (m, ct) => GetApiResponseContentAsync(m, typeInfo, ct), cancellationToken))!;
+            (m, ct) => GetApiResponseContentAsync(m, typeInfo, ct),
+            cancellationToken, caller))!;
         }
 
         /// <summary>
@@ -198,15 +209,19 @@ namespace Tes.ApiClients
         /// <typeparam name="TResponse">Response's content deserialization type.</typeparam>
         /// <returns></returns>
         protected async Task<TResponse> HttpGetRequestWithRetryPolicyAsync<TResponse>(Uri requestUrl,
-            JsonTypeInfo<TResponse> typeInfo, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
-            => await cachingRetryHandler.ExecuteWithRetryAndConversionAsync(async ct =>
+            JsonTypeInfo<TResponse> typeInfo, CancellationToken cancellationToken, bool setAuthorizationHeader = false,
+            [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
+        {
+            return await cachingRetryHandler.ExecuteWithRetryAndConversionAsync(async ct =>
             {
                 //request must be recreated in every retry.
                 var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
 
                 return await HttpClient.SendAsync(httpRequest, ct);
             },
-            (m, ct) => GetApiResponseContentAsync(m, typeInfo, ct), cancellationToken);
+            (m, ct) => GetApiResponseContentAsync(m, typeInfo, ct),
+            cancellationToken, caller);
+        }
 
         /// <summary>
         /// Returns an query string key-value, with the value escaped. If the value is null or empty returns an empty string
@@ -259,7 +274,8 @@ namespace Tes.ApiClients
         /// <typeparam name="TResponse">Response's content deserialization type.</typeparam>
         /// <returns></returns>
         protected async Task<TResponse> HttpGetRequestWithRetryPolicyAsync<TResponse>(
-            Func<HttpRequestMessage> httpRequestFactory, JsonTypeInfo<TResponse> typeInfo, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
+            Func<HttpRequestMessage> httpRequestFactory, JsonTypeInfo<TResponse> typeInfo, CancellationToken cancellationToken, bool setAuthorizationHeader = false,
+            [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
         {
             return await cachingRetryHandler.ExecuteWithRetryAndConversionAsync(async ct =>
             {
@@ -272,7 +288,8 @@ namespace Tes.ApiClients
 
                 return await HttpClient.SendAsync(request, ct);
             },
-            (m, ct) => GetApiResponseContentAsync(m, typeInfo, ct), cancellationToken);
+            (m, ct) => GetApiResponseContentAsync(m, typeInfo, ct),
+            cancellationToken, caller);
         }
 
         private async Task AddAuthorizationHeaderToRequestAsync(HttpRequestMessage requestMessage, CancellationToken cancellationToken)
@@ -293,7 +310,7 @@ namespace Tes.ApiClients
             }
             catch (Exception e)
             {
-                Logger.LogError(e, @"Failed to set authentication header with the access token for scope:{TokenScope}",
+                Logger.LogError(e, @"Failed to set authentication header with the access token for scope: {TokenScope}",
                     tokenScope);
                 throw;
             }

@@ -51,12 +51,12 @@ namespace TesApi.Web
                 if (response is null)
                 {
                     // Corresponds to no identity existing in Sam, or the user not having access to it.
-                    Logger.LogInformation(@"Found no ACR Pull action identity in Sam for {id}", samResourceIdForAcrPull);
+                    Logger.LogDebug(@"Found no ACR Pull action identity in Sam for {id}", samResourceIdForAcrPull);
                     return null;
                 }
                 else
                 {
-                    Logger.LogInformation(@"Successfully fetched ACR action identity from Sam: {ObjectId}", response.ObjectId);
+                    Logger.LogDebug(@"Successfully fetched ACR action identity from Sam: {ObjectId}", response.ObjectId);
                     return response.ObjectId;
                 }
             }
