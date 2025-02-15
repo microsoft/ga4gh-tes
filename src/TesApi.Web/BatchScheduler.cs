@@ -265,7 +265,7 @@ namespace TesApi.Web
                                 tesTask.SetWarning(warningInfo[0]);
                                 break;
                             default:
-                                tesTask.SetWarning(warningInfo[0], warningInfo.Skip(1).ToArray());
+                                tesTask.SetWarning(warningInfo[0], [.. warningInfo.Skip(1)]);
                                 break;
                         }
                     }
@@ -274,10 +274,9 @@ namespace TesApi.Web
                     {
                         tesTask.SetFailureReason(
                             batchInfo.Failure.Value.Reason,
-                            (batchInfo.Failure.Value.SystemLogs ?? (string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem)
+                            ([.. batchInfo.Failure.Value.SystemLogs ?? (string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem)
                                     ? []
-                                    : Enumerable.Empty<string>().Append(batchInfo.AlternateSystemLogItem))
-                                ).ToArray());
+                                    : Enumerable.Empty<string>().Append(batchInfo.AlternateSystemLogItem))]));
                     }
                     else if (!(string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem) || tesTask.IsActiveState() || new[] { TesState.COMPLETE, TesState.CANCELED }.Contains(tesTask.State)))
                     {
@@ -458,9 +457,9 @@ namespace TesApi.Web
         /// <summary>
         /// Retrieves pools associated with this TES from the batch account.
         /// </summary>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        private IAsyncEnumerable<CloudPool> GetCloudPools(CancellationToken cancellationToken)
+        ///// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        private IAsyncEnumerable<CloudPool> GetCloudPools(CancellationToken _1)
             => azureProxy.GetActivePoolsAsync(batchPrefix);
 
         private Lazy<Task> _loadExistingPools = null;
@@ -791,7 +790,7 @@ namespace TesApi.Web
                     true => dictionary.TryRemove(new(key, refValue)), // Attempt queue removal from dictionary
                     false => dictionary.TryUpdate(key, new(timer, queue), refValue), // Attempt dictionary update with items remaining in the queue
                 });
-                queue = ImmutableQueue.CreateRange(refValue.Queue.WhereNot(tasks.Contains))) // get the list of items that were not "enqueued"
+                queue = [.. refValue.Queue.WhereNot(tasks.Contains)]) // get the list of items that were not "enqueued"
             {
                 refValue = dictionary[key]; // get the current dictionary value for the key
             }
@@ -837,7 +836,7 @@ namespace TesApi.Web
             }
             catch (Exception exception)
             {
-                taskCompletions = (taskCompletions ?? []).ToList();
+                taskCompletions = [.. (taskCompletions ?? [])];
 
                 if (taskCompletions.Any())
                 {
@@ -864,7 +863,7 @@ namespace TesApi.Web
             }
             catch (Exception exception)
             {
-                taskCompletions = (taskCompletions ?? []).ToList();
+                taskCompletions = [.. (taskCompletions ?? [])];
 
                 if (taskCompletions.Any())
                 {
@@ -982,7 +981,7 @@ namespace TesApi.Web
                             modelPoolFactory: async (id, ct) => await GetPoolSpecification(
                                 name: id,
                                 displayName: pool.VirtualMachineInfo.PoolDisplayName,
-                                poolIdentity: GetBatchPoolIdentity(pool.VirtualMachineInfo.Identities.WhereNot(string.IsNullOrWhiteSpace).ToList()),
+                                poolIdentity: GetBatchPoolIdentity([.. pool.VirtualMachineInfo.Identities.WhereNot(string.IsNullOrWhiteSpace)]),
                                 vmInfo: pool.VirtualMachineInfo,
                                 initialTarget: pool.InitialTarget,
                                 nodeInfo: (useGen2 ?? false) ? gen2BatchNodeInfo : gen1BatchNodeInfo,
@@ -1093,9 +1092,11 @@ namespace TesApi.Web
             {
                 Constraints = new(maxWallClockTime: taskMaxWallClockTime, retentionTime: TimeSpan.Zero, maxTaskRetryCount: 0),
                 UserIdentity = new(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
-                EnvironmentSettings = assets.Environment.Select(pair => new EnvironmentSetting(pair.Key, pair.Value))
-                    .Concat(Enumerable.Repeat<EnvironmentSetting>(new("DEBUG_DELAY", debugDelay?.ToString("c")), debugDelay is null ? 0 : 1))
-                    .ToList(),
+                EnvironmentSettings =
+                [
+                    .. assets.Environment.Select(pair => new EnvironmentSetting(pair.Key, pair.Value)),
+                    .. Enumerable.Repeat<EnvironmentSetting>(new("DEBUG_DELAY", debugDelay?.ToString("c")), debugDelay is null ? 0 : 1),
+                ],
             };
         }
 
@@ -1151,7 +1152,7 @@ namespace TesApi.Web
 
                 if (commandScript is not null)
                 {
-                    return blobsInExecutionDirectory
+                    return [.. blobsInExecutionDirectory
                         .Select(b => (Path: $"/{metadata.CromwellExecutionDir.TrimStart('/')}/{b.BlobName.Split('/').Last()}",
                             Uri: new BlobUriBuilder(executionDirectoryUri) { BlobName = b.BlobName }.ToUri()))
                         .Select(b => new TesInput
@@ -1160,8 +1161,7 @@ namespace TesApi.Web
                             Url = b.Uri.AbsoluteUri,
                             Name = Path.GetFileName(b.Path),
                             Type = TesFileType.FILE
-                        })
-                        .ToList();
+                        })];
                 }
             }
 
@@ -1500,12 +1500,11 @@ namespace TesApi.Web
 
             if (!string.IsNullOrWhiteSpace(vmSize))
             {
-                eligibleVms = virtualMachineInfoList
+                eligibleVms = [.. virtualMachineInfoList
                     .Where(vm =>
                         vm.LowPriority == preemptible
                         && vm.VmSize.Equals(vmSize, StringComparison.OrdinalIgnoreCase))
-                    .Select<VirtualMachineInformation, VirtualMachineInformationWithDataDisks>(vm => new(vm, []))
-                    .ToList();
+                    .Select<VirtualMachineInformation, VirtualMachineInformationWithDataDisks>(vm => new(vm, []))];
 
                 noVmFoundMessage = $"No VM (out of {virtualMachineInfoList.Count}) available with the required resources (vmsize: {vmSize}, preemptible: {preemptible}) for task id {tesTask.Id}.";
             }
