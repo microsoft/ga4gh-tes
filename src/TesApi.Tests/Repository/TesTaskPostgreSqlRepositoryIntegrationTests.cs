@@ -17,7 +17,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Tes.Models;
-using Tes.Utilities;
+using Tes.Repository.Utilities;
 using TesApi.Controllers;
 
 namespace Tes.Repository.Tests
@@ -53,7 +53,7 @@ namespace Tes.Repository.Tests
                 subscriptionId, regionName, resourceGroupName, postgreSqlServerName, postgreSqlDatabaseName, adminLogin, adminPw);
 
             var connectionString = ConnectionStringUtility.GetPostgresConnectionString(
-                Options.Create(new PostgreSqlOptions
+                Options.Create(new Models.PostgreSqlOptions
                 {
                     ServerName = postgreSqlServerName,
                     DatabaseName = postgreSqlDatabaseName,

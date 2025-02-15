@@ -57,7 +57,7 @@ namespace Tes.ApiClients
             {
                 var apiUrl = GetResolveDrsApiUrl();
 
-                Logger.LogInformation(@"Resolving DRS URI calling: {uri}", apiUrl);
+                Logger.LogDebug(@"Resolving DRS URI calling: {uri}", apiUrl);
 
                 response =
                     await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, apiUrl) { Content = GetDrsResolveRequestContent(drsUri) },
@@ -65,7 +65,7 @@ namespace Tes.ApiClients
 
                 var apiResponse = await GetDrsResolveApiResponseAsync(response, cancellationToken);
 
-                Logger.LogInformation(@"Successfully resolved URI: {drsUri}", drsUri);
+                Logger.LogDebug(@"Successfully resolved URI: {drsUri}", drsUri);
 
                 return apiResponse;
             }

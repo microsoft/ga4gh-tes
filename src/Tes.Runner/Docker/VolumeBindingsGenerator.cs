@@ -25,7 +25,7 @@ namespace Tes.Runner.Docker
             this.mountParentDirectory = string.IsNullOrWhiteSpace(mountParentDirectory) ? null! : fileInfoProvider.GetExpandedFileName(mountParentDirectory);
         }
 
-        public List<string> GenerateVolumeBindings(List<FileInput>? inputs, List<FileOutput>? outputs)
+        public List<string> GenerateVolumeBindings(List<FileInput>? inputs, List<FileOutput>? outputs, List<string>? containerVolumes = default)
         {
             var volumeBindings = new HashSet<string>();
 
@@ -45,12 +45,18 @@ namespace Tes.Runner.Docker
                 }
             }
 
-            return volumeBindings.ToList();
+            foreach (var volume in containerVolumes ?? [])
+            {
+                var targetDir = volume.TrimStart('/');
+                volumeBindings.Add($"{mountParentDirectory.TrimEnd('/')}/{targetDir}:/{targetDir}");
+            }
+
+            return [.. volumeBindings];
         }
 
         private void AddVolumeBindingIfRequired(HashSet<string> volumeBindings, string path)
         {
-            var mountPath = ToVolumeBinding(mountParentDirectory, path);
+            var mountPath = ToVolumeBinding(path);
 
             if (!string.IsNullOrEmpty(mountPath))
             {
@@ -58,7 +64,7 @@ namespace Tes.Runner.Docker
             }
         }
 
-        private string? ToVolumeBinding(string? mountParentDirectory, string path)
+        private string? ToVolumeBinding(string path)
         {
             if (string.IsNullOrEmpty(mountParentDirectory))
             {
@@ -69,17 +75,17 @@ namespace Tes.Runner.Docker
 
             if (!expandedPath.StartsWith(mountParentDirectory))
             {
-                logger.LogDebug(
+                logger.LogTrace(
                     @"The expanded path value {ExpandedPath} does not contain the specified mount parent directory: {MountParentDirectory}. No volume binding will be created for this file in the container.",
                     expandedPath, mountParentDirectory);
                 return default;
             }
 
-            var targetDir = $"{expandedPath.Substring(mountParentDirectory.Length).Split('/', StringSplitOptions.RemoveEmptyEntries)[0].TrimStart('/')}";
+            var targetDir = $"{expandedPath[mountParentDirectory.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries)[0].TrimStart('/')}";
 
             var volBinding = $"{mountParentDirectory.TrimEnd('/')}/{targetDir}:/{targetDir}";
 
-            logger.LogDebug(@"Volume binding for {ExpandedPath} is {VolBinding}", expandedPath, volBinding);
+            logger.LogTrace(@"Volume binding for {ExpandedPath} is {VolBinding}", expandedPath, volBinding);
 
             return volBinding;
         }

@@ -2,8 +2,10 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
@@ -14,6 +16,7 @@ using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TesApi.Web.Storage;
+using static TesApi.Web.IBatchPool;
 
 namespace TesApi.Web
 {
@@ -28,7 +31,7 @@ namespace TesApi.Web
         public const string CloudPoolSelectClause = "creationTime,id,identity,metadata";
 
         /// <summary>
-        /// Autoscale evalutation interval
+        /// Autoscale evaluation interval
         /// </summary>
         public static TimeSpan AutoScaleEvaluationInterval { get; } = TimeSpan.FromMinutes(5);
 
@@ -62,13 +65,10 @@ namespace TesApi.Web
             _batchPools = batchScheduler as BatchScheduler ?? throw new ArgumentException("batchScheduler must be of type BatchScheduler", nameof(batchScheduler));
         }
 
-        private Queue<IBatchPool.StartTaskFailureInformation> StartTaskFailures { get; } = new();
-        private Queue<ResizeError> ResizeErrors { get; } = new();
+        private IAsyncEnumerable<CloudTask> GetTasksAsync(string select, string filter)
+            => _removedFromService ? AsyncEnumerable.Empty<CloudTask>() : _azureProxy.ListTasksAsync(PoolId, new ODATADetailLevel { SelectClause = select, FilterClause = filter });
 
-        internal IAsyncEnumerable<CloudTask> GetTasksAsync(bool includeCompleted)
-            => _azureProxy.ListTasksAsync(PoolId, new ODATADetailLevel { SelectClause = "id,stateTransitionTime", FilterClause = includeCompleted ? default : "state ne 'completed'" });
-
-        private async ValueTask RemoveNodesAsync(IList<ComputeNode> nodesToRemove, CancellationToken cancellationToken)
+        private async ValueTask RemoveNodesAsync(List<ComputeNode> nodesToRemove, CancellationToken cancellationToken)
         {
             _logger.LogDebug("Removing {Nodes} nodes from {PoolId}", nodesToRemove.Count, PoolId);
             await _azureProxy.DeleteBatchComputeNodesAsync(PoolId, nodesToRemove, cancellationToken);
@@ -130,7 +130,7 @@ namespace TesApi.Web
             /// Reset state to <see cref="AutoScaleEnabled"/>.
             /// </summary>
             /// <remarks>
-            /// This state exists to eliminate premature redisabling of autoscale mode.
+            /// This state exists to prevent premature re-disabling of autoscale mode.
             /// </remarks>
             SettingAutoScale
         }
@@ -152,15 +152,15 @@ namespace TesApi.Web
              * If the the scaling mode does not correspond to the actual state of autoscale enablement, this method guides us towards the desired state.
              *
              * Barring outside intervention, at each and every time this method is called, the following should always hold true:
-             * |------------------|---------------------|-------------------------|-------------------------|
-             * | autoScaleEnabled |     ScalingMode     |       Last action       |       Next action       |
-             * |------------------|---------------------|-------------------------|-------------------------|
-             * |       true       |   AutoScaleEnabled  | Normal long-term state  |Change for select errrors|
-             * |       false      |  AutoScaleDisabled  |  Recently disabled AS   |  Perform needed actions |
-             * |       false      | RemovingFailedNodes | Manual resizing actions | Reenable autoscale mode |
-             * |       true       | WaitingForAutoScale | Ensure autoscale works  | Delay and re-assess     |
-             * |       true       |   SettingAutoScale  |  Assess pool response   | Restore normal long-term|
-             * |------------------|---------------------|-------------------------|-------------------------|
+             * |------------------|---------------------|-------------------------|--------------------------|
+             * | autoScaleEnabled |     ScalingMode     |       Last action       |        Next action       |
+             * |------------------|---------------------|-------------------------|--------------------------|
+             * |       true       |   AutoScaleEnabled  | Normal long-term state  | Change for select errors |
+             * |       false      |  AutoScaleDisabled  |  Recently disabled AS   |  Perform needed actions  |
+             * |       false      | RemovingFailedNodes | Manual resizing actions | Reenable autoscale mode  |
+             * |       true       | WaitingForAutoScale | Ensure autoscale works  |   Delay and re-assess    |
+             * |       true       |   SettingAutoScale  |  Assess pool response   | Restore normal long-term |
+             * |------------------|---------------------|-------------------------|--------------------------|
              *
              * The first time this method is called, ScalingMode will be Unknown. Initialize it to an appropriate value to initialize the state machine's state.
              * If autoScaleEnabled is null, don't change anything.
@@ -197,7 +197,7 @@ namespace TesApi.Web
 
             if (failed)
             {
-                IsAvailable = false;
+                IsAvailable = false; // TODO: Move 'active' (aka queued) tasks from this pool's job to another pool's job with the same key
                 _resetAutoScalingRequired = true;
             }
         }
@@ -205,17 +205,11 @@ namespace TesApi.Web
         private async ValueTask ServicePoolGetResizeErrorsAsync(CancellationToken cancellationToken)
         {
             // This method must only collect error information when allocation state is not Steady. It only obtains resize errors once after each time the allocation state returned to Steady.
-
             var (allocationState, allocationStateTransitionTime, autoScaleEnabled, _, _, _, _) = await _azureProxy.GetFullAllocationStateAsync(PoolId, cancellationToken);
 
             if (allocationState == AllocationState.Steady)
             {
-                var pool = await _azureProxy.GetBatchPoolAsync(PoolId, cancellationToken, new ODATADetailLevel
-                {
-                    SelectClause = autoScaleEnabled ?? false
-                        ? "id,allocationStateTransitionTime,autoScaleFormula,autoScaleRun,resizeErrors"
-                        : "id,allocationStateTransitionTime,resizeErrors"
-                });
+                var pool = await _azureProxy.GetBatchPoolAsync(PoolId, cancellationToken, new ODATADetailLevel { SelectClause = "allocationStateTransitionTime,id,resizeErrors" + (autoScaleEnabled ?? false ? ",autoScaleRun" : string.Empty) });
 
                 if ((autoScaleEnabled ?? false) && pool.AutoScaleRun?.Error is not null)
                 {
@@ -279,7 +273,7 @@ namespace TesApi.Web
           Notes on the formula:
               Reference: https://docs.microsoft.com/en-us/azure/batch/batch-automatic-scaling
 
-          In order to avoid confusion, some of the builtin variable names in batch's autoscale formulas are named in a way that may not initially appear intuitive:
+          In order to avoid confusion, some of the built-in variable names in batch's autoscale formulas are named in a way that may not initially appear intuitive:
               Running tasks are named RunningTasks, which is fine
               Queued tasks are named ActiveTasks, which matches the same value of the "state" property
               The sum of running & queued tasks (what I would have named TotalTasks) is named PendingTasks
@@ -291,7 +285,7 @@ namespace TesApi.Web
           Whenever autoscaling is turned on, whether or not the pool was just created, there are no sampled metrics available. Thus, we need to prevent the
           expected errors that would result from trying to extract the samples. Later on, if recent samples aren't available, we prefer that the formula fails
           (firstly, so we can potentially capture that, and secondly, so that we don't suddenly try to remove all nodes from the pool when there's still demand)
-          so we use a timed scheme to substitue an "initial value" (aka initialTarget).
+          so we use a timed scheme to substitute an "initial value" (aka initialTarget).
 
           We set NodeDeallocationOption to taskcompletion to prevent wasting time/money by stopping a running task, only to requeue it onto another node, or worse,
           fail it, just because batch's last sample was taken longer ago than a task's assignment was made to a node, because the formula evaluations intervals are not coordinated
@@ -305,15 +299,15 @@ namespace TesApi.Web
         */
         {
             var targetVariable = preemptable ? "TargetLowPriorityNodes" : "TargetDedicated";
-            return string.Join(Environment.NewLine, new[]
-            {
+            return string.Join(Environment.NewLine,
+            [
                 "$NodeDeallocationOption = taskcompletion;",
                 $"""lifespan = time() - time("{DateTime.UtcNow:r}");""",
                 "span = TimeInterval_Second * 90;",
                 "startup = TimeInterval_Minute * 2;",
                 "ratio = 10;",
                 $"${targetVariable} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {initialTarget});"
-            });
+            ]);
         }
 
         private async ValueTask ServicePoolManagePoolScalingAsync(CancellationToken cancellationToken)
@@ -332,7 +326,7 @@ namespace TesApi.Web
                 switch (_scalingMode)
                 {
                     case ScalingMode.AutoScaleEnabled:
-                        if (_resetAutoScalingRequired || await GetNodesToRemove(false).AnyAsync(cancellationToken))
+                        if (_resetAutoScalingRequired || await (await GetNodesToRemove()).AnyAsync(cancellationToken))
                         {
                             _logger.LogInformation(@"Switching pool {PoolId} to manual scale to clear resize errors and/or compute nodes in invalid states.", PoolId);
                             await _azureProxy.DisableBatchPoolAutoScaleAsync(PoolId, cancellationToken);
@@ -342,48 +336,52 @@ namespace TesApi.Web
 
                     case ScalingMode.AutoScaleDisabled:
                         {
-                            var nodesToRemove = Enumerable.Empty<ComputeNode>();
+                            List<ComputeNode> nodesToRemove = [];
 
                             // It's documented that a max of 100 nodes can be removed at a time. Excess eligible nodes will be removed in a future call to this method.
-                            await foreach (var node in GetNodesToRemove(true).Take(MaxComputeNodesToRemoveAtOnce).WithCancellation(cancellationToken))
+                            await foreach (var node in (await GetNodesToRemove()).Take(MaxComputeNodesToRemoveAtOnce).WithCancellation(cancellationToken))
                             {
                                 switch (node.State)
                                 {
                                     case ComputeNodeState.Unusable:
-                                        _logger.LogDebug("Found unusable node {NodeId}", node.Id);
+                                        _logger.LogTrace("Found unusable node {NodeId}", node.Id);
                                         break;
 
                                     case ComputeNodeState.StartTaskFailed:
-                                        _logger.LogDebug("Found starttaskfailed node {NodeId}", node.Id);
-                                        StartTaskFailures.Enqueue(new(node.Id, node.StartTaskInformation.FailureInformation));
+                                        _logger.LogTrace("Found starttaskfailed node {NodeId}", node.Id);
+                                        StartTaskFailures.Enqueue(new(PoolId, node.Id, node.StartTaskInformation.FailureInformation));
                                         break;
 
                                     case ComputeNodeState.Preempted:
-                                        _logger.LogDebug("Found preempted node {NodeId}", node.Id);
+                                        _logger.LogTrace("Found preempted node {NodeId}", node.Id);
                                         break;
 
                                     default:
                                         throw new System.Diagnostics.UnreachableException($"Unexpected compute node state '{node.State}' received while looking for nodes to remove from the pool.");
                                 }
 
-                                nodesToRemove = nodesToRemove.Append(node);
+                                nodesToRemove.Add(node);
                             }
 
-                            nodesToRemove = nodesToRemove.ToList();
-
-                            if (nodesToRemove.Any())
+                            if (nodesToRemove.Count == 0)
+                            {
+                                goto case ScalingMode.RemovingFailedNodes;
+                            }
+                            else
                             {
                                 await nodesToRemove
                                     .Where(node => ComputeNodeState.StartTaskFailed.Equals(node.State))
                                     .SelectMany<ComputeNode, (ComputeNode Node, string Log)>(node => [(node, "stdout.txt"), (node, "stderr.txt")])
-                                    .ForEachAsync((logInfo, token) => TransferStartTaskLogAsync(logInfo.Node, logInfo.Log, token), cancellationToken);
-                                await RemoveNodesAsync((IList<ComputeNode>)nodesToRemove, cancellationToken);
+                                    .ForEachAsync(async (nodeAndLog, token) =>
+                                    {
+                                        var file = await nodeAndLog.Node.GetNodeFileAsync($"startup/{nodeAndLog.Log}", cancellationToken: token);
+                                        var content = await file.ReadAsStringAsync(cancellationToken: token);
+                                        var blobUri = await _storageAccessProvider.GetInternalTesBlobUrlAsync($"/pools/{PoolId}/nodes/{nodeAndLog.Node.Id}/{nodeAndLog.Log}", Azure.Storage.Sas.BlobSasPermissions.Create, token);
+                                        await _azureProxy.UploadBlobAsync(blobUri, content, token);
+                                    }, cancellationToken);
+                                await RemoveNodesAsync(nodesToRemove, cancellationToken);
                                 _resetAutoScalingRequired = false;
                                 _scalingMode = ScalingMode.RemovingFailedNodes;
-                            }
-                            else
-                            {
-                                goto case ScalingMode.RemovingFailedNodes;
                             }
                         }
                         break;
@@ -391,8 +389,8 @@ namespace TesApi.Web
                     case ScalingMode.RemovingFailedNodes:
                         _scalingMode = ScalingMode.RemovingFailedNodes;
                         _logger.LogInformation(@"Switching pool {PoolId} back to autoscale.", PoolId);
-                        await _azureProxy.EnableBatchPoolAutoScaleAsync(PoolId, !IsDedicated, AutoScaleEvaluationInterval, (p, t) => AutoPoolFormula(p, GetTaskCount(t)), cancellationToken);
-                        _autoScaleWaitTime = DateTime.UtcNow + (3 * AutoScaleEvaluationInterval) + (BatchPoolService.RunInterval / 2);
+                        await _azureProxy.EnableBatchPoolAutoScaleAsync(PoolId, !IsDedicated, AutoScaleEvaluationInterval, AutoPoolFormula, _ => ValueTask.FromResult(GetTasks(includeCompleted: false).Count()), cancellationToken);
+                        _autoScaleWaitTime = DateTime.UtcNow + (3 * AutoScaleEvaluationInterval) + (PoolScheduler.RunInterval / 2);
                         _scalingMode = _resetAutoScalingRequired ? ScalingMode.WaitingForAutoScale : ScalingMode.SettingAutoScale;
                         _resetAutoScalingRequired = false;
                         break;
@@ -409,30 +407,7 @@ namespace TesApi.Web
                         _logger.LogInformation(@"Pool {PoolId} is back to normal resize and monitoring status.", PoolId);
                         break;
                 }
-
-                async ValueTask TransferStartTaskLogAsync(ComputeNode node, string log, CancellationToken cancellationToken)
-                {
-                    var file = await node.GetNodeFileAsync($"startup/{log}", cancellationToken: cancellationToken);
-                    var content = await file.ReadAsStringAsync(cancellationToken: cancellationToken);
-                    var blobUri = await _storageAccessProvider.GetInternalTesBlobUrlAsync($"/pools/{PoolId}/nodes/{node.Id}/{log}", cancellationToken);
-                    await _azureProxy.UploadBlobAsync(blobUri, content, cancellationToken);
-                }
-
-                int GetTaskCount(int @default) // Used to make reenabling auto-scale more performant by attempting to gather the current number of "pending" tasks, falling back on the current target.
-                {
-                    try
-                    {
-                        return GetTasksAsync(includeCompleted: false).CountAsync(cancellationToken).AsTask().Result;
-                    }
-                    catch
-                    {
-                        return @default;
-                    }
-                }
             }
-
-            IAsyncEnumerable<ComputeNode> GetNodesToRemove(bool withState)
-                => _azureProxy.ListComputeNodesAsync(PoolId, new ODATADetailLevel(filterClause: @"state eq 'starttaskfailed' or state eq 'preempted' or state eq 'unusable'", selectClause: withState ? @"id,state,startTaskInfo" : @"id"));
         }
 
         private bool DetermineIsAvailable(DateTime? creation)
@@ -455,10 +430,10 @@ namespace TesApi.Web
                 // Get current node counts
                 var (_, _, _, _, lowPriorityNodes, _, dedicatedNodes) = await _azureProxy.GetFullAllocationStateAsync(PoolId, cancellationToken);
 
-                if (lowPriorityNodes.GetValueOrDefault(0) == 0 && dedicatedNodes.GetValueOrDefault(0) == 0 && !await GetTasksAsync(includeCompleted: true).AnyAsync(cancellationToken))
+                if (lowPriorityNodes.GetValueOrDefault() == 0 && dedicatedNodes.GetValueOrDefault() == 0 && !GetTasks(includeCompleted: true).Any())
                 {
                     _ = _batchPools.RemovePoolFromList(this);
-                    await _batchPools.DeletePoolAsync(this, cancellationToken);
+                    await _batchPools.DeletePoolAndJobAsync(this, cancellationToken);
                 }
             }
         }
@@ -470,6 +445,7 @@ namespace TesApi.Web
     public sealed partial class BatchPool : IBatchPool
     {
         private static readonly SemaphoreSlim lockObj = new(1, 1);
+        private bool _removedFromService = false;
 
         /// <summary>
         /// Types of maintenance calls offered by the <see cref="ServicePoolAsync(ServiceKind, CancellationToken)"/> service method.
@@ -504,37 +480,38 @@ namespace TesApi.Web
         public string PoolId { get; private set; }
 
         /// <inheritdoc/>
-        public async ValueTask<bool> CanBeDeleted(CancellationToken cancellationToken = default)
+        public Queue<StartTaskFailureInformation> StartTaskFailures { get; } = new();
+
+        /// <inheritdoc/>
+        public Queue<ResizeError> ResizeErrors { get; } = new();
+
+        /// <inheritdoc/>
+        public ConcurrentDictionary<string, string> AssociatedTesTasks { get; } = [];
+
+        /// <inheritdoc/>
+        public async ValueTask<bool> CanBeDeletedAsync(CancellationToken cancellationToken = default)
         {
-            if (await GetTasksAsync(includeCompleted: true).AnyAsync(cancellationToken))
+            if (_removedFromService)
             {
+                return true;
+            }
+
+            try
+            {
+                if (await GetTasksAsync("id", default).AnyAsync(cancellationToken))
+                {
+                    return false;
+                }
+
+                return true;
+            }
+            catch (BatchException ex) when (BatchErrorCodeStrings.JobNotFound.Equals(ex.RequestInformation.BatchError.Code))
+            {
+                IsAvailable = false;
+                //_removedFromService = true;
                 return false;
             }
-
-            await foreach (var node in _azureProxy.ListComputeNodesAsync(PoolId, new ODATADetailLevel(selectClause: "state")).WithCancellation(cancellationToken))
-            {
-                switch (node.State)
-                {
-                    case ComputeNodeState.Rebooting:
-                    case ComputeNodeState.Reimaging:
-                    case ComputeNodeState.Running:
-                    case ComputeNodeState.Creating:
-                    case ComputeNodeState.Starting:
-                    case ComputeNodeState.WaitingForStartTask:
-                        return false;
-                }
-            }
-
-            return true;
         }
-
-        /// <inheritdoc/>
-        public ResizeError PopNextResizeError()
-            => ResizeErrors.TryDequeue(out var resizeError) ? resizeError : default;
-
-        /// <inheritdoc/>
-        public IBatchPool.StartTaskFailureInformation PopNextStartTaskFailure()
-            => StartTaskFailures.TryDequeue(out var failure) ? failure : default;
 
         /// <summary>
         /// Service methods dispatcher.
@@ -556,7 +533,10 @@ namespace TesApi.Web
 
             try // Don't add any code that can throw between this line and the call above to acquire lockObj.
             {
-                await func(cancellationToken);
+                if (!_removedFromService)
+                {
+                    await func(cancellationToken);
+                }
             }
             finally
             {
@@ -565,11 +545,52 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async ValueTask ServicePoolAsync(CancellationToken cancellationToken = default)
+        public async ValueTask ServicePoolAsync(CancellationToken cancellationToken)
         {
+            ValueTask StandupQueries()
+            {
+                _taskPreviousComputeNodeIds.Clear();
+                _foundTasks.ForEach(task =>
+                {
+                    if (PoolScheduler.TaskListWithComputeNodeInfoPredicate(task))
+                    {
+                        _taskPreviousComputeNodeIds.Add(task.Id, task.ComputeNodeInformation.ComputeNodeId);
+                    }
+                });
+
+                // List tasks from batch just one time each time we service the pool when called from PoolScheduler
+                _foundTasks.Clear();
+
+                try
+                {
+                    _foundTasks.AddRange(GetTasksAsync("creationTime,executionInfo,id,nodeInfo,state,stateTransitionTime", null).ToBlockingEnumerable(cancellationToken));
+                }
+                catch (BatchException ex) when (BatchErrorCodeStrings.JobNotFound.Equals(ex.RequestInformation.BatchError.Code))
+                {
+                    IsAvailable = false;
+                }
+
+                _logger.LogTrace("{PoolId}: {TaskCount} tasks discovered.", PoolId, _foundTasks.Count);
+
+                // List nodes from Batch at most one time each time we service the pool
+                _lazyComputeNodes = _taskPreviousComputeNodeIds.Count == 0
+
+                    ? new(() => Task.FromResult(_azureProxy.ListComputeNodesAsync(PoolId,
+                                new ODATADetailLevel(filterClause: EjectableComputeNodesFilterClause, selectClause: EjectableComputeNodesSelectClause()))))
+
+                    : new(async () => (await _azureProxy.ListComputeNodesAsync(PoolId,
+                                new ODATADetailLevel(filterClause: EjectableComputeNodesFilterClause, selectClause: EjectableComputeNodesSelectClause()))
+                            .ToListAsync(cancellationToken))
+                        .ToAsyncEnumerable());
+
+                return ValueTask.CompletedTask;
+            }
+
             var exceptions = new List<Exception>();
 
-            _ = await PerformTask(ServicePoolAsync(ServiceKind.GetResizeErrors, cancellationToken), cancellationToken) &&
+            // Run each servicing task serially and accumulate the exception, except whenever the pool or the job are not found
+            _ = await PerformTask(StandupQueries(), cancellationToken) &&
+            await PerformTask(ServicePoolAsync(ServiceKind.GetResizeErrors, cancellationToken), cancellationToken) &&
             await PerformTask(ServicePoolAsync(ServiceKind.ManagePoolScaling, cancellationToken), cancellationToken) &&
             await PerformTask(ServicePoolAsync(ServiceKind.Rotate, cancellationToken), cancellationToken) &&
             await PerformTask(ServicePoolAsync(ServiceKind.RemovePoolIfEmpty, cancellationToken), cancellationToken);
@@ -584,7 +605,7 @@ namespace TesApi.Web
 
                 default:
                     throw new AggregateException(exceptions.SelectMany(Flatten));
-            }
+            };
 
             static IEnumerable<Exception> Flatten(Exception ex)
                 => ex switch
@@ -650,9 +671,9 @@ namespace TesApi.Web
                     if (batchException.RequestInformation.BatchError.Code == BatchErrorCodeStrings.PoolNotFound ||
                         batchException.RequestInformation.BatchError.Code == BatchErrorCodeStrings.JobNotFound)
                     {
-                        _logger.LogError(ex, "Batch pool and/or job {PoolId} is missing. Removing them from TES's active pool list.", PoolId);
+                        _logger.LogError(batchException, "Batch pool and/or job {PoolId} is missing. Removing them from TES's active pool list.", PoolId);
                         _ = _batchPools.RemovePoolFromList(this);
-                        await _batchPools.DeletePoolAsync(this, cancellationToken); // TODO: Consider moving any remaining tasks to another pool, or failing job/tasks explicitly
+                        await _batchPools.DeletePoolAndJobAsync(this, cancellationToken);
                         return true;
                     }
 
@@ -661,9 +682,42 @@ namespace TesApi.Web
             }
         }
 
+        private readonly List<CloudTask> _foundTasks = [];
+        private readonly Dictionary<string, string> _taskPreviousComputeNodeIds = [];
+
+        private Lazy<Task<IAsyncEnumerable<ComputeNode>>> _lazyComputeNodes;
+        private const string EjectableComputeNodesFilterClause = @"state eq 'starttaskfailed' or state eq 'preempted' or state eq 'unusable'";
+
+        private string EjectableComputeNodesSelectClause()
+            => (ScalingMode.AutoScaleDisabled.Equals(_scalingMode), _taskPreviousComputeNodeIds.Count == 0) switch
+            {
+                (false, false) => @"errors,id,state", // Not removing compute nodes. Servicing tasks by compute node
+                (false, true) => @"id", // Not removing compute nodes. Not servicing tasks by compute node
+                (true, false) => @"errors,id,state,startTaskInfo", // Possibly removing compute nodes. Servicing tasks by compute node
+                (true, true) => @"id,state,startTaskInfo", // Possibly removing compute nodes. Not servicing tasks by compute node
+            };
+
+        private async ValueTask<IAsyncEnumerable<ComputeNode>> GetNodesToRemove()
+            => await _lazyComputeNodes.Value;
+
         /// <inheritdoc/>
-        public async ValueTask<DateTime> GetAllocationStateTransitionTime(CancellationToken cancellationToken = default)
-            => (await _azureProxy.GetBatchPoolAsync(PoolId, cancellationToken, new ODATADetailLevel { SelectClause = "allocationStateTransitionTime" })).AllocationStateTransitionTime ?? DateTime.UtcNow;
+        public async Task<IAsyncEnumerable<ComputeNode>> ListEjectableComputeNodesAsync()
+        {
+            return (await _lazyComputeNodes.Value).Where(node => !ComputeNodeState.StartTaskFailed.Equals(node.State));
+        }
+
+        private IEnumerable<CloudTask> GetTasks(bool includeCompleted)
+            => _foundTasks.Where(task => includeCompleted || !TaskState.Completed.Equals(task.State));
+
+        /// <inheritdoc/>
+        public IEnumerable<CloudTaskWithPreviousComputeNodeId> ListCloudTasksAsync()
+        {
+            return _foundTasks.Select(task => new CloudTaskWithPreviousComputeNodeId(task, _taskPreviousComputeNodeIds.TryGetValue(task.Id, out var nodeId) ? nodeId : default));
+        }
+
+        /// <inheritdoc/>
+        public async ValueTask<DateTime> GetAllocationStateTransitionTimeAsync(CancellationToken cancellationToken = default)
+            => (await _azureProxy.GetFullAllocationStateAsync(PoolId, cancellationToken)).AllocationStateTransitionTime ?? DateTime.UtcNow;
 
         /// <inheritdoc/>
         public async ValueTask CreatePoolAndJobAsync(BatchAccountPoolData poolModel, bool isPreemptible, string runnerMD5, CancellationToken cancellationToken)
@@ -673,6 +727,7 @@ namespace TesApi.Web
             try
             {
                 CloudPool pool = default;
+
                 await Task.WhenAll(
                     _azureProxy.CreateBatchJobAsync(jobId, jobId, cancellationToken),
                     Task.Run(async () =>
@@ -681,16 +736,16 @@ namespace TesApi.Web
                         pool = await _azureProxy.GetBatchPoolAsync(poolId, cancellationToken, new ODATADetailLevel { SelectClause = CloudPoolSelectClause });
                     }, cancellationToken));
 
-                Configure(pool, runnerMD5);
+                Configure(pool, runnerMD5, false);
             }
             catch (AggregateException ex)
             {
                 var exception = ex.Flatten();
                 // If there is only one contained exception, we don't need an AggregateException, and we have a simple path to success (following this if block)
-                // In the extremely unlikely event that there are no innerexceptions, we don't want to change the existing code flow nor do we want to complicate the (less than 2) path.
+                // In the extremely unlikely event that there are no innerexceptions, we don't want to change the existing code flow nor do we want to complicate the (less than 2 inner exceptions) path.
                 if (exception.InnerExceptions?.Count != 1)
                 {
-                    throw new AggregateException(exception.Message, exception.InnerExceptions?.Select(HandleException) ?? Enumerable.Empty<Exception>());
+                    throw new AggregateException(exception.Message, exception.InnerExceptions?.Select(HandleException) ?? []);
                 }
 
                 throw HandleException(exception.InnerException);
@@ -709,8 +764,8 @@ namespace TesApi.Web
 
                 return ex switch
                 {
-                    OperationCanceledException => ex.InnerException is null ? ex : new AzureBatchPoolCreationException(ex.Message, true, ex),
-                    var x when x is RequestFailedException rfe && rfe.Status == 0 && rfe.InnerException is System.Net.WebException webException && webException.Status == System.Net.WebExceptionStatus.Timeout => new AzureBatchPoolCreationException(ex.Message, true, ex),
+                    OperationCanceledException => ex.InnerException is null ? ex : new AzureBatchPoolCreationException(ex.Message, isTimeout: true, ex),
+                    var x when x is RequestFailedException rfe && rfe.Status == 0 && rfe.InnerException is System.Net.WebException webException && webException.Status == System.Net.WebExceptionStatus.Timeout => new AzureBatchPoolCreationException(ex.Message, isTimeout: true, ex),
                     var x when IsInnermostExceptionSocketException(x) => new AzureBatchPoolCreationException(ex.Message, ex),
                     _ => new AzureBatchPoolCreationException(ex.Message, ex),
                 };
@@ -728,7 +783,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async ValueTask AssignPoolAsync(CloudPool pool, string runnerMD5, CancellationToken cancellationToken)
+        public async ValueTask AssignPoolAsync(CloudPool pool, string runnerMD5, bool forceRemove, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(pool);
 
@@ -746,7 +801,7 @@ namespace TesApi.Web
             try
             {
                 broken |= !pool.Metadata.Any(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)) ||
-                    !IBatchScheduler.PoolMetadata.Create(pool.Metadata.Single(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)).Value).Validate();
+                    !IBatchScheduler.PoolMetadata.Create(pool.Metadata.Single(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)).Value).Validate(validateEventsVersion: false);
             }
             catch (InvalidOperationException)
             {
@@ -760,7 +815,7 @@ namespace TesApi.Web
             {
                 broken = true;
             }
-            catch (System.Text.Json.JsonException)
+            catch (JsonException)
             {
                 broken = true;
             }
@@ -770,23 +825,36 @@ namespace TesApi.Web
                 throw new ArgumentException("CloudPool is either not configured correctly or was not retrieved with all required metadata.", nameof(pool));
             }
 
-            // Pool is "broken" if job is missing/not active. Reject this pool via the side effect of the exception that is thrown.
-            if (1 != (await _azureProxy.GetBatchJobAsync(pool.Id, cancellationToken, new ODATADetailLevel { SelectClause = "id,state"/*, FilterClause = "state eq 'active'"*/ }).ToAsyncEnumerable().Where(j => j.State == JobState.Active).ToListAsync(cancellationToken)).Count)
+            // Pool is "broken" if its associated job is missing/not active. Reject this pool via the side effect of the exception that is thrown.
+            var job = await _azureProxy.GetBatchJobAsync(pool.Id, cancellationToken, new ODATADetailLevel { SelectClause = "poolInfo,state" });
+            if (job.State != JobState.Active || !pool.Id.Equals(job.PoolInformation?.PoolId, StringComparison.OrdinalIgnoreCase))
             {
-                // TODO: investigate why FilterClause throws "Type Microsoft.Azure.Batch.Protocol.BatchRequests.JobGetBatchRequest does not support a filter clause. (Parameter 'detailLevel')"
                 throw new InvalidOperationException($"Active Job not found for Pool {pool.Id}");
             }
 
-            Configure(pool, runnerMD5);
+            Configure(pool, runnerMD5, forceRemove);
         }
 
-        private void Configure(CloudPool pool, string runnerMD5)
+        private void Configure(CloudPool pool, string runnerMD5, bool forceRemove)
         {
             ArgumentNullException.ThrowIfNull(pool);
 
+            var metadata = IBatchScheduler.PoolMetadata.Create(pool.Metadata.First(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)).Value);
+
             PoolId = pool.Id;
-            IsAvailable = DetermineIsAvailable(pool.CreationTime) &&
-                runnerMD5.Equals(IBatchScheduler.PoolMetadata.Create(pool.Metadata.Single(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)).Value).RunnerMD5, StringComparison.OrdinalIgnoreCase);
+
+            var eventVersionsMatch = Tes.Runner.Events.EventsPublisher.EventVersion.Equals(GetVersion(metadata.EventsVersion[nameof(Tes.Runner.Events.EventsPublisher.EventVersion)])) &&
+                Tes.Runner.Events.EventsPublisher.EventDataVersion.Equals(GetVersion(metadata.EventsVersion[nameof(Tes.Runner.Events.EventsPublisher.EventDataVersion)]));
+
+            IsAvailable = !forceRemove && DetermineIsAvailable(pool.CreationTime) &&
+                runnerMD5.Equals(metadata.RunnerMD5, StringComparison.OrdinalIgnoreCase) &&
+                eventVersionsMatch;
+
+            if (!eventVersionsMatch)
+            {
+                //
+            }
+
             //IReadOnlyDictionary<string, string> Identity = pool.Identity.UserAssignedIdentities.ToDictionary(identity => identity.ResourceId, identity => identity.ClientId, StringComparer.OrdinalIgnoreCase).AsReadOnly();
 
             if (IsAvailable)
@@ -794,18 +862,32 @@ namespace TesApi.Web
                 Creation = pool.CreationTime.Value;
             }
 
-            IsDedicated = IBatchScheduler.PoolMetadata.Create(pool.Metadata.First(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)).Value).IsDedicated;
+            IsDedicated = metadata.IsDedicated;
             _ = _batchPools.AddPool(this);
+
+            static Version GetVersion(object value)
+                => value switch
+                {
+                    JsonElement jsonElement when JsonValueKind.String.Equals(jsonElement.ValueKind) => new(jsonElement.ToString()),
+                    JsonElement jsonElement when JsonValueKind.Number.Equals(jsonElement.ValueKind) => new(jsonElement.ToString()),
+                    Version versionValue => versionValue,
+                    string stringValue => new(stringValue),
+                    _ => (Version)Convert.ChangeType(value, typeof(Version)),
+                };
+        }
+
+        /// <inheritdoc/>
+        public void MarkRemovedFromService()
+        {
+            _removedFromService = true;
         }
     }
 
     /// <content>
-    /// Used for unit/module testing.
+    /// Used only for unit/module testing.
     /// </content>
     public sealed partial class BatchPool
     {
-        internal int TestPendingReservationsCount => GetTasksAsync(includeCompleted: false).CountAsync().AsTask().Result;
-
         internal int? TestTargetDedicated => _azureProxy.GetFullAllocationStateAsync(PoolId, CancellationToken.None).Result.TargetDedicated;
         internal int? TestTargetLowPriority => _azureProxy.GetFullAllocationStateAsync(PoolId, CancellationToken.None).Result.TargetLowPriority;
 
