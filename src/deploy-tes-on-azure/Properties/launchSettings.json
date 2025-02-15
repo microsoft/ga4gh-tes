@@ -2,8 +2,7 @@
   "profiles": {
     "Setup": {
       "commandName": "Project",
-      "commandLineArgs": "--SubscriptionId 594bef42-33f3-42df-b056-e7399d6ae7a0 --HelmBinaryPath \"C:\\Users\\v-murriblair\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helm.Helm_Microsoft.Winget.Source_8wekyb3d8bbwe\\windows-amd64\\helm.exe\" --DebugLogging true --KubectlBinaryPath \"C:\\Users\\v-murriblair\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Kubernetes.kubectl_Microsoft.Winget.Source_8wekyb3d8bbwe\\kubectl.exe\" --Update True --ResourceGroupName bmtwe-24c50640 --SolutionDir D:\\source\\repos\\alt\\ga4gh-tes",
-      "workingDirectory": "D:\\source\\deploy\\Terra\\westeurope\\bmtwe",
+      "commandLineArgs": "--subscriptionid aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee --regionname westus2 --mainidentifierprefix toatest --AadGroupIds aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
       "sqlDebugging": true
     }
   }
