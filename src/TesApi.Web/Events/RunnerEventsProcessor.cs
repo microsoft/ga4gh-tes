@@ -379,7 +379,7 @@ namespace TesApi.Web.Events
 
             async ValueTask<IEnumerable<string>> AddProcessLogsIfAvailableAsync(Tes.Runner.Events.EventMessage message, Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
             {
-                var processLogs = await GetProcessLogsAsync(message.Name, tesTask, cancellationToken).ToListAsync(cancellationToken);
+                var processLogs = await GetProcessLogsAsync(message, tesTask, cancellationToken).ToListAsync(cancellationToken);
 
                 if (processLogs.Any())
                 {
@@ -389,15 +389,24 @@ namespace TesApi.Web.Events
                 return processLogs;
             }
 
-            IAsyncEnumerable<string> GetProcessLogsAsync(string messageName, Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
+            IAsyncEnumerable<string> GetProcessLogsAsync(Tes.Runner.Events.EventMessage message, Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
             {
-                var blobNameStartsWith = messageName switch
+                var blobNameStartsWith = message.Name switch
                 {
                     Tes.Runner.Events.EventsPublisher.DownloadEndEvent => "download_std",
-                    Tes.Runner.Events.EventsPublisher.ExecutorEndEvent => "exec_std",
+                    Tes.Runner.Events.EventsPublisher.ExecutorEndEvent => "exec-",
                     Tes.Runner.Events.EventsPublisher.UploadEndEvent => "upload_std",
                     _ => string.Empty,
                 };
+
+                if (message.EventData.TryGetValue("executor", out var value) &&
+                    int.TryParse(value.Split('/', 2, StringSplitOptions.TrimEntries)[0], out var executor)
+                    ? executor
+                    : -1)
+                {
+                    // Maintain format with Tes.RunnerCLI.Commands.CommandLauncher.LaunchesExecutorCommandAsSubProcessAsync()
+                    blobNameStartsWith += $"{executor:D3}_std";
+                }
 
                 return GetAvailableProcessLogsAsync(blobNameStartsWith, tesTask, cancellationToken).Select(t => t.Uri.AbsoluteUri);
             }
