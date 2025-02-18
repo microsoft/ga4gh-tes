@@ -4,6 +4,7 @@
 using System.IO.Compression;
 using System.Net;
 using CommonUtilities;
+using Microsoft.Kiota.Abstractions.Authentication;
 
 namespace BuildPushAcr
 {
@@ -23,6 +24,28 @@ namespace BuildPushAcr
         private CancellationToken processEntryToken;
         private string? srcRoot;
         private string? root;
+
+        public static IAccessTokenProvider? GetAccessTokenProvider()
+        {
+            var pat = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
+
+            if (string.IsNullOrWhiteSpace(pat))
+            {
+                return default;
+            }
+
+            return new AccessTokenProvider(pat);
+        }
+
+        private class AccessTokenProvider(string pat) : IAccessTokenProvider
+        {
+            private readonly string pat = pat;
+
+            AllowedHostsValidator IAccessTokenProvider.AllowedHostsValidator { get; } = new(["api.github.com"]);
+
+            Task<string> IAccessTokenProvider.GetAuthorizationTokenAsync(Uri uri, Dictionary<string, object>? additionalAuthenticationContext, CancellationToken cancellationToken)
+                => Task.FromResult(pat);
+        }
 
         async ValueTask<Version> IArchive.GetTagAsync(CancellationToken cancellationToken)
         {
