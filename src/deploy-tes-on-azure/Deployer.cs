@@ -623,12 +623,16 @@ namespace TesDeployer
                             {
                                 ConsoleEx.WriteLine("Unable to assign 'Storage Blob Data Contributor' for deployment identity to the storage account. If the deployment fails as a result, the storage account must be precreated and the deploying user must have the 'Storage Blob Data Contributor' role for the storage account.", ConsoleColor.Yellow);
                             }
+                            else
+                            {
+                                await Task.Delay(TimeSpan.FromMinutes(5), cts.Token);
+                            }
 
-                            await WritePersonalizedFilesToStorageAccountAsync(storageAccountData);
                             await AssignVmAsContributorToStorageAccountAsync(managedIdentity, storageAccount);
                             await AssignVmAsDataOwnerToStorageAccountAsync(managedIdentity, storageAccount);
                             await AssignManagedIdOperatorToResourceAsync(managedIdentity, resourceGroup);
                             await AssignMIAsNetworkContributorToResourceAsync(managedIdentity, resourceGroup);
+                            await WritePersonalizedFilesToStorageAccountAsync(storageAccountData);
                         }),
                     ]);
 
