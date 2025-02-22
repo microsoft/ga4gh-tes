@@ -1,3 +1,5 @@
+### Announcement: Deployment [changes](https://github.com/microsoft/ga4gh-tes/wiki/6.0.0-Migration-Guide) in v6.0.0
+
 # GA4GH TES on Azure
 
 This project is an implementation of the [GA4GH Task Execution Service (TES)](https://github.com/ga4gh/task-execution-schemas), that provides distributed batch task execution on Microsoft Azure. The TES API is an effort to define a standardized schema and API for describing batch execution tasks. A task defines a set of input files, a set of Docker containers and commands to run, a set of output files, and some other logging and metadata.
