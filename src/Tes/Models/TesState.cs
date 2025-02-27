@@ -28,6 +28,8 @@ namespace Tes.Models
     /// - EXECUTOR_ERROR: The task encountered an error in one of the Executor processes. Generally, this means that an Executor exited with a non-zero exit code.
     /// - SYSTEM_ERROR: The task was stopped due to a system error, but not from an Executor, for example an upload failed due to network issues, the worker's ran out of disk space, etc.
     /// - CANCELED: The task was canceled by the user.
+    /// - PREEMPTED: The task is stopped (preempted) by the system. The reasons for this would be tied to the specific system running the job. Generally, this means that the system reclaimed the compute capacity for reallocation.
+    /// - CANCELING: The task was canceled by the user, but the downstream resources are still awaiting deletion.
     /// </value>
     [JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
     public enum TesState
@@ -40,6 +42,8 @@ namespace Tes.Models
         COMPLETE = 6,
         EXECUTOR_ERROR = 7,
         SYSTEM_ERROR = 8,
-        CANCELED = 9
+        CANCELED = 9,
+        PREEMPTED = 10,
+        CANCELING = 11,
     }
 }

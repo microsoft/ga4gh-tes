@@ -71,7 +71,7 @@ namespace CommonUtilities
 
         private void SetInitialState(AzureCloudConfig armEndpoints)
         {
-            (GetEnvironmentVariable("AZURE_ADDITIONALLY_ALLOWED_TENANTS") ?? string.Empty).Split((char[]?)[';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ForEach(AdditionallyAllowedTenants.Add);
+            (GetEnvironmentVariable("AZURE_ADDITIONALLY_ALLOWED_TENANTS") ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ForEach(AdditionallyAllowedTenants.Add);
             TenantId = GetEnvironmentVariable("AZURE_TENANT_ID")!;
             AuthorityHost = armEndpoints.AuthorityHost ?? new(armEndpoints.Authentication?.LoginEndpointUrl ?? throw new ArgumentException("AuthorityHost is missing", nameof(armEndpoints)));
             Audience = armEndpoints.ArmEnvironment?.Audience ?? armEndpoints.Authentication?.Audiences?.LastOrDefault() ?? throw new ArgumentException("Audience is missing", nameof(armEndpoints));
@@ -114,6 +114,11 @@ namespace CommonUtilities
         public bool DisableInstanceDiscovery { get; set; }
 
         /// <summary>
+        /// Options controlling the storage of the token cache.
+        /// </summary>
+        public Azure.Identity.TokenCachePersistenceOptions TokenCachePersistenceOptions { get; set; }
+
+        /// <summary>
         /// Specifies tenants in addition to the specified <see cref="TenantId"/> for which the credential may acquire tokens.
         /// Add the wildcard value "*" to allow the credential to acquire tokens for any tenant the logged in account can access.
         /// If no value is specified for <see cref="TenantId"/>, this option will have no effect on that authentication method, and the credential will acquire tokens for any requested tenant when using that method.
@@ -134,23 +139,17 @@ namespace CommonUtilities
 
         internal Azure.Identity.AzureCliCredential CreateAzureCliCredential()
         {
-            var result = new Azure.Identity.AzureCliCredentialOptions { TenantId = TenantId, AuthorityHost = AuthorityHost, IsUnsafeSupportLoggingEnabled = IsUnsafeSupportLoggingEnabled };
-            CopyAdditionallyAllowedTenants(result.AdditionallyAllowedTenants);
-            return new(result);
+            return new(ConfigureOptions(new Azure.Identity.AzureCliCredentialOptions()));
         }
 
         internal Azure.Identity.VisualStudioCredential CreateVisualStudioCredential()
         {
-            var result = new Azure.Identity.VisualStudioCredentialOptions { TenantId = TenantId, AuthorityHost = AuthorityHost, IsUnsafeSupportLoggingEnabled = IsUnsafeSupportLoggingEnabled };
-            CopyAdditionallyAllowedTenants(result.AdditionallyAllowedTenants);
-            return new(result);
+            return new(ConfigureOptions(new Azure.Identity.VisualStudioCredentialOptions()));
         }
 
         internal Azure.Identity.VisualStudioCodeCredential CreateVisualStudioCodeCredential()
         {
-            var result = new Azure.Identity.VisualStudioCodeCredentialOptions { TenantId = TenantId, AuthorityHost = AuthorityHost, IsUnsafeSupportLoggingEnabled = IsUnsafeSupportLoggingEnabled };
-            CopyAdditionallyAllowedTenants(result.AdditionallyAllowedTenants);
-            return new(result);
+            return new(ConfigureOptions(new Azure.Identity.VisualStudioCodeCredentialOptions()));
         }
 
         //internal Azure.Identity.InteractiveBrowserCredential CreateInteractiveBrowserCredential()
@@ -169,40 +168,112 @@ namespace CommonUtilities
 
         internal Azure.Identity.ClientSecretCredential CreateClientSecretCredential(string appId, string appKey, string tenantId)
         {
-            var result = new Azure.Identity.ClientSecretCredentialOptions { AuthorityHost = AuthorityHost, IsUnsafeSupportLoggingEnabled = IsUnsafeSupportLoggingEnabled, DisableInstanceDiscovery = DisableInstanceDiscovery };
-            CopyAdditionallyAllowedTenants(result.AdditionallyAllowedTenants);
-            return new(string.IsNullOrEmpty(tenantId) ? TenantId : tenantId, appId, appKey, result);
+            return new(string.IsNullOrEmpty(tenantId) ? TenantId : tenantId, appId, appKey, ConfigureOptions(new Azure.Identity.ClientSecretCredentialOptions()));
         }
 
-        internal Azure.Identity.ManagedIdentityCredential CreateManagedIdentityCredential(int _1, string appId)
+        internal Azure.Identity.ManagedIdentityCredential CreateManagedIdentityCredential(string appId)
         {
-            return new(appId, this);
+            return new(appId, options: this);
         }
 
-        internal Azure.Identity.ManagedIdentityCredential CreateManagedIdentityCredential(int _1)
+        internal Azure.Identity.ManagedIdentityCredential CreateManagedIdentityCredential()
         {
-            return new(options: this);
+            return CreateManagedIdentityCredential(null!);
         }
 
         internal Azure.Identity.WorkloadIdentityCredential CreateWorkloadIdentityCredential(string appId)
         {
-            Azure.Identity.WorkloadIdentityCredentialOptions result = new() { ClientId = appId, AuthorityHost = AuthorityHost, IsUnsafeSupportLoggingEnabled = IsUnsafeSupportLoggingEnabled, DisableInstanceDiscovery = DisableInstanceDiscovery, TenantId = TenantId };
-            CopyAdditionallyAllowedTenants(result.AdditionallyAllowedTenants);
-            return new(result);
+            return new(ConfigureOptions(new Azure.Identity.WorkloadIdentityCredentialOptions() { ClientId = appId }));
         }
 
         internal Azure.Identity.WorkloadIdentityCredential CreateWorkloadIdentityCredential()
         {
-            Azure.Identity.WorkloadIdentityCredentialOptions result = new() { AuthorityHost = AuthorityHost, IsUnsafeSupportLoggingEnabled = IsUnsafeSupportLoggingEnabled, DisableInstanceDiscovery = DisableInstanceDiscovery, TenantId = TenantId };
-            CopyAdditionallyAllowedTenants(result.AdditionallyAllowedTenants);
-            return new(result);
+            return new(ConfigureOptions(new Azure.Identity.WorkloadIdentityCredentialOptions()));
         }
 
-        void CopyAdditionallyAllowedTenants(IList<string> additionalTenants)
+        // Based on https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/identity/Azure.Identity/src/Credentials/TokenCredentialOptions.cs#L50 method Clone
+        private T ConfigureOptions<T>(T options) where T : Azure.Identity.TokenCredentialOptions
         {
-            foreach (var tenant in AdditionallyAllowedTenants)
+            CopyTenantId(options);
+
+            // copy TokenCredentialOptions Properties
+            options.AuthorityHost = AuthorityHost;
+
+            options.IsUnsafeSupportLoggingEnabled = IsUnsafeSupportLoggingEnabled;
+
+            // copy TokenCredentialDiagnosticsOptions specific options
+            options.Diagnostics.IsAccountIdentifierLoggingEnabled = Diagnostics.IsAccountIdentifierLoggingEnabled;
+
+            // copy ISupportsDisableInstanceDiscovery
+            CopyDisableInstanceDiscovery(options);
+
+            // copy ISupportsTokenCachePersistenceOptions
+            CopyTokenCachePersistenceOptions(options);
+
+            // copy ISupportsAdditionallyAllowedTenants
+            CopyAdditionallyAllowedTenants(options);
+
+            // copy base ClientOptions properties
+
+            // only copy transport if the original has changed from the default so as not to set IsCustomTransportSet unintentionally
+            if (Transport != Default.Transport)
             {
-                additionalTenants.Add(tenant);
+                options.Transport = Transport;
+            }
+
+            // clone base Diagnostic options
+            options.Diagnostics.ApplicationId = Diagnostics.ApplicationId;
+            options.Diagnostics.IsLoggingEnabled = Diagnostics.IsLoggingEnabled;
+            options.Diagnostics.IsTelemetryEnabled = Diagnostics.IsTelemetryEnabled;
+            options.Diagnostics.LoggedContentSizeLimit = Diagnostics.LoggedContentSizeLimit;
+            options.Diagnostics.IsDistributedTracingEnabled = Diagnostics.IsDistributedTracingEnabled;
+            options.Diagnostics.IsLoggingContentEnabled = Diagnostics.IsLoggingContentEnabled;
+
+            CopyListItems(Diagnostics.LoggedHeaderNames, options.Diagnostics.LoggedHeaderNames);
+            CopyListItems(Diagnostics.LoggedQueryParameters, options.Diagnostics.LoggedQueryParameters);
+
+            // clone base RetryOptions
+            options.RetryPolicy = RetryPolicy;
+
+            options.Retry.MaxRetries = Retry.MaxRetries;
+            options.Retry.Delay = Retry.Delay;
+            options.Retry.MaxDelay = Retry.MaxDelay;
+            options.Retry.Mode = Retry.Mode;
+            options.Retry.NetworkTimeout = Retry.NetworkTimeout;
+
+            return options;
+        }
+
+        private static void CopyListItems<TItem>(IList<TItem> source, IList<TItem> destination)
+        {
+            foreach (var item in source)
+            {
+                destination.Add(item);
+            }
+        }
+
+        private void CopyTenantId<T>(T options) where T : Azure.Identity.TokenCredentialOptions
+        {
+            options?.GetType().GetProperty(nameof(TenantId))?.SetValue(options, TenantId);
+        }
+
+        private void CopyDisableInstanceDiscovery<T>(T options) where T : Azure.Identity.TokenCredentialOptions
+        {
+            options?.GetType().GetProperty(nameof(DisableInstanceDiscovery))?.SetValue(options, DisableInstanceDiscovery);
+        }
+
+        private void CopyTokenCachePersistenceOptions<T>(T options) where T : Azure.Identity.TokenCredentialOptions
+        {
+            options?.GetType().GetProperty(nameof(TokenCachePersistenceOptions))?.SetValue(options, TokenCachePersistenceOptions);
+        }
+
+        void CopyAdditionallyAllowedTenants<T>(T options) where T : Azure.Identity.TokenCredentialOptions
+        {
+            var additionalTenants = options?.GetType().GetProperty(nameof(AdditionallyAllowedTenants))?.GetValue(options) as IList<string>;
+
+            if (additionalTenants is not null)
+            {
+                CopyListItems(AdditionallyAllowedTenants, additionalTenants);
             }
         }
     }
@@ -367,30 +438,24 @@ namespace CommonUtilities
                     }
                     else
                     {
-                        ValidateMsiRetryTimeout(connectionSettings, options.ConnectionString);
+                        ValidateAndSetMsiRetryTimeout(connectionSettings, options);
 
                         // If certificate or client secret are not specified, use the specified managed identity
-                        azureServiceTokenCredential = options.CreateManagedIdentityCredential(
-                            connectionSettings.TryGetValue(MsiRetryTimeout, out var value)
-                                ? int.Parse(value)
-                                : 0,
-                                appId);
+                        azureServiceTokenCredential = options.CreateManagedIdentityCredential(appId);
                     }
                 }
                 else
                 {
-                    ValidateMsiRetryTimeout(connectionSettings, options.ConnectionString);
+                    ValidateAndSetMsiRetryTimeout(connectionSettings, options);
 
                     // If AppId is not specified, use Managed Service Identity
-                    azureServiceTokenCredential = options.CreateManagedIdentityCredential(
-                        connectionSettings.TryGetValue(MsiRetryTimeout, out var value)
-                            ? int.Parse(value)
-                            : 0);
+                    azureServiceTokenCredential = options.CreateManagedIdentityCredential();
                 }
             }
             else if (string.Equals(runAs, Workload, StringComparison.OrdinalIgnoreCase))
             {
-                // If RunAs=Workload use the specified Workload Identity
+                // RunAs=Workload
+                // Use the specified Workload Identity
                 // If AppId key is present, use it as the ClientId
                 if (connectionSettings.TryGetValue(AppId, out var appId))
                 {
@@ -468,7 +533,7 @@ namespace CommonUtilities
         //    }
         //}
 
-        private static void ValidateMsiRetryTimeout(Dictionary<string, string> connectionSettings, string connectionString)
+        private static void ValidateAndSetMsiRetryTimeout(Dictionary<string, string> connectionSettings, AzureServicesConnectionStringCredentialOptions options)
         {
             if (connectionSettings != null && connectionSettings.TryGetValue(MsiRetryTimeout, out var value))
             {
@@ -476,10 +541,13 @@ namespace CommonUtilities
                 {
                     var timeoutString = value;
 
-                    var parseSucceeded = int.TryParse(timeoutString, out _);
-                    if (!parseSucceeded)
+                    if (int.TryParse(timeoutString, out var timeoutValue) && timeoutValue >= 0)
                     {
-                        throw new ArgumentException($"Connection string '{connectionString}' is not valid. MsiRetryTimeout '{timeoutString}' is not valid. Valid values are integers greater than or equal to 0.", nameof(connectionString));
+                        options.Retry.NetworkTimeout = TimeSpan.FromSeconds(timeoutValue);
+                    }
+                    else
+                    {
+                        throw new ArgumentException($"Connection string '{options.ConnectionString}' is not valid. MsiRetryTimeout '{timeoutString}' is not valid. Valid values are integers greater than or equal to 0.", nameof(options));
                     }
                 }
             }
