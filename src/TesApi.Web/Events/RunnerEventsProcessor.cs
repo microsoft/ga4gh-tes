@@ -411,10 +411,18 @@ namespace TesApi.Web.Events
                 var blobNameStartsWith = message.Name switch
                 {
                     Tes.Runner.Events.EventsPublisher.DownloadEndEvent => "download_std",
+
                     Tes.Runner.Events.EventsPublisher.ExecutorEndEvent => $"exec-{ParseExecutorIndex(message.EventData):D3}_std",
                     Tes.Runner.Events.EventsPublisher.UploadEndEvent => "upload_std",
                     _ => string.Empty,
                 };
+
+                if (message.EventData.TryGetValue("executor", out var value) &&
+                    int.TryParse(value.Split('/', 2, StringSplitOptions.TrimEntries)[0], out var executor))
+                {
+                    // Maintain format with Tes.RunnerCLI.Commands.CommandLauncher.LaunchesExecutorCommandAsSubProcessAsync()
+                    blobNameStartsWith += $"{executor:D3}_std";
+                }
 
                 return GetAvailableProcessLogsAsync(blobNameStartsWith, tesTask, cancellationToken).Select(t => t.Uri.AbsoluteUri);
             }
