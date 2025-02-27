@@ -400,9 +400,7 @@ namespace TesApi.Web.Events
                 };
 
                 if (message.EventData.TryGetValue("executor", out var value) &&
-                    int.TryParse(value.Split('/', 2, StringSplitOptions.TrimEntries)[0], out var executor)
-                    ? executor
-                    : -1)
+                    int.TryParse(value.Split('/', 2, StringSplitOptions.TrimEntries)[0], out var executor))
                 {
                     // Maintain format with Tes.RunnerCLI.Commands.CommandLauncher.LaunchesExecutorCommandAsSubProcessAsync()
                     blobNameStartsWith += $"{executor:D3}_std";
