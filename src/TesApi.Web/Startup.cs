@@ -25,6 +25,7 @@ using Newtonsoft.Json.Serialization;
 using Tes.ApiClients;
 using Tes.Models;
 using Tes.Repository;
+using Tes.Repository.Models;
 using TesApi.Filters;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Batch;
@@ -95,12 +96,13 @@ namespace TesApi.Web
                     .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryCache<TesTaskDatabaseItem>>()
                     .AddSingleton<TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()
+                    .AddSingleton<Events.RunnerEventsProcessor>()
                     .AddTransient<BatchPool>()
-                    .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
+                    .AddSingleton<Func<IBatchPool>>(services => () => services.GetService<BatchPool>())
                     .AddSingleton(CreateTerraApiClient)
                     .AddSingleton<IBatchPoolManager>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesBatchPoolManager>(sp, CreateBatchPoolManagerFromConfiguration(sp)))
 
-                    .AddControllers(options => options.Filters.Add<Controllers.OperationCancelledExceptionFilter>())
+                    .AddControllers(options => options.Filters.Add<OperationCancelledExceptionFilter>())
                         .AddNewtonsoftJson(opts =>
                         {
                             opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
@@ -118,6 +120,8 @@ namespace TesApi.Web
                     .AddSingleton(CreateActionIdentityProvider)
                     .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                     .AddSingleton<IBatchScheduler, BatchScheduler>()
+                    .AddSingleton<TaskScheduler>()
+                    .AddSingleton<ITaskScheduler>(s => s.GetRequiredService<TaskScheduler>())
                     .AddSingleton<PriceApiClient>()
                     .AddSingleton<IBatchSkuInformationProvider>(s => ActivatorUtilities.CreateInstance<PriceApiBatchSkuInformationProvider>(s, TerraOptionsAreConfigured(s)))
                     .AddSingleton(CreateBatchAccountResourceInformation)
@@ -297,8 +301,14 @@ namespace TesApi.Web
 
                     // Order is important for hosted services
                     .AddHostedService(sp => (AllowedVmSizesService)sp.GetRequiredService(typeof(IAllowedVmSizesService)))
-                    .AddHostedService<BatchPoolService>()
-                    .AddHostedService<Scheduler>();
+                    .AddHostedService<PoolScheduler>()
+                    .AddHostedService(s => s.GetRequiredService<TaskScheduler>());
+
+                RetryPolicyOptions retryPolicy = new();
+                configuration.Bind(RetryPolicyOptions.SectionName, retryPolicy);
+
+                ClientOptions.Default.Retry.MaxRetries = retryPolicy.MaxRetryCount;
+                ClientOptions.Default.Retry.Delay = TimeSpan.FromSeconds(retryPolicy.ExponentialBackOffExponent);
             }
             catch (Exception exc)
             {
