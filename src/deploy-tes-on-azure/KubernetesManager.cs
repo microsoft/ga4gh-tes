@@ -442,6 +442,7 @@ namespace TesDeployer
             var deployment = GetObjectFromConfig(values, "deployment") ?? new Dictionary<string, string>();
 
             values.Config["acrId"] = GetValueOrDefault(settings, "AcrId");
+            values.Config["tesImage"] = GetValueOrDefault(settings, "TesImageName");
             values.Config["azureCloudName"] = GetValueOrDefault(settings, "AzureCloudName");
             values.Config["tesOnAzureVersion"] = GetValueOrDefault(settings, "TesOnAzureVersion");
             values.Config["azureServicesAuthConnectionString"] = GetValueOrDefault(settings, "AzureServicesAuthConnectionString");
@@ -464,7 +465,7 @@ namespace TesDeployer
             drsHub["url"] = GetValueOrDefault(settings, "DrsHubUrl");
             batchScheduling["prefix"] = GetValueOrDefault(settings, "BatchPrefix");
             values.Config["crossSubscriptionAKSDeployment"] = GetValueOrDefault(settings, "CrossSubscriptionAKSDeployment");
-            values.Images["tes"] = GetValueOrDefault(settings, "TesImageName");
+            values.Images["tes"] = GetValueOrDefault(settings, "ActualTesImageName");
             values.Service["tesHostname"] = GetValueOrDefault(settings, "TesHostname");
             values.Service["enableIngress"] = GetValueOrDefault(settings, "EnableIngress");
             values.Config["letsEncryptEmail"] = GetValueOrDefault(settings, "LetsEncryptEmail");
@@ -518,6 +519,7 @@ namespace TesDeployer
             return new()
             {
                 ["AcrId"] = GetValueOrDefault(values.Config, "acrId") as string,
+                ["TesImageName"] = GetValueOrDefault(values.Config, "tesImage") as string ?? GetValueOrDefault(values.Images, "tes"),
                 ["AzureCloudName"] = GetValueOrDefault(values.Config, "azureCloudName") as string,
                 ["TesOnAzureVersion"] = GetValueOrDefault(values.Config, "tesOnAzureVersion") as string,
                 ["AzureServicesAuthConnectionString"] = GetValueOrDefault(values.Config, "azureServicesAuthConnectionString") as string,
@@ -542,7 +544,7 @@ namespace TesDeployer
                 ["CrossSubscriptionAKSDeployment"] = GetValueOrDefault(values.Config, "crossSubscriptionAKSDeployment") as string,
                 ["UsePostgreSqlSingleServer"] = GetValueOrDefault(values.Config, "usePostgreSqlSingleServer") as string,
                 ["ManagedIdentityClientId"] = GetValueOrDefault(values.Identity, "clientId"),
-                ["TesImageName"] = GetValueOrDefault(values.Images, "tes"),
+                ["ActualTesImageName"] = string.IsNullOrEmpty(GetValueOrDefault(values.Config, "tesImage") as string) ? null : GetValueOrDefault(values.Images, "tes"),
                 ["TesHostname"] = GetValueOrDefault(values.Service, "tesHostname"),
                 ["EnableIngress"] = GetValueOrDefault(values.Service, "enableIngress"),
                 ["LetsEncryptEmail"] = GetValueOrDefault(values.Config, "letsEncryptEmail") as string,

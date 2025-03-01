@@ -107,6 +107,9 @@ namespace TesDeployer
 
         private static readonly TimeSpan longRetryWaitTime = TimeSpan.FromSeconds(15);
 
+        internal static Azure.Core.Pipeline.RetryPolicy GetRetryPolicy(CommonUtilities.Options.RetryPolicyOptions retryPolicy)
+            => new(retryPolicy.MaxRetryCount, DelayStrategy.CreateExponentialDelayStrategy(TimeSpan.FromSeconds(retryPolicy.ExponentialBackOffExponent)));
+
         public const string ConfigurationContainerName = "configuration";
         public const string TesInternalContainerName = "tes-internal";
         public const string AllowedVmSizesFileName = "allowed-vm-sizes";
@@ -168,7 +171,11 @@ namespace TesDeployer
         {
             return new(new BlobUriBuilder(storageAccount.PrimaryEndpoints.BlobUri) { BlobContainerName = containerName, BlobName = blobName }.ToUri(),
                 tokenCredential,
-                new() { Audience = Azure.Storage.Blobs.Models.BlobAudience.DefaultAudience }); // https://github.com/Azure/azure-cli/issues/28708#issuecomment-2047256166
+                new()
+                {
+                    Audience = Azure.Storage.Blobs.Models.BlobAudience.DefaultAudience, // https://github.com/Azure/azure-cli/issues/28708#issuecomment-2047256166
+                    RetryPolicy = GetRetryPolicy(new())
+                });
         }
 
         public async Task<int> DeployAsync()
@@ -195,8 +202,8 @@ namespace TesDeployer
 
                 await Execute("Connecting to Azure Services...", async () =>
                 {
-                    tokenCredential = new AzureCliCredential(new() { AuthorityHost = cloudEnvironment.AzureAuthorityHost });
-                    armClient = new ArmClient(tokenCredential, configuration.SubscriptionId, new() { Environment = cloudEnvironment.ArmEnvironment });
+                    tokenCredential = new AzureCliCredential(new() { AuthorityHost = cloudEnvironment.AzureAuthorityHost, RetryPolicy = GetRetryPolicy(new()) });
+                    armClient = new ArmClient(tokenCredential, configuration.SubscriptionId, new() { Environment = cloudEnvironment.ArmEnvironment, RetryPolicy = GetRetryPolicy(new()) });
                     armSubscription = armClient.GetSubscriptionResource(SubscriptionResource.CreateResourceIdentifier(configuration.SubscriptionId));
                     subscriptionIds = await armClient.GetSubscriptions().GetAllAsync(cts.Token).ToListAsync(cts.Token);
                 });
@@ -1296,52 +1303,50 @@ namespace TesDeployer
         private async Task BuildPushAcrAsync(Dictionary<string, string> settings, string targetVersion, UserAssignedIdentityResource managedIdentity)
         {
             ContainerRegistryResource acr = default;
+            Azure.Containers.ContainerRegistry.ContainerRegistryClient client = default;
 
             if (settings.TryGetValue("AcrId", out var acrId) && !string.IsNullOrEmpty(acrId))
             {
                 acr = await EnsureResourceDataAsync(armClient.GetContainerRegistryResource(new(acrId)), r => r.HasData, r => r.GetAsync, cts.Token);
             }
 
-            List<string> defaultRegistries = ["mcr.microsoft.com"]; // Upgrade tag changes reset to MCR even though it is no longer used.
-
-            if (acr is not null)
-            {
-                defaultRegistries.Add(acr.Data.LoginServer);
-            }
-
             // No build needed if the image is not in the registries this deployer manages or if the same version is being upgraded with no explicit source code provided.
-            if ((((string[])[configuration.AcrId, configuration.GitHubCommit, configuration.SolutionDir]).All(string.IsNullOrWhiteSpace) && bool.Parse(settings["SameVersionUpgrade"]))
-                || !defaultRegistries.Select(s => s + "/").Any(settings["TesImageName"].StartsWith))
             {
-                if (defaultRegistries.Count > 1 && settings["TesImageName"].StartsWith(defaultRegistries[0]))
+                var acrRequested = !((string[])[configuration.AcrId, configuration.GitHubCommit, configuration.SolutionDir]).All(string.IsNullOrWhiteSpace);
+                var sameVersionUpgrade = bool.Parse(settings["SameVersionUpgrade"]);
+                var tesUpgraded = !settings["TesImageName"].Equals(settings["PreviousTesImageName"]);
+                var canReturnEarly = sameVersionUpgrade;
+
+                if (acr is null && !acrRequested &&
+                    ((string[])[settings["TesImageName"]]).All(name => !name.StartsWith("mcr.microsoft.com/")))
                 {
-                    var path = settings["TesImageName"][defaultRegistries[0].Length..];
-
-                    if (path[path.IndexOf(':')..].Count(c => c == '.') == 3)
-                    {
-                        path = path[..path.LastIndexOf('.')];
-                    }
-
-                    settings["TesImageName"] = defaultRegistries[1] + path;
+                    settings["ActualTesImageName"] = settings["TesImageName"];
+                }
+                else
+                {
+                    canReturnEarly = sameVersionUpgrade && !tesUpgraded && !string.IsNullOrEmpty(settings["ActualTesImageName"]);
                 }
 
-                return; // No ACR build needed
+                if (canReturnEarly)
+                {
+                    return; // No ACR build needed
+                }
             }
 
             if (acr is null)
             {
-                if (!string.IsNullOrWhiteSpace(configuration.AcrId))
+                if (string.IsNullOrWhiteSpace(configuration.AcrId))
                 {
-                    acr = await EnsureResourceDataAsync(armClient.GetContainerRegistryResource(new(configuration.AcrId)), r => r.HasData, r => r.GetAsync, cts.Token);
-                    ConsoleEx.WriteLine($"Using existing Container Registry {acr.Id.Name}");
+                    var name = Utility.RandomResourceName(configuration.MainIdentifierPrefix, 25);
+                    acr = await Execute($"Creating Container Registry: {name}...",
+                        async () => (await resourceGroup.GetContainerRegistries().CreateOrUpdateAsync(WaitUntil.Completed, name, new(new(configuration.RegionName), new(Azure.ResourceManager.ContainerRegistry.Models.ContainerRegistrySkuName.Standard)), cts.Token)).Value);
                     await AssignManagedIdAcrPullToResourceAsync(managedIdentity, acr);
                     settings["AcrId"] = acr.Id;
                 }
                 else
                 {
-                    var name = Utility.RandomResourceName(configuration.MainIdentifierPrefix, 25);
-                    acr = await Execute($"Creating Container Registry: {name}...",
-                        async () => (await resourceGroup.GetContainerRegistries().CreateOrUpdateAsync(WaitUntil.Completed, name, new(new(configuration.RegionName), new(Azure.ResourceManager.ContainerRegistry.Models.ContainerRegistrySkuName.Standard)), cts.Token)).Value);
+                    acr = await EnsureResourceDataAsync(armClient.GetContainerRegistryResource(new(configuration.AcrId)), r => r.HasData, r => r.GetAsync, cts.Token);
+                    ConsoleEx.WriteLine($"Using existing Container Registry {acr.Id.Name}");
                     await AssignManagedIdAcrPullToResourceAsync(managedIdentity, acr);
                     settings["AcrId"] = acr.Id;
                 }
@@ -1397,7 +1402,11 @@ namespace TesDeployer
                     return build;
                 }));
 
-            settings["TesImageName"] = $"{acr.Data.LoginServer}/ga4gh/tes:{build.Tag}";
+            var tesDigest = (await (client ??= GetClient()).GetArtifact("cromwellonazure/tes", build.Tag.ToString()).GetManifestPropertiesAsync(cts.Token)).Value.Digest;
+            settings["ActualTesImageName"] = $"{acr.Data.LoginServer}/cromwellonazure/tes@{tesDigest}";
+
+            Azure.Containers.ContainerRegistry.ContainerRegistryClient GetClient()
+                => new(new UriBuilder() { Scheme = Uri.UriSchemeHttps, Host = acr.Data.LoginServer }.Uri, tokenCredential, new() { Audience = cloudEnvironment.ArmEnvironment.Audience, RetryPolicy = GetRetryPolicy(new()) });
         }
 
         private static Dictionary<string, string> GetDefaultValues(string[] files)
@@ -1426,6 +1435,7 @@ namespace TesDeployer
             UpdateSetting(settings, defaults, "DeploymentUpdated", currentTime.ToString("O"), ignoreDefaults: false);
 
             // Process images
+            CopySetting("TesImageName", "PreviousTesImageName");
             UpdateSetting(settings, defaults, "TesImageName", configuration.TesImageName,
                 ignoreDefaults: ImageNameIgnoreDefaults(settings, defaults, "TesImageName", configuration.TesImageName is null, installedVersion));
 
@@ -1465,6 +1475,9 @@ namespace TesDeployer
 
             BackFillSettings(settings, defaults);
             return settings;
+
+            void CopySetting(string key, string newKey, string @default = null)
+                => settings[newKey] = settings.TryGetValue(key, out var value) ? value : @default;
         }
 
         /// <summary>
@@ -1488,28 +1501,6 @@ namespace TesDeployer
             _ = settings.TryGetValue(key, out var installed);
             _ = defaults.TryGetValue(key, out var @default);
 
-            if (settings.TryGetValue("AcrId", out var acrId) && !string.IsNullOrEmpty(acrId))
-            {
-                var id = ResourceIdentifier.Parse(acrId);
-
-                if (installed.StartsWith($"{id.Name}."))
-                {
-                    @default = $"{installed.Split('/', 2)[0]}/{@default.Split('/', 2)[1]}";
-                }
-            }
-
-            var fieldCount = installedVersion switch
-            {
-                var v when v.Revision != -1 => 4,
-                var v when v.Build != -1 => 3,
-                _ => 2,
-            };
-
-            if (acrId is not null)
-            {
-                fieldCount = Math.Min(fieldCount, 3);
-            }
-
             var defaultPath = @default?[..@default.LastIndexOf(':')];
             var installedTag = installed?[(installed.LastIndexOf(':') + 1)..];
             bool? result;
@@ -1521,7 +1512,7 @@ namespace TesDeployer
                         // Attempt to parse the tag as a version (ignoring any decorations)
                         && Version.TryParse(installedTag, out var version)
                         // Check if the parsed version matches the installed version
-                        && version.ToString(fieldCount).Equals(installedVersion.ToString(fieldCount))
+                        && version.Equals(installedVersion)
                     // If not customized, consider it as not requiring an upgrade
                     ? false
                     // If customized, preserve the configured image without upgrading
@@ -2163,7 +2154,7 @@ namespace TesDeployer
 
         private async Task SetStorageKeySecret(Uri vaultUrl, string secretName, string secretValue)
         {
-            var client = new SecretClient(vaultUrl, tokenCredential);
+            var client = new SecretClient(vaultUrl, tokenCredential, new() { RetryPolicy = GetRetryPolicy(new()) });
             await client.SetSecretAsync(secretName, secretValue, cts.Token);
         }
 
