@@ -73,7 +73,7 @@
     </GenerateMD5>
     <WriteLinesToFile Lines="$(__RunnerMD5Hash)" File="$(IntermediateOutputPath)$(AssemblyName).md5" WriteOnlyWhenDifferent="true" Overwrite="true" />
     <ItemGroup>
-    <FileWrites Include="$(IntermediateOutputPath)$(AssemblyName).md5" />
+      <FileWrites Include="$(IntermediateOutputPath)$(AssemblyName).md5" />
       <ResolvedFileToPublish Include="$(IntermediateOutputPath)$(AssemblyName).md5">
         <RelativePath>$(AssemblyName).md5</RelativePath>
       </ResolvedFileToPublish>

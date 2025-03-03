@@ -23,6 +23,7 @@ using Newtonsoft.Json;
 using Tes.Extensions;
 using Tes.Models;
 using Tes.TaskSubmitters;
+using TesApi.Tests.Storage;
 using TesApi.Web;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Batch;
@@ -235,7 +236,7 @@ namespace TesApi.Tests
             var batchScheduler = serviceProvider.GetT();
 
             var size = await ((BatchScheduler)batchScheduler).GetVmSizeAsync(task, CancellationToken.None);
-            GuardAssertsWithTesTask(task, () => Assert.AreEqual(vmSize, size.VmSize));
+            GuardAssertsWithTesTask(task, () => Assert.AreEqual(vmSize, size.VM.VmSize));
         }
 
         private static BatchAccountResourceInformation GetNewBatchResourceInfo()
@@ -634,7 +635,7 @@ namespace TesApi.Tests
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual("TES-hostname-edicated1-obkfufnroslrzwlitqbrmjeowu7iuhfm-", tesTask.PoolId[0..^8]);
+                Assert.AreEqual("TES-hostname-edicated1-pwh2hopt3kvqjb2hfmq4psr3sotsrv4m-", tesTask.PoolId[0..^8]);
                 Assert.AreEqual("VmSizeDedicated1", pool.VmSize);
                 Assert.IsTrue(((BatchScheduler)batchScheduler).TryGetPool(tesTask.PoolId, out _));
             });
@@ -1008,6 +1009,52 @@ namespace TesApi.Tests
         }
 
         [DataTestMethod]
+        [DataRow(["task-executor-1_stdout_20241007203438616.txt", "task-executor-1_stderr_20241007203438616.txt"])]
+        [DataRow(["task-executor-1_stdout_20241007203438616.txt", "task-executor-1_stderr_20241007203438616.txt", "task-executor-1_stdout_20241007203438616_1.txt",])]
+        public async Task ExecutorLogsAreAddedToExecutorLog(IEnumerable<string> logs)
+        {
+            List<Uri> expectedStdErrLogs = [];
+            List<Uri> expectedStdOutLogs = [];
+            var tesTask = GetTesTask();
+            tesTask.State = TesState.RUNNING;
+
+            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
+            azureProxyReturnValues.BatchJobAndTaskState = BatchJobAndTaskStates.TaskCompletedSuccessfully;
+            var azureProxy = GetMockAzureProxy(azureProxyReturnValues);
+            var batchPoolManager = GetMockBatchPoolManager(azureProxyReturnValues);
+
+            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), batchPoolManager, azureProxyReturnValues, serviceProviderActions: serviceProvider =>
+            {
+                var storageAccessProvider = serviceProvider.GetServiceOrCreateInstance<IStorageAccessProvider>();
+                var executionDirectoryUri = storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, null, CancellationToken.None).GetAwaiter().GetResult();
+
+                logs.Order().ForEach(log =>
+                {
+                    var uri = storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(tesTask, log);
+
+                    if (log.Contains("stderr"))
+                    {
+                        expectedStdErrLogs.Add(uri);
+                    }
+                    else if (log.Contains("stdout"))
+                    {
+                        expectedStdOutLogs.Add(uri);
+                    }
+                });
+
+                serviceProvider.AzureProxy.Setup(p => p.ListBlobsAsync(It.Is(executionDirectoryUri, new UrlMutableSASEqualityComparer()), It.IsAny<CancellationToken>())).Returns(Task.FromResult(expectedStdErrLogs.Concat(expectedStdOutLogs).OrderBy(uri => uri.AbsoluteUri).Select(log => BlobsModelFactory.BlobItem(name: new BlobUriBuilder(log).BlobName))));
+            });
+
+            GuardAssertsWithTesTask(tesTask, () =>
+            {
+                Assert.IsTrue(expectedStdOutLogs.SequenceEqual(GetLogs(tesTask.Logs.LastOrDefault()?.Logs.FirstOrDefault()?.Stdout ?? string.Empty) ?? []));
+                Assert.IsTrue(expectedStdErrLogs.SequenceEqual(GetLogs(tesTask.Logs.LastOrDefault()?.Logs.FirstOrDefault()?.Stderr ?? string.Empty) ?? []));
+            });
+
+            static IEnumerable<Uri> GetLogs(string logs) => logs is null ? null : System.Text.Json.JsonSerializer.Deserialize<IEnumerable<string>>(logs).Select(log => new Uri(log));
+        }
+
+        [DataTestMethod]
         [DataRow(new string[] { null, "echo hello" }, "blob1.tmp", false, DisplayName = "commandScript via content")]
         [DataRow(new string[] { "https://defaultstorageaccount.blob.core.windows.net/cromwell-executions/workflow1/0fbdb535-4afd-45e3-a8a8-c8e50585ee4e/call-Task1/execution/script", null }, "blob1.tmp", false, DisplayName = "default url with file missing")]
         [DataRow(new string[] { "https://defaultstorageaccount.blob.core.windows.net/cromwell-executions/workflow1/0fbdb535-4afd-45e3-a8a8-c8e50585ee4e/call-Task1/execution/script", null }, "blob1.tmp", true, DisplayName = "default url with file present")]
@@ -1334,8 +1381,8 @@ namespace TesApi.Tests
                 azureProxy.Setup(a => a.GetStorageAccountInfoAsync("storageaccount1", It.IsAny<CancellationToken>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.StorageAccountInfos["storageaccount1"]));
 
-                azureProxy.Setup(a => a.GetStorageAccountKeyAsync(It.IsAny<StorageAccountInfo>(), It.IsAny<CancellationToken>()))
-                    .Returns(Task.FromResult(azureProxyReturnValues.StorageAccountKey));
+                azureProxy.Setup(a => a.GetStorageAccountUserKeyAsync(It.IsAny<StorageAccountInfo>(), It.IsAny<CancellationToken>()))
+                    .Returns(Task.FromResult(DefaultStorageAccessProviderTests.GenerateTestAzureStorageKey(azureProxyReturnValues.StorageAccountKey)));
 
                 azureProxy.Setup(a => a.GetBatchActiveNodeCountByVmSize())
                     .Returns(azureProxyReturnValues.ActiveNodeCountByVmSize);

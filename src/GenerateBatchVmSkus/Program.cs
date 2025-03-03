@@ -10,19 +10,24 @@ using System.CommandLine.Parsing;
 using System.CommandLine.Rendering;
 using System.Globalization;
 using System.Reflection;
+using Azure.Core;
 using Azure.Identity;
+using Azure.ResourceManager;
+using Azure.ResourceManager.Batch;
 using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Tes.Models;
 
 namespace GenerateBatchVmSkus
 {
     internal class Configuration
     {
         public string? SubscriptionId { get; set; }
-        public string? OutputFilePath { get; set; }
+        public string? VmOutputFilePath { get; set; }
+        public string? DiskOutputFilePath { get; set; }
         public string[]? BatchAccounts { get; set; }
         public string[]? SubnetIds { get; set; }
 
@@ -72,7 +77,7 @@ namespace GenerateBatchVmSkus
             IsRequired = true
         };
 
-        CommandLineBuilder BuildHostBuilder()
+        private static CommandLineBuilder BuildHostBuilder()
         {
             var jsonFile = new Argument<FileInfo>("destination", "Minimized SKU list.") { Arity = ArgumentArity.ZeroOrOne /*Arity = ArgumentArity.ExactlyOne*/ };
             RootCommand.AddArgument(jsonFile);
@@ -120,15 +125,6 @@ namespace GenerateBatchVmSkus
                         services.AddAzureClientsCore(true);
                         services.AddAzureClients(configure =>
                         {
-                            //configure.AddClient<Microsoft.Azure.Batch.Protocol.BatchServiceClient, MSALTokenCredentials>((MSALTokenCredentials o, IServiceProvider s) =>
-                            //{
-                            //    return new(o);
-                            //})
-                            //.ConfigureOptions((o, s) =>
-                            //{
-                            //    o.Scopes = "https://batch.core.windows.net/.default";
-                            //});
-
                             configure.AddClient<ManagedIdentityCredential, TokenCredentialOptions>((TokenCredentialOptions o, IServiceProvider s) =>
                             {
                                 return new(context.Configuration["AZURE_CLIENT_ID"], o);
@@ -151,8 +147,8 @@ namespace GenerateBatchVmSkus
                             .WithCredential(s => new ChainedTokenCredential(s.GetRequiredService<ManagedIdentityCredential>(), s.GetRequiredService<AzureCliCredential>()))
                             .ConfigureOptions((o, s) =>
                             {
-                                o.Environment = Azure.ResourceManager.ArmEnvironment.AzurePublicCloud;
-                                o.SetApiVersionsFromProfile(Azure.ResourceManager.AzureStackProfile.Profile20200901Hybrid);
+                                o.Environment = ArmEnvironment.AzurePublicCloud;
+                                o.SetApiVersionsFromProfile(AzureStackProfile.Profile20200901Hybrid);
                             });
                         });
                     })
@@ -187,7 +183,7 @@ namespace GenerateBatchVmSkus
             try
             {
                 var program = new Program();
-                var builder = program.BuildHostBuilder();
+                var builder = BuildHostBuilder();
                 Environment.Exit(await builder.Build().Parse(args).InvokeAsync());
             }
             catch (Exception exception)
@@ -211,6 +207,89 @@ namespace GenerateBatchVmSkus
                 if (exitCode == 0) { exitCode = 1; }
                 if (Environment.OSVersion.Platform == PlatformID.Unix) { exitCode &= 0x0ff; }
                 Environment.Exit(exitCode);
+            }
+        }
+
+        internal record VmSku(string Name, IEnumerable<VirtualMachineInformation> Skus)
+        {
+            public static VmSku Create(IGrouping<string, VirtualMachineInformation> grouping)
+            {
+                if (!(grouping?.Any() ?? false))
+                {
+                    throw new ArgumentException("Each SKU must contain at least one VirtualMachineInformation.", nameof(grouping));
+                }
+
+                var sku = grouping.LastOrDefault(sku => sku.LowPriority) ?? grouping.Last();
+                return new(grouping.Key, grouping) { Sku = sku };
+            }
+
+            public VirtualMachineInformation Sku { get; private set; } = Skus.Last();
+        }
+
+        internal sealed class BatchAccountInfo : IDisposable
+        {
+            private Microsoft.Azure.Batch.BatchClient ClientFactory(TokenCredential credential, CancellationToken cancellationToken)
+            {
+                var result = Microsoft.Azure.Batch.BatchClient.Open(
+                new Microsoft.Azure.Batch.Auth.BatchTokenCredentials(
+                    new UriBuilder(Uri.UriSchemeHttps, data.AccountEndpoint).Uri.AbsoluteUri,
+                    async () => await BatchTokenProvider(credential, cancellationToken)));
+
+                result.CustomBehaviors.OfType<Microsoft.Azure.Batch.RetryPolicyProvider>().Single().Policy = new Microsoft.Azure.Batch.Common.ExponentialRetry(TimeSpan.FromSeconds(1), 11, TimeSpan.FromMinutes(1));
+                return result;
+            }
+
+            private async Task<string> BatchTokenProvider(TokenCredential tokenCredential, CancellationToken cancellationToken)
+            {
+                if (accessToken?.ExpiresOn > DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(60)))
+                {
+                    return accessToken.Value.Token;
+                }
+
+                accessToken = await tokenCredential.GetTokenAsync(
+                    new([new UriBuilder("https://batch.core.windows.net/") { Path = ".default" }.Uri.AbsoluteUri], Guid.NewGuid().ToString("D")),
+                    cancellationToken);
+                return accessToken.Value.Token;
+            }
+
+            private readonly Lazy<Microsoft.Azure.Batch.BatchClient> batchClient;
+            private readonly BatchAccountData data;
+            private AccessToken? accessToken;
+
+            public BatchAccountInfo(BatchAccountData data, string subnetId, int index, TokenCredential credential, CancellationToken cancellationToken)
+            {
+                SubnetId = subnetId;
+                Index = index;
+                this.data = data;
+                batchClient = new Lazy<Microsoft.Azure.Batch.BatchClient>(() => ClientFactory(credential, cancellationToken));
+            }
+
+            public string Name => data.Name;
+
+            public int Index { get; }
+
+            public string SubnetId { get; }
+
+            public AzureLocation Location => data.Location!.Value;
+
+            public Microsoft.Azure.Batch.BatchClient Client => batchClient.Value;
+
+            public bool? IsDedicatedCoreQuotaPerVmFamilyEnforced => data.IsDedicatedCoreQuotaPerVmFamilyEnforced;
+
+            public IReadOnlyList<Azure.ResourceManager.Batch.Models.BatchVmFamilyCoreQuota> DedicatedCoreQuotaPerVmFamily => data.DedicatedCoreQuotaPerVmFamily;
+
+            public int? PoolQuota => data.PoolQuota;
+
+            public int? DedicatedCoreQuota => data.DedicatedCoreQuota;
+
+            public int? LowPriorityCoreQuota => data.LowPriorityCoreQuota;
+
+            void IDisposable.Dispose()
+            {
+                if (batchClient.IsValueCreated)
+                {
+                    batchClient.Value.Dispose();
+                }
             }
         }
     }

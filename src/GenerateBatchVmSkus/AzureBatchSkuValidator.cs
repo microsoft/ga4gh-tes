@@ -14,7 +14,7 @@ using Microsoft.Extensions.Primitives;
 using Polly;
 using Polly.Retry;
 using Tes.Models;
-using static GenerateBatchVmSkus.AzureBatchSkuLocator;
+using static GenerateBatchVmSkus.Program;
 
 /*
  * TODO considerations:
@@ -84,7 +84,7 @@ namespace GenerateBatchVmSkus
             ArgumentNullException.ThrowIfNull(batchSkus);
 
             AzureBatchSkuValidator.batchSkus = batchSkus;
-            List<Validator> validators = new();
+            List<Validator> validators = [];
             skus = skus.ToList();
             UnknownVCpuCores = skus.Max(vm => vm.Sku.VCpusAvailable ?? 1);
             var asyncSkus = skus.ToAsyncEnumerable().Select(WrappedVmSku.Create);
@@ -131,7 +131,7 @@ namespace GenerateBatchVmSkus
         private static long started = 0;
         private static long completed = 0;
 
-        private static Func<string> progressLineFunc = () => $"SKU validations: Started: {started / (double)count:P2} / Completed: {completed / (double)count:P2}";
+        private static readonly Func<string> progressLineFunc = static () => $"SKU validations: Started: {started / (double)count:P2} / Completed: {completed / (double)count:P2}";
 
         private sealed class Validator : IDisposable
         {
@@ -260,9 +260,9 @@ namespace GenerateBatchVmSkus
                     });
 
                     Dictionary<string, (bool Ignore, int RetryCount, DateTime NextAttempt, WrappedVmSku VmSize)> retries = new(StringComparer.OrdinalIgnoreCase);
-                    List<Task<(WrappedVmSku vmSize, VerifyVMIResult result)>> tests = new();
+                    List<Task<(WrappedVmSku vmSize, VerifyVMIResult result)>> tests = [];
 
-                    List<Task> tasks = new();
+                    List<Task> tasks = [];
                     Task? retryReadyTask = default;
                     tasks.Add(candidateSkus.Reader.Completion);
                     var moreInputTask = candidateSkus.Reader.WaitToReadAsync(cancellationToken).AsTask();
@@ -272,12 +272,12 @@ namespace GenerateBatchVmSkus
                     {
                         try
                         {
-                            List<WrappedVmSku> skusToTest = new(await GetVmSkusAsync(context, cancellationToken));
+                            List<WrappedVmSku> skusToTest = [.. await GetVmSkusAsync(context, cancellationToken)];
                             await skusToTest.ToAsyncEnumerable()
                                 .ForEachAwaitWithCancellationAsync(async (sku, token) => await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "queue", sku), token), cancellationToken);
                             var loadedTests = skusToTest.Where(CanTestNow).ToList();
 
-                            for (tests = loadedTests.Select(StartLoadedTest).ToList();
+                            for (tests = [.. loadedTests.Select(StartLoadedTest)];
                                 (tests.Any() || tasks.Any()) && !cancellationToken.IsCancellationRequested;
                                 tests.AddRange(loadedTests.Select(StartLoadedTest)))
                             {
@@ -421,7 +421,7 @@ namespace GenerateBatchVmSkus
                                     }
                                 }
 
-                                loadedTests = skusToTest.Where(CanTestNow).ToList();
+                                loadedTests = [.. skusToTest.Where(CanTestNow)];
                             }
 
                             await skusToTest.ToAsyncEnumerable().ForEachAwaitWithCancellationAsync(async (vmSize, token) =>

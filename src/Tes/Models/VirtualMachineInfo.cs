@@ -10,6 +10,8 @@ namespace Tes.Models
     /// </summary>
     public class VirtualMachineInformation
     {
+        public static VirtualMachineInformation Clone(VirtualMachineInformation vm) => (VirtualMachineInformation)vm.MemberwiseClone();
+
         /// <summary>
         /// Size of the VM
         /// </summary>
@@ -59,21 +61,33 @@ namespace Tes.Models
         public int? MaxDataDiskCount { get; set; }
 
         /// <summary>
-        /// HyperV Generations of VM this sku supports.
+        /// HyperV Generations of VM this sku supports
         /// </summary>
         [TesTaskLogMetadataKey("vm_hyper_v_generations")]
         public IEnumerable<string> HyperVGenerations { get; set; }
 
         /// <summary>
-        /// List of regions this VM can be provisioned by Batch.
+        /// List of regions this VM can be provisioned by Batch
         /// </summary>
         [TesTaskLogMetadataKey("vm_regions_available")]
         public IEnumerable<string> RegionsAvailable { get; set; }
 
         /// <summary>
-        /// Host based encryption is supported.
+        /// Host based encryption is supported
         /// </summary>
         [TesTaskLogMetadataKey("encryption_at_host_supported")]
         public bool? EncryptionAtHostSupported { get; set; }
+
+        /// <summary>
+        /// The NVME disks total size, in GB
+        /// </summary>
+        [TesTaskLogMetadataKey("vm_nvme_disk_size_in_gib")]
+        public double? NvmeDiskSizeInGiB { get; set; }
+
+        /// <summary>
+        /// The number of GPUs
+        /// </summary>
+        [TesTaskLogMetadataKey("vm_gpus_available")]
+        public int? GpusAvailable { get; set; }
     }
 }

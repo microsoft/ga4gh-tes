@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.Models;
+using TesApi.Tests.Storage;
 using TesApi.Web;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
@@ -97,7 +98,7 @@ namespace TesApi.Tests
             azureProxy.Setup(a => a.BlobExistsAsync(It.IsAny<Uri>(), It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult(true));
             azureProxy.Setup(a => a.DownloadBlobAsync(It.IsAny<Uri>(), It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult(allowedVmSizesFileContent));
             azureProxy.Setup(a => a.GetStorageAccountInfoAsync("defaultstorageaccount", It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult(storageAccountInfos["defaultstorageaccount"]));
-            azureProxy.Setup(a => a.GetStorageAccountKeyAsync(It.IsAny<StorageAccountInfo>(), It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult("Key1"));
+            azureProxy.Setup(a => a.GetStorageAccountUserKeyAsync(It.IsAny<StorageAccountInfo>(), It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult(DefaultStorageAccessProviderTests.GenerateTestAzureStorageKey("Key1")));
         }
 
         private static List<VirtualMachineInformation> GetNewVmSizeAndPricingList()

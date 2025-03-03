@@ -29,6 +29,14 @@ namespace Tes.SDK
         Task<TesTask> CreateAndWaitTilDoneAsync(TesTask tesTask, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Creates new TES tasks and blocks forever until they're done
+        /// </summary>
+        /// <param name="tesTask">The TES tasks to create</param>
+        /// <param name="cancellationToken">The cancellationToken</param>
+        /// <returns>The created TES tasks</returns>
+        Task<List<TesTask>> CreateAndWaitTilDoneAsync(IEnumerable<TesTask> tesTasks, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Creates a new TES task
         /// </summary>
         /// <param name="tesTask">The TES task to create</param>

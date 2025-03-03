@@ -11,7 +11,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure.ResourceManager;
 using Azure.ResourceManager.ContainerService;
 using Azure.ResourceManager.ManagedServiceIdentities;
 using Azure.Storage.Blobs;
@@ -94,9 +93,9 @@ namespace TesDeployer
             return new Kubernetes(k8sClientConfiguration);
         }
 
-        public static (string, V1Deployment) GetUbuntuDeploymentTemplate()
+        public static (string, V1Deployment) GetUbuntuDeploymentTemplate(string ubuntuImage)
             => ("ubuntu", KubernetesYaml.Deserialize<V1Deployment>(
-                """
+                $"""
                 apiVersion: apps/v1
                 kind: Deployment
                 metadata:
@@ -115,7 +114,7 @@ namespace TesDeployer
                     spec:
                       containers:
                       - name: ubuntu
-                        image: ubuntu
+                        image: {ubuntuImage}
                         command: ["/bin/bash", "-c", "--"]
                         args: ["while true; do sleep 30; done;"]
                 """));
@@ -185,14 +184,9 @@ namespace TesDeployer
 
             var helmRepoList = await ExecHelmProcessAsync($"repo list", workingDirectory: null, throwOnNonZeroExitCode: false);
 
-            if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("ingress-nginx", StringComparison.OrdinalIgnoreCase))
+            foreach (var (helmCmd, throwOnNonZeroExitCode) in EnsureUpdateHelmRepo(helmRepoList, "ingress-nginx", NginxIngressRepo).Concat(EnsureUpdateHelmRepo(helmRepoList, "jetstack", CertManagerRepo)))
             {
-                await ExecHelmProcessAsync($"repo add ingress-nginx {NginxIngressRepo}");
-            }
-
-            if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("jetstack", StringComparison.OrdinalIgnoreCase))
-            {
-                await ExecHelmProcessAsync($"repo add jetstack {CertManagerRepo}");
+                await ExecHelmProcessAsync(helmCmd, throwOnNonZeroExitCode: throwOnNonZeroExitCode);
             }
 
             await ExecHelmProcessAsync($"repo update");
@@ -218,6 +212,26 @@ namespace TesDeployer
             await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
 
             return client;
+
+            static IEnumerable<(string HelmCmd, bool ThrowOnNonZeroExitCode)> EnsureUpdateHelmRepo(string helmRepoList, string helmRepo, string helmRepoUri)
+            {
+                if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains(helmRepo, StringComparison.OrdinalIgnoreCase))
+                {
+                    return [($"repo add {helmRepo} {helmRepoUri}", true)];
+                }
+                else if (!helmRepoList.Contains(helmRepoUri, StringComparison.OrdinalIgnoreCase))
+                {
+                    return
+                    [
+                        ($"repo remove {helmRepo}", false),
+                        ($"repo add {helmRepo} {helmRepoUri}", true)
+                    ];
+                }
+                else
+                {
+                    return [];
+                }
+            }
         }
 
         public async Task DeployHelmChartToClusterAsync(IKubernetes kubernetesClient)
@@ -231,7 +245,7 @@ namespace TesDeployer
 
         public async Task RemovePodAadChart()
         {
-            await ExecHelmProcessAsync($"uninstall aad-pod-identity", throwOnNonZeroExitCode: false);
+            await ExecHelmProcessAsync($"uninstall aad-pod-identity --namespace kube-system --kubeconfig \"{kubeConfigPath}\"", throwOnNonZeroExitCode: false);
         }
 
         public async Task<HelmValues> GetHelmValuesAsync(string valuesTemplatePath)
@@ -289,14 +303,33 @@ namespace TesDeployer
             await Deployer.UploadTextToStorageAccountAsync(getBlobClient(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml"), valuesString, cancellationToken);
         }
 
-        public async Task UpgradeValuesYamlAsync(Azure.ResourceManager.Storage.StorageAccountData storageAccount, Dictionary<string, string> settings)
+        public async Task UpgradeValuesYamlAsync(Azure.ResourceManager.Storage.StorageAccountData storageAccount, Dictionary<string, string> settings, Version previousVersion)
         {
             var blobClient = getBlobClient(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml");
             var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(blobClient, cancellationToken));
             UpdateValuesFromSettings(values, settings);
+            ProcessHelmValuesUpdates(values, previousVersion);
             var valuesString = KubernetesYaml.Serialize(values);
             await File.WriteAllTextAsync(TempHelmValuesYamlPath, valuesString, cancellationToken);
             await Deployer.UploadTextToStorageAccountAsync(blobClient, valuesString, cancellationToken);
+        }
+
+        private static void ProcessHelmValuesUpdates(HelmValues values, Version previousVersion)
+        {
+            if (previousVersion is null || previousVersion < new Version(5, 5, 2))
+            {
+                var datasettestinputs = values.ExternalSasContainers?.SingleOrDefault(container => container.TryGetValue("accountName", out var name) && "datasettestinputs".Equals(name, StringComparison.OrdinalIgnoreCase));
+
+                if (datasettestinputs is not null)
+                {
+                    _ = values.ExternalSasContainers.Remove(datasettestinputs);
+
+                    if (values.ExternalSasContainers.Count == 0)
+                    {
+                        values.ExternalSasContainers = null;
+                    }
+                }
+            }
         }
 
         public async Task<FileInfo> ConfigureAltLocalValuesYamlAsync(string altName, Action<HelmValues> configure)
@@ -408,6 +441,8 @@ namespace TesDeployer
             var drsHub = GetObjectFromConfig(values, "drsHub") ?? new Dictionary<string, string>();
             var deployment = GetObjectFromConfig(values, "deployment") ?? new Dictionary<string, string>();
 
+            values.Config["acrId"] = GetValueOrDefault(settings, "AcrId");
+            values.Config["tesImage"] = GetValueOrDefault(settings, "TesImageName");
             values.Config["azureCloudName"] = GetValueOrDefault(settings, "AzureCloudName");
             values.Config["tesOnAzureVersion"] = GetValueOrDefault(settings, "TesOnAzureVersion");
             values.Config["azureServicesAuthConnectionString"] = GetValueOrDefault(settings, "AzureServicesAuthConnectionString");
@@ -430,7 +465,7 @@ namespace TesDeployer
             drsHub["url"] = GetValueOrDefault(settings, "DrsHubUrl");
             batchScheduling["prefix"] = GetValueOrDefault(settings, "BatchPrefix");
             values.Config["crossSubscriptionAKSDeployment"] = GetValueOrDefault(settings, "CrossSubscriptionAKSDeployment");
-            values.Images["tes"] = GetValueOrDefault(settings, "TesImageName");
+            values.Images["tes"] = GetValueOrDefault(settings, "ActualTesImageName");
             values.Service["tesHostname"] = GetValueOrDefault(settings, "TesHostname");
             values.Service["enableIngress"] = GetValueOrDefault(settings, "EnableIngress");
             values.Config["letsEncryptEmail"] = GetValueOrDefault(settings, "LetsEncryptEmail");
@@ -483,6 +518,8 @@ namespace TesDeployer
 
             return new()
             {
+                ["AcrId"] = GetValueOrDefault(values.Config, "acrId") as string,
+                ["TesImageName"] = GetValueOrDefault(values.Config, "tesImage") as string ?? GetValueOrDefault(values.Images, "tes"),
                 ["AzureCloudName"] = GetValueOrDefault(values.Config, "azureCloudName") as string,
                 ["TesOnAzureVersion"] = GetValueOrDefault(values.Config, "tesOnAzureVersion") as string,
                 ["AzureServicesAuthConnectionString"] = GetValueOrDefault(values.Config, "azureServicesAuthConnectionString") as string,
@@ -507,7 +544,7 @@ namespace TesDeployer
                 ["CrossSubscriptionAKSDeployment"] = GetValueOrDefault(values.Config, "crossSubscriptionAKSDeployment") as string,
                 ["UsePostgreSqlSingleServer"] = GetValueOrDefault(values.Config, "usePostgreSqlSingleServer") as string,
                 ["ManagedIdentityClientId"] = GetValueOrDefault(values.Identity, "clientId"),
-                ["TesImageName"] = GetValueOrDefault(values.Images, "tes"),
+                ["ActualTesImageName"] = string.IsNullOrEmpty(GetValueOrDefault(values.Config, "tesImage") as string) ? null : GetValueOrDefault(values.Images, "tes"),
                 ["TesHostname"] = GetValueOrDefault(values.Service, "tesHostname"),
                 ["EnableIngress"] = GetValueOrDefault(values.Service, "enableIngress"),
                 ["LetsEncryptEmail"] = GetValueOrDefault(values.Config, "letsEncryptEmail") as string,

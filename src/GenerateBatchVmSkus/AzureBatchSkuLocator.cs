@@ -26,6 +26,7 @@ using Tes.ApiClients;
 using Tes.ApiClients.Models.Pricing;
 using Tes.Models;
 using static GenerateBatchVmSkus.AzureBatchSkuValidator;
+using static GenerateBatchVmSkus.Program;
 
 namespace GenerateBatchVmSkus
 {
@@ -40,11 +41,17 @@ namespace GenerateBatchVmSkus
         private static readonly ConcurrentDictionary<string, ComputeResourceSku> skuForVm = new(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, PricingItem> priceForVm = new(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, PricingItem> lowPrPriceForVm = new(StringComparer.OrdinalIgnoreCase);
+        private static IEnumerable<StorageDiskPriceInformation> diskPrices = [];
 
         public int Invoke(InvocationContext context) => throw new NotSupportedException();
 
         public async Task<int> InvokeAsync(InvocationContext context)
         {
+            ArgumentException.ThrowIfNullOrEmpty(configuration.VmOutputFilePath);
+            ArgumentException.ThrowIfNullOrEmpty(configuration.DiskOutputFilePath);
+            ArgumentException.ThrowIfNullOrEmpty(configuration.SubscriptionId);
+            ArgumentNullException.ThrowIfNull(configuration.BatchAccounts);
+
             ConsoleHelper.Console = console;
             return await RunAsync(
                 context.ParseResult.CommandResult.GetValueForOption(Program.NoValidateWhitelistFile),
@@ -115,11 +122,24 @@ namespace GenerateBatchVmSkus
             }
         }
 
+        private static void AddUpdatePrice(Dictionary<string, PricingItem> prices, PricingItem price, string key)
+        {
+            if (prices.TryGetValue(key, out var existing))
+            {
+                if (price.effectiveStartDate > existing.effectiveStartDate)
+                {
+                    prices[key] = price;
+                }
+            }
+            else
+            {
+                prices.Add(key, price);
+            }
+        }
+
         internal async Task<int> RunAsync(FileInfo? whitelistFile, string cloudName, CancellationToken cancellationToken)
         {
-            ArgumentException.ThrowIfNullOrEmpty(configuration.OutputFilePath);
-            ArgumentException.ThrowIfNullOrEmpty(configuration.SubscriptionId);
-            ArgumentNullException.ThrowIfNull(configuration.BatchAccounts);
+            ArgumentException.ThrowIfNullOrEmpty(cloudName);
 
             ConsoleHelper.WriteLine("Starting...");
             TokenCredential tokenCredential = new DefaultAzureCredential(new DefaultAzureCredentialOptions
@@ -166,29 +186,37 @@ namespace GenerateBatchVmSkus
                         switch (price.meterName.Contains("Low Priority", StringComparison.OrdinalIgnoreCase))
                         {
                             case true: // Low Priority
-                                AddUpdatePrice(lowPrPriceForVm, price);
+                                AddUpdatePrice(lowPrPriceForVm, price, price.armSkuName);
                                 break;
 
                             case false: // Dedicated
-                                AddUpdatePrice(priceForVm, price);
+                                AddUpdatePrice(priceForVm, price, price.armSkuName);
                                 break;
                         }
-
-                        static void AddUpdatePrice(Dictionary<string, PricingItem> prices, PricingItem price)
-                        {
-                            if (prices.TryGetValue(price.armSkuName, out var existing))
-                            {
-                                if (price.effectiveStartDate > existing.effectiveStartDate)
-                                {
-                                    prices[price.armSkuName] = price;
-                                }
-                            }
-                            else
-                            {
-                                prices.Add(price.armSkuName, price);
-                            }
-                        }
                     }
+                },
+
+                async () =>
+                {
+                    Console.WriteLine("Getting Storage pricing data...");
+                    var now = DateTime.UtcNow + TimeSpan.FromSeconds(60);
+                    Dictionary<string, PricingItem> prices = [];
+                    await foreach (var price in priceApiClient.GetAllPricingInformationForStandardStorageLRSDisksAsync(AzureLocation.WestEurope, cancellationToken)
+                        .Where(p => p.effectiveStartDate < now)
+                        .Where(p => "1/Month".Equals(p.unitOfMeasure, StringComparison.OrdinalIgnoreCase))
+                        .Where(p => StorageDiskPriceInformation.StandardLrsSsdCapacityInGiB.ContainsKey(p.meterName))
+                        .WithCancellation(cancellationToken))
+                    {
+                        price.unitPrice = StorageDiskPriceInformation.ConvertPricePerMonthToPricePerHour(price.unitPrice);
+                        price.tierMinimumUnits = StorageDiskPriceInformation.ConvertPricePerMonthToPricePerHour(price.tierMinimumUnits);
+                        price.unitOfMeasure = "1 Hour";
+
+                        AddUpdatePrice(prices, price, price.meterName);
+                    }
+
+                    diskPrices = [.. diskPrices
+                        .Concat(prices.Values.Select(item => new StorageDiskPriceInformation(item.meterName, StorageDiskPriceInformation.StandardLrsSsdCapacityInGiB[item.meterName], Convert.ToDecimal(item.unitPrice))))
+                        .OrderBy(item => item.CapacityInGiB)];
                 },
 
                 async () =>
@@ -212,7 +240,7 @@ namespace GenerateBatchVmSkus
 
                                     skus ??= await subscription.GetComputeResourceSkusAsync($"location eq '{region.Name}'", cancellationToken: token).ToListAsync(token);
 
-                                    skusInSkus ??= skus.Select(sku => sku.Name).ToList();
+                                    skusInSkus ??= [.. skus.Select(sku => sku.Name)];
                                     if (!skusInSkus.Contains(vm, StringComparer.OrdinalIgnoreCase))
                                     {
                                         ConsoleHelper.WriteLine(ForegroundColorSpan.LightYellow(), $"Warning: '{vm}' in the list of batch supported SKUs is not found in the compute resources of region {region.DisplayName}.");
@@ -247,11 +275,11 @@ namespace GenerateBatchVmSkus
             Func<Task<ValidationResults>> batchValidator = new(async () =>
             {
                 ConsoleHelper.WriteLine("Validating SKUs in Azure Batch...");
-                return await AzureBatchSkuValidator.ValidateSkus(
+                return await ValidateSkus(
                     batchSupportedVmSet,
                     GetBatchAccountsAsync(subscription, tokenCredential, configuration, cancellationToken),
                     skuForVm
-                        .Select(sku => (sku.Key, Info: new AzureBatchSkuValidator.BatchSkuInfo(
+                        .Select(sku => (sku.Key, Info: new BatchSkuInfo(
                             sku.Value.Family,
                             int.TryParse(sku.Value.Capabilities.SingleOrDefault(x => x.Name.Equals("vCPUsAvailable", StringComparison.OrdinalIgnoreCase))?.Value, NumberFormatInfo.InvariantInfo, out var vCpus) ? vCpus : null)))
                         .ToDictionary(sku => sku.Key, sku => sku.Info, StringComparer.OrdinalIgnoreCase),
@@ -286,9 +314,9 @@ namespace GenerateBatchVmSkus
             if (notVerified.Any())
             {
                 var indent = 4;
-                string oneIndent = new(Enumerable.Repeat(' ', indent).ToArray());
-                string twoIndent = new(Enumerable.Repeat(' ', indent * 2).ToArray());
-                string threeIndent = new(Enumerable.Repeat(' ', indent * 3).ToArray());
+                string oneIndent = new([.. Enumerable.Repeat(' ', indent)]);
+                string twoIndent = new([.. Enumerable.Repeat(' ', indent * 2)]);
+                string threeIndent = new([.. Enumerable.Repeat(' ', indent * 3)]);
                 var tableWidth = console.IsOutputRedirected ? 0 : Console.WindowWidth - threeIndent.Length;
                 ConsoleHelper.WriteLine(ForegroundColorSpan.LightYellow(), $"Due to either availability, capacity, quota, or other constraints, the following {notVerified.Count()} SKUs were not validated and will not be included. Consider adding quota or additional regions as needed:");
                 notVerified.Select(vmsize => (vmsize.Sku.VmSize, vmsize.Sku.VmFamily, vmsize.Sku.LowPriority, vmsize.Sku.RegionsAvailable))
@@ -317,7 +345,7 @@ namespace GenerateBatchVmSkus
                     items = items.ToList(); // to safely enumerate twice
                     var columnWidth = items.Max(item => item.Length);
                     var columns = (tableWidth + separator.Length) / (columnWidth + separator.Length);
-                    return items.ConvertGroup(columns, (item, _) => item + new string(Enumerable.Repeat(' ', columnWidth - item.Length).ToArray()), row => string.Join(separator, row));
+                    return items.ConvertGroup(columns, (item, _) => item + new string([.. Enumerable.Repeat(' ', columnWidth - item.Length)]), row => string.Join(separator, row));
                 }
             }
 
@@ -329,10 +357,15 @@ namespace GenerateBatchVmSkus
             ConsoleHelper.WriteLine($"SupportedSkuCount:{batchVmInfo.Select(vm => vm.VmSize).Distinct(StringComparer.OrdinalIgnoreCase).Count()}");
             ConsoleHelper.WriteLine($"Writing {batchVmInfo.Count} SKU price records");
 
-            var data = JsonSerializer.Serialize(batchVmInfo, options: jsonOptions);
-            await File.WriteAllTextAsync(configuration.OutputFilePath!, data, cancellationToken);
+            await Task.WhenAll(WriteOutput((configuration.VmOutputFilePath!, batchVmInfo)), WriteOutput((configuration.DiskOutputFilePath!, diskPrices)));
             ConsoleHelper.WriteLine(Assembly.GetEntryAssembly()!.GetName().Name!, ForegroundColorSpan.Green(), $"Completed in {DateTimeOffset.UtcNow - startTime:g}.");
             return 0;
+
+            Task WriteOutput<T>((string Path, T Value) output)
+            {
+                var data = JsonSerializer.Serialize(output.Value, options: jsonOptions);
+                return File.WriteAllTextAsync(output.Path, data, cancellationToken);
+            }
         }
 
         private static IEnumerable<VirtualMachineInformation> GetVirtualMachineInformations(string name)
@@ -344,13 +377,20 @@ namespace GenerateBatchVmSkus
 
             var sku = skuForVm[name] ?? throw new Exception($"Sku info is null for VM {name}");
 
-            var generations = AttemptParseString("HyperVGenerations")?.Split(",").ToList() ?? new();
+            if (name.Contains("_L"))
+            {
+                System.Diagnostics.Debugger.Break();
+            }
+
+            var generations = AttemptParseString("HyperVGenerations")?.Split(",").ToList() ?? [];
             var vCpusAvailable = AttemptParseInt32("vCPUsAvailable");
             var encryptionAtHostSupported = AttemptParseBoolean("EncryptionAtHostSupported");
             var lowPriorityCapable = AttemptParseBoolean("LowPriorityCapable") ?? false;
             var maxDataDiskCount = AttemptParseInt32("MaxDataDiskCount");
             var maxResourceVolumeMB = AttemptParseInt32("MaxResourceVolumeMB");
             var memoryGB = AttemptParseDouble("MemoryGB");
+            var mvmeMB = AttemptParseInt32("NvmeDiskSizeInMiB");
+            var gpus = AttemptParseInt32("GPUs");
 
             yield return new()
             {
@@ -364,6 +404,8 @@ namespace GenerateBatchVmSkus
                 HyperVGenerations = generations,
                 RegionsAvailable = [.. regionsForVm[name].Order()],
                 EncryptionAtHostSupported = encryptionAtHostSupported,
+                NvmeDiskSizeInGiB = ConvertMiBToGiB(mvmeMB),
+                GpusAvailable = gpus,
                 PricePerHour = priceForVm.TryGetValue(name, out var priceItem) ? (decimal)priceItem.retailPrice : null,
             };
 
@@ -381,6 +423,8 @@ namespace GenerateBatchVmSkus
                     HyperVGenerations = generations,
                     RegionsAvailable = [.. regionsForVm[name].Order()],
                     EncryptionAtHostSupported = encryptionAtHostSupported,
+                    NvmeDiskSizeInGiB = ConvertMiBToGiB(mvmeMB),
+                    GpusAvailable = gpus,
                     PricePerHour = lowPrPriceForVm.TryGetValue(name, out var lowPrPriceItem) ? (decimal)lowPrPriceItem.retailPrice : null,
                 };
             }
@@ -392,93 +436,10 @@ namespace GenerateBatchVmSkus
                 => bool.TryParse(AttemptParseString(name), out var value) ? value : null;
 
             int? AttemptParseInt32(string name)
-                => int.TryParse(AttemptParseString(name), System.Globalization.NumberFormatInfo.InvariantInfo, out var value) ? value : null;
+                => int.TryParse(AttemptParseString(name), NumberFormatInfo.InvariantInfo, out var value) ? value : null;
 
             double? AttemptParseDouble(string name)
-                => double.TryParse(AttemptParseString(name), System.Globalization.NumberFormatInfo.InvariantInfo, out var value) ? value : null;
-        }
-
-        internal record VmSku(string Name, IEnumerable<VirtualMachineInformation> Skus)
-        {
-            public static VmSku Create(IGrouping<string, VirtualMachineInformation> grouping)
-            {
-                if (!(grouping?.Any() ?? false))
-                {
-                    throw new ArgumentException("Each SKU must contain at least one VirtualMachineInformation.", nameof(grouping));
-                }
-
-                var sku = grouping.LastOrDefault(sku => sku.LowPriority) ?? grouping.Last();
-                return new(grouping.Key, grouping) { Sku = sku };
-            }
-
-            public VirtualMachineInformation Sku { get; private set; } = Skus.Last();
-        }
-
-        internal sealed class BatchAccountInfo : IDisposable
-        {
-            private Microsoft.Azure.Batch.BatchClient ClientFactory(TokenCredential credential, CancellationToken cancellationToken)
-            {
-                var result = Microsoft.Azure.Batch.BatchClient.Open(
-                new Microsoft.Azure.Batch.Auth.BatchTokenCredentials(
-                    new UriBuilder(Uri.UriSchemeHttps, data.AccountEndpoint).Uri.AbsoluteUri,
-                    async () => await BatchTokenProvider(credential, cancellationToken)));
-
-                result.CustomBehaviors.OfType<Microsoft.Azure.Batch.RetryPolicyProvider>().Single().Policy = new Microsoft.Azure.Batch.Common.ExponentialRetry(TimeSpan.FromSeconds(1), 11, TimeSpan.FromMinutes(1));
-                return result;
-            }
-
-            private async Task<string> BatchTokenProvider(TokenCredential tokenCredential, CancellationToken cancellationToken)
-            {
-                if (accessToken?.ExpiresOn > DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(60)))
-                {
-                    return accessToken.Value.Token;
-                }
-
-                accessToken = await tokenCredential.GetTokenAsync(
-                    new(new[] { new UriBuilder("https://batch.core.windows.net/") { Path = ".default" }.Uri.AbsoluteUri }, Guid.NewGuid().ToString("D")),
-                    cancellationToken);
-                return accessToken.Value.Token;
-            }
-
-            private readonly Lazy<Microsoft.Azure.Batch.BatchClient> batchClient;
-            private readonly BatchAccountData data;
-            private AccessToken? accessToken;
-
-            public BatchAccountInfo(BatchAccountData data, string subnetId, int index, TokenCredential credential, CancellationToken cancellationToken)
-            {
-                SubnetId = subnetId;
-                Index = index;
-                this.data = data;
-                batchClient = new Lazy<Microsoft.Azure.Batch.BatchClient>(() => ClientFactory(credential, cancellationToken));
-            }
-
-            public string Name => data.Name;
-
-            public int Index { get; }
-
-            public string SubnetId { get; }
-
-            public AzureLocation Location => data.Location!.Value;
-
-            public Microsoft.Azure.Batch.BatchClient Client => batchClient.Value;
-
-            public bool? IsDedicatedCoreQuotaPerVmFamilyEnforced => data.IsDedicatedCoreQuotaPerVmFamilyEnforced;
-
-            public IReadOnlyList<Azure.ResourceManager.Batch.Models.BatchVmFamilyCoreQuota> DedicatedCoreQuotaPerVmFamily => data.DedicatedCoreQuotaPerVmFamily;
-
-            public int? PoolQuota => data.PoolQuota;
-
-            public int? DedicatedCoreQuota => data.DedicatedCoreQuota;
-
-            public int? LowPriorityCoreQuota => data.LowPriorityCoreQuota;
-
-            void IDisposable.Dispose()
-            {
-                if (batchClient.IsValueCreated)
-                {
-                    batchClient.Value.Dispose();
-                }
-            }
+                => double.TryParse(AttemptParseString(name), NumberFormatInfo.InvariantInfo, out var value) ? value : null;
         }
     }
 }

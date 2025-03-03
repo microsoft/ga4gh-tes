@@ -66,7 +66,7 @@ namespace GenerateBatchVmSkus
 
                 if (string.IsNullOrEmpty(lines.Last()))
                 {
-                    lines = lines.SkipLast(1).ToArray();
+                    lines = [.. lines.SkipLast(1)];
                 }
 
                 result = string.Join(Environment.NewLine,
@@ -91,7 +91,7 @@ namespace GenerateBatchVmSkus
                     Console.Out.Write(sb.ToString());
 
                     sb.Clear();
-                    sb.Append(Enumerable.Repeat(' ', line.Length).ToArray());
+                    sb.Append([.. Enumerable.Repeat(' ', line.Length)]);
                     sb.Append('\r');
                     linePrefix = sb.ToString();
                 }

@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using AutoMapper;
@@ -26,9 +25,8 @@ namespace TesApi.Web.Management.Batch
         {
             CreateMap<BatchDeploymentConfiguration, ApiDeploymentConfiguration>()
                 .ForMember(dst => dst.VirtualMachineConfiguration, opt => opt.MapFrom(src => src.VmConfiguration))
-                .ForMember(dst => dst.CloudServiceConfiguration, opt => opt.MapFrom(src => src.CloudServiceConfiguration));
+                .ForMember(dst => dst.CloudServiceConfiguration, opt => opt.Ignore());
             CreateMap<BatchVmConfiguration, ApiVirtualMachineConfiguration>();
-            CreateMap<BatchCloudServiceConfiguration, ApiCloudServiceConfiguration>();
             CreateMap<BatchAccountPoolScaleSettings, ApiScaleSettings>();
             CreateMap<BatchAccountAutoScaleSettings, ApiAutoScale>()
                 .ForMember(dst => dst.EvaluationInterval, opt => opt.MapFrom(src => Convert.ToInt64(src.EvaluationInterval.Value.TotalMinutes)));

@@ -137,13 +137,24 @@ namespace TesApi.Web.Runner
                     .WithResourceIdManagedIdentity(GetNodeManagedIdentityResourceId(task, nodeTaskConversionOptions.GlobalManagedIdentity))
                     .WithAcrPullResourceIdManagedIdentity(nodeTaskConversionOptions.AcrPullIdentity)
                     .WithWorkflowId(task.WorkflowId)
+                    .WithContainerMountParentDirectory(containerMountParentDirectory)
                     .WithContainerCommands(executor.Command)
                     .WithContainerImage(executor.Image)
+                    .WithContainerExecutionParameters(executor.Workdir, executor.Stdin, executor.Stdout, executor.Stderr, executor.Env)
                     .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath: string.Empty))
                     .WithLogPublisher(storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath: string.Empty))
                     .WithDrsHubUrl(nodeTaskConversionOptions.DrsHubApiHost)
                     .WithOnUploadSetContentMD5(nodeTaskConversionOptions.SetContentMd5OnUpload)
                     .WithMetricsFile(MetricsFileName);
+
+                switch (nodeTaskConversionOptions.VmFamilyGroup)
+                {
+                    case BatchScheduler.VmFamilySeries.standardNCFamilies:
+                    case BatchScheduler.VmFamilySeries.standardNDFamilies:
+                    case BatchScheduler.VmFamilySeries.standardNVFamilies:
+                        builder.WithGpuSupport();
+                        break;
+                }
 
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
                 {
@@ -175,8 +186,7 @@ namespace TesApi.Web.Runner
                 builder.WithOutputUsingCombinedTransformationStrategy(
                     AppendParentDirectoryIfSet(path, $"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%"),
                     url.AbsoluteUri,
-                    fileType: FileType.File,
-                    mountParentDirectory: null);
+                    fileType: FileType.File);
             }
         }
 
@@ -253,7 +263,7 @@ namespace TesApi.Web.Runner
                     inputs.AddRange(distinctAdditionalInputs);
                 }
 
-                await MapInputsAsync(inputs, pathParentDirectory, containerMountParentDirectory, builder);
+                await MapInputsAsync(inputs, pathParentDirectory, builder, cancellationToken);
             }
         }
 
@@ -293,6 +303,8 @@ namespace TesApi.Web.Runner
                     continue;
                 }
 
+                await ResolveInputType(input, cancellationToken);
+
                 preparedInput = PrepareLocalFileInput(input, defaultStorageAccountName);
 
                 if (preparedInput != null)
@@ -319,6 +331,37 @@ namespace TesApi.Web.Runner
             }
 
             return [.. inputs.Values];
+        }
+
+        private async Task ResolveInputType(TesInput input, CancellationToken cancellationToken)
+        {
+            if (input.Type != default)
+            {
+                return; // Already set
+            }
+
+            var uri = (await storageAccessProvider.IsPublicHttpUrlAsync(input.Url, cancellationToken))
+                ? new(input.Url)
+                : await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, cancellationToken, default, getContainerSas: true);
+
+            if (uri is null)
+            {
+                return; // Not azure storage. We'll let other parts of the system handle it.
+            }
+
+            try
+            {
+                input.Type = (await storageAccessProvider.GetBlobUrlsAsync(
+                        uri,
+                        cancellationToken))
+                    .Any()
+                    ? TesFileType.DIRECTORY
+                    : TesFileType.FILE;
+            }
+            catch (Azure.RequestFailedException)
+            {
+                input.Type = TesFileType.FILE; // Likely not azure storage. We only support directory URLs in known blob-style storage containers.
+            }
         }
 
         /// <summary>
@@ -507,13 +550,11 @@ namespace TesApi.Web.Runner
             outputs?.ForEach(output =>
             {
                 builder.WithOutputUsingCombinedTransformationStrategy(
-                    AppendParentDirectoryIfSet(output.Path, pathParentDirectory), output.Url, ToNodeTaskFileType(output.Type),
-                    containerMountParentDirectory);
+                    AppendParentDirectoryIfSet(output.Path, pathParentDirectory), output.Url, ToNodeTaskFileType(output.Type));
             });
         }
 
-        private async Task MapInputsAsync(List<TesInput> inputs, string pathParentDirectory, string containerMountParentDirectory,
-            NodeTaskBuilder builder)
+        private async Task MapInputsAsync(List<TesInput> inputs, string pathParentDirectory, NodeTaskBuilder builder, CancellationToken cancellationToken)
         {
             if (inputs is null || inputs.Count == 0)
             {
@@ -522,7 +563,7 @@ namespace TesApi.Web.Runner
 
             foreach (var input in inputs)
             {
-                if (input?.Type == TesFileType.FILE)
+                if (input.Type == TesFileType.FILE)
                 {
                     AddInputToBuilder(input.Path, input.Url);
                 }
@@ -531,17 +572,25 @@ namespace TesApi.Web.Runner
                     // Nextflow directory example
                     // input.Url = /storageaccount/work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
                     // input.Path = /work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
-                    var blobDirectoryUrlWithSasToken = await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, default, default, getContainerSas: true);
+                    var blobDirectoryUrlWithSasToken = await storageAccessProvider.IsPublicHttpUrlAsync(input.Url, cancellationToken)
+                        ? new(input.Url)
+                        : await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, cancellationToken, default, getContainerSas: true);
                     var blobDirectoryUrlWithoutSasToken = blobDirectoryUrlWithSasToken.GetLeftPart(UriPartial.Path);
-                    var blobAbsoluteUrls = await storageAccessProvider.GetBlobUrlsAsync(blobDirectoryUrlWithSasToken, default);
+                    IList<Uri> blobAbsoluteUrls;
 
-                    if (input.Type == default)
+                    try
                     {
-                        if (blobAbsoluteUrls.Count == 0)
-                        {
-                            AddInputToBuilder(input.Path, input.Url);
-                            continue;
-                        }
+                        blobAbsoluteUrls = await storageAccessProvider.GetBlobUrlsAsync(blobDirectoryUrlWithSasToken, cancellationToken);
+                    }
+                    catch (Azure.RequestFailedException)
+                    {
+                        blobAbsoluteUrls = [new(input.Url)]; // Pass this off to the runner if the input type has not been specified or determined
+                    }
+
+                    if (input.Type == default && blobAbsoluteUrls.Count == 0)
+                    {
+                        AddInputToBuilder(input.Path, input.Url);
+                        continue;
                     }
 
                     foreach (var blobAbsoluteUrl in blobAbsoluteUrls)
@@ -557,8 +606,7 @@ namespace TesApi.Web.Runner
             void AddInputToBuilder(string path, string url)
             {
                 builder.WithInputUsingCombinedTransformationStrategy(
-                    AppendParentDirectoryIfSet(path, pathParentDirectory), url,
-                    containerMountParentDirectory);
+                    AppendParentDirectoryIfSet(path, pathParentDirectory), url);
             }
         }
 
@@ -593,6 +641,8 @@ namespace TesApi.Web.Runner
     /// <param name="AcrPullIdentity"></param>
     /// <param name="DrsHubApiHost"></param>
     /// <param name="SetContentMd5OnUpload"></param>
+    /// <param name="VmFamilyGroup"></param>
     public record NodeTaskConversionOptions(IList<TesInput> AdditionalInputs = default, string DefaultStorageAccountName = default,
-        string GlobalManagedIdentity = default, string AcrPullIdentity = default, string DrsHubApiHost = default, bool SetContentMd5OnUpload = false);
+        string GlobalManagedIdentity = default, string AcrPullIdentity = default, string DrsHubApiHost = default, bool SetContentMd5OnUpload = false,
+            BatchScheduler.VmFamilySeries VmFamilyGroup = default);
 }

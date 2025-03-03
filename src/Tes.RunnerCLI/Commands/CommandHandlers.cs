@@ -96,7 +96,7 @@ namespace Tes.RunnerCLI.Commands
             {
                 cleanupTasks =
                 [
-                    new DockerExecutor(dockerUri).NodeCleanupAsync(new(nodeTask.ImageName, nodeTask.ImageTag, default, default, default, new()), Logger),
+                    new DockerExecutor(dockerUri).NodeCleanupAsync(new(nodeTask.ImageName, nodeTask.ImageTag, default, default, default, new(), default), Logger),
                     Executor.RunnerHost.NodeCleanupPreviousTasksAsync()
                 ];
                 await Task.WhenAll(cleanupTasks);
