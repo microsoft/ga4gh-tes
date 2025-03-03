@@ -41,7 +41,7 @@ namespace TesApi.Tests.Runner
         {
             var workingDir = "/home";
             nodeTaskBuilder.WithContainerMountParentDirectory(workingDir);
-            Assert.AreEqual(workingDir, nodeTaskBuilder.Build().MountParentDirectoryPath);
+            Assert.AreEqual(workingDir, nodeTaskBuilder.Build().RuntimeOptions.MountParentDirectoryPath);
         }
 
         [TestMethod]
@@ -123,8 +123,9 @@ namespace TesApi.Tests.Runner
         public void WithContainerCommands_CommandsProvided_CommandsAreSet()
         {
             var commands = new List<string>() { "echo", "world" };
-            nodeTaskBuilder.WithContainerCommands(commands);
-            var containerInfo = nodeTaskBuilder.Build().CommandsToExecute;
+            Tes.Models.TesExecutor executor = new() { Command = commands, Image = "image" };
+            nodeTaskBuilder.WithExecutors([executor]);
+            var containerInfo = nodeTaskBuilder.Build().Executors[0].CommandsToExecute;
             CollectionAssert.AreEqual(commands, containerInfo);
         }
 
@@ -135,10 +136,11 @@ namespace TesApi.Tests.Runner
         [DataRow("broadinstitute/gatk@sha256:f80d33060cb4872d29b9a248b193d267f838b1a636c5a6120aaa45b08a1f09e9", "broadinstitute/gatk", "sha256:f80d33060cb4872d29b9a248b193d267f838b1a636c5a6120aaa45b08a1f09e9")]
         public void WithContainerImageTest_ImageInfoIsProvided_ImageInfoIsSet(string imageInfo, string expectedImage, string expectedTag)
         {
-            nodeTaskBuilder.WithContainerImage(imageInfo);
+            Tes.Models.TesExecutor executor = new() { Image = imageInfo, Command = ["cmd"] };
+            nodeTaskBuilder.WithExecutors([executor]);
             var nodeTask = nodeTaskBuilder.Build();
-            Assert.AreEqual(expectedImage, nodeTask.ImageName);
-            Assert.AreEqual(expectedTag, nodeTask.ImageTag);
+            Assert.AreEqual(expectedImage, nodeTask.Executors[0].ImageName);
+            Assert.AreEqual(expectedTag, nodeTask.Executors[0].ImageTag);
         }
 
         [TestMethod]

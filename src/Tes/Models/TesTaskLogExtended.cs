@@ -79,8 +79,10 @@ namespace Tes.Models
         internal void LoadObjectsFromMetadata(StreamingContext context)
         {
             LoadObjectFromMetadata(this);
-            this.VirtualMachineInfo = TryGetObjectFromMetadata<VirtualMachineInformation>(out var vmInfo) ? vmInfo : null;
-            this.BatchNodeMetrics = TryGetObjectFromMetadata<BatchNodeMetrics>(out var metrics) ? metrics : null;
+            var vmInfo = this.VirtualMachineInfo;
+            this.VirtualMachineInfo = TryGetObjectFromMetadata(ref vmInfo) ? vmInfo : null;
+            var metrics = this.BatchNodeMetrics;
+            this.BatchNodeMetrics = TryGetObjectFromMetadata(ref metrics) ? metrics : null;
         }
 
         /// <summary>
@@ -118,11 +120,10 @@ namespace Tes.Models
         /// </summary>
         /// <typeparam name="T">Type of object to populate and return</typeparam>
         /// <returns>Populated object</returns>
-        private bool TryGetObjectFromMetadata<T>(out T obj) where T : new()
+        private bool TryGetObjectFromMetadata<T>(ref T obj) where T : new()
         {
             if (this.Metadata is null)
             {
-                obj = default;
                 return false;
             }
 
@@ -131,12 +132,11 @@ namespace Tes.Models
 
             if (this.Metadata.Keys.Intersect(metadataKeyNames).Any())
             {
-                obj = new T();
+                obj ??= new T();
                 LoadObjectFromMetadata(obj);
                 return true;
             }
 
-            obj = default;
             return false;
         }
 
@@ -149,19 +149,22 @@ namespace Tes.Models
         /// <returns>True if metadata value is found.</returns>
         private bool TryGetMetadataValue(string key, Type type, out object result)
         {
-            string value = null;
-            var hasValue = this.Metadata is not null && this.Metadata.TryGetValue(key, out value);
-
-            if (type == typeof(IEnumerable<string>))
+            if (this.Metadata is not null && this.Metadata.TryGetValue(key, out var value))
             {
-                result = hasValue ? JsonConvert.DeserializeObject(value, type) : default;
-            }
-            else
-            {
-                result = hasValue ? JsonConvert.DeserializeObject($"\"{value}\"", type) : default;
+                if (typeof(System.Collections.IEnumerable).IsAssignableFrom(type) && !typeof(string).IsAssignableFrom(type))
+                {
+                    result = JsonConvert.DeserializeObject(value, type);
+                }
+                else
+                {
+                    result = JsonConvert.DeserializeObject($"\"{value}\"", type);
+                }
+
+                return true;
             }
 
-            return hasValue;
+            result = default;
+            return false;
         }
 
         /// <summary>

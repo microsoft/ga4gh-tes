@@ -53,6 +53,6 @@ public class PartsReader : PartsProcessor
             writeBufferChannel.Writer.Complete();
         }
 
-        logger.LogInformation("All part read operations completed successfully.");
+        logger.LogDebug("All part read operations completed successfully.");
     }
 }

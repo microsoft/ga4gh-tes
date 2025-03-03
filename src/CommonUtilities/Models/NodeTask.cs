@@ -10,31 +10,31 @@ namespace Tes.Runner.Models
     {
         public string? Id { get; set; }
         public string? WorkflowId { get; set; }
-        public string? ImageTag { get; set; }
-        public string? ImageName { get; set; }
+        public List<Executor>? Executors { get; set; }
         public List<ContainerDeviceRequest>? ContainerDeviceRequests { get; set; }
-        public string? ContainerWorkDir { get; set; }
-        public List<string>? CommandsToExecute { get; set; }
-
-        /// <value>Path inside the container to a file which will be piped to the executor&#39;s stdin. Must be an absolute path.</value>
-        public string? ContainerStdInPath { get; set; }
-
-        /// <value>Path inside the container to a file where the executor&#39;s stdout will be written to. Must be an absolute path.</value>
-        public string? ContainerStdOutPath { get; set; }
-
-        /// <value>Path inside the container to a file where the executor&#39;s stderr will be written to. Must be an absolute path.</value>
-        public string? ContainerStdErrPath { get; set; }
-
-        public Dictionary<string, string>? ContainerEnv { get; set; }
+        public List<string>? ContainerVolumes { get; set; }
         public List<FileInput>? Inputs { get; set; }
         public List<FileOutput>? Outputs { get; set; }
+        public List<FileOutput>? TaskOutputs { get; set; }
         public string? MetricsFilename { get; set; }
         public string? InputsMetricsFormat { get; set; }
         public string? OutputsMetricsFormat { get; set; }
         public List<string>? TimestampMetricsFormats { get; set; }
         public List<string>? BashScriptMetricsFormats { get; set; }
-        public string? MountParentDirectoryPath { get; set; }
         public RuntimeOptions RuntimeOptions { get; set; } = null!;
+    }
+
+    public class Executor
+    {
+        public string? ImageTag { get; set; }
+        public string? ImageName { get; set; }
+        public string? ContainerWorkDir { get; set; }
+        public List<string>? CommandsToExecute { get; set; }
+        public string? ContainerStdInPath { get; set; }
+        public string? ContainerStdOutPath { get; set; }
+        public string? ContainerStdErrPath { get; set; }
+        public Dictionary<string, string>? ContainerEnv { get; set; }
+        public bool IgnoreError { get; set; }
     }
 
     public class ContainerDeviceRequest
@@ -80,6 +80,7 @@ namespace Tes.Runner.Models
         public AzureEnvironmentConfig? AzureEnvironmentConfig { get; set; }
 
         public bool? SetContentMd5OnUpload { get; set; }
+        public string? MountParentDirectoryPath { get; set; }
     }
 
     public class StorageTargetLocation
