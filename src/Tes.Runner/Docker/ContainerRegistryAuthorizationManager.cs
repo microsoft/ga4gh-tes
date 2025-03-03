@@ -48,11 +48,11 @@ namespace Tes.Runner.Docker
 
             if (string.IsNullOrWhiteSpace(acrAccessToken))
             {
-                logger.LogInformation(@"The ACR instance is public. No authorization is required. Registry: {RegistryEndpoint}", registryAddress);
+                logger.LogDebug(@"The ACR instance is public. No authorization is required. Registry: {RegistryEndpoint}", registryAddress);
                 return null; // image is available anonymously
             }
 
-            logger.LogInformation(@"The ACR instance is private. An access token was successfully obtained. Registry: {RegistryEndpoint}", registryAddress);
+            logger.LogDebug(@"The ACR instance is private. An access token was successfully obtained. Registry: {RegistryEndpoint}", registryAddress);
 
             return new AuthConfig
             {

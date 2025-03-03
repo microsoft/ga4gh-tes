@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommonUtilities;
 using CommonUtilities.Options;
@@ -19,6 +20,7 @@ using Tes.ApiClients;
 using Tes.Models;
 using Tes.Repository;
 using TesApi.Web;
+using TesApi.Web.Events;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Batch;
 using TesApi.Web.Management.Configuration;
@@ -51,6 +53,7 @@ namespace TesApi.Tests.TestServices
             var azureCloudConfig = CommonUtilities.AzureCloud.AzureCloudConfig.ForUnitTesting();
             provider = new ServiceCollection()
                 .AddSingleton(_ => new TesServiceInfo { CreatedAt = DateTimeOffset.UtcNow, Environment = "unittest", Id = "unit-test-id", Organization = new() { Name = "unit-test-org", Url = "http://localhost/" }, Storage = [], UpdatedAt = DateTimeOffset.UtcNow })
+                .AddSingleton(_ => new BatchAccountResourceInformation("batchAccount", "resourceGroupName", "subscriptionId", "regionName", "https://batchAccount.regionName.batchSuffix"))
                 .AddSingleton(azureCloudConfig)
                 .AddSingleton(azureCloudConfig.AzureEnvironmentConfig)
                 .AddSingleton<ConfigurationUtils>()
@@ -73,32 +76,37 @@ namespace TesApi.Tests.TestServices
                 .AddTransient<ILogger<T>>(_ => NullLogger<T>.Instance)
                 .IfThenElse(mockStorageAccessProvider, s => s, s => s.AddTransient<ILogger<DefaultStorageAccessProvider>>(_ => NullLogger<DefaultStorageAccessProvider>.Instance))
                 .IfThenElse(batchSkuInformationProvider is null,
-                    s => s.AddSingleton<IBatchSkuInformationProvider>(sp => ActivatorUtilities.CreateInstance<PriceApiBatchSkuInformationProvider>(sp))
-                        .AddSingleton(sp => new PriceApiBatchSkuInformationProvider(sp.GetRequiredService<PriceApiClient>(), azureCloudConfig, sp.GetRequiredService<ILogger<PriceApiBatchSkuInformationProvider>>())),
+                    s => s.AddSingleton<IBatchSkuInformationProvider>(sp => new PriceApiBatchSkuInformationProvider(sp.GetRequiredService<PriceApiClient>(), azureCloudConfig, sp.GetRequiredService<ILogger<PriceApiBatchSkuInformationProvider>>())),
                     s => s.AddSingleton(_ => GetBatchSkuInformationProvider(batchSkuInformationProvider).Object))
                 .AddSingleton(_ => GetBatchQuotaProvider(batchQuotaProvider).Object)
                 .AddTransient<ILogger<BatchScheduler>>(_ => NullLogger<BatchScheduler>.Instance)
+                .AddTransient<ILogger<Web.TaskScheduler>>(_ => NullLogger<Web.TaskScheduler>.Instance)
                 .AddTransient<ILogger<BatchPool>>(_ => NullLogger<BatchPool>.Instance)
                 .AddTransient<ILogger<ArmBatchQuotaProvider>>(_ => NullLogger<ArmBatchQuotaProvider>.Instance)
                 .AddTransient<ILogger<BatchQuotaVerifier>>(_ => NullLogger<BatchQuotaVerifier>.Instance)
                 .AddTransient<ILogger<ConfigurationUtils>>(_ => NullLogger<ConfigurationUtils>.Instance)
+                .AddTransient<ILogger<PriceApiClient>>(_ => NullLogger<PriceApiClient>.Instance)
                 .AddTransient<ILogger<PriceApiBatchSkuInformationProvider>>(_ => NullLogger<PriceApiBatchSkuInformationProvider>.Instance)
                 .AddTransient<ILogger<TaskToNodeTaskConverter>>(_ => NullLogger<TaskToNodeTaskConverter>.Instance)
                 .AddTransient<ILogger<TaskExecutionScriptingManager>>(_ => NullLogger<TaskExecutionScriptingManager>.Instance)
                 .AddTransient<ILogger<CachingWithRetriesAzureProxy>>(_ => NullLogger<CachingWithRetriesAzureProxy>.Instance)
+                .AddTransient<ILogger<RunnerEventsProcessor>>(_ => NullLogger<RunnerEventsProcessor>.Instance)
                 .AddSingleton<CachingRetryPolicyBuilder>()
                 .AddTransient<IActionIdentityProvider, DefaultActionIdentityProvider>()
                 .AddSingleton<PriceApiClient>()
-                .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
+                .AddSingleton<Func<IBatchPool>>(s => () => s.GetService<BatchPool>())
                 .AddTransient<BatchPool>()
+                .AddSingleton<RunnerEventsProcessor>()
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
                 .AddSingleton(s => GetArmBatchQuotaProvider(s, armBatchQuotaProvider)) //added so config utils gets the arm implementation, to be removed once config utils is refactored.
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                 .AddSingleton<TaskToNodeTaskConverter>()
                 .AddSingleton<TaskExecutionScriptingManager>()
                 .AddSingleton(GetBatchPoolManager(batchPoolManager).Object)
+                .AddSingleton<ITaskScheduler, Web.TaskScheduler>()
                 .IfThenElse(additionalActions is null, s => { }, s => additionalActions(s))
-            .BuildServiceProvider();
+                .AddSingleton<Microsoft.Extensions.Hosting.IHostApplicationLifetime, HostApplicationLifetime>()
+                .BuildServiceProvider();
 
             IOptions<TOption> BindHelper<TOption>(string key) where TOption : class, new()
                 => Options.Create<TOption>(Configuration.GetSection(key).Get<TOption>() ?? new TOption());
@@ -224,6 +232,20 @@ namespace TesApi.Tests.TestServices
             var proxy = new Mock<IStorageAccessProvider>();
             action?.Invoke(proxy);
             return StorageAccessProvider = proxy;
+        }
+
+        private class HostApplicationLifetime : Microsoft.Extensions.Hosting.IHostApplicationLifetime
+        {
+            public CancellationToken ApplicationStarted => throw new NotImplementedException();
+
+            public CancellationToken ApplicationStopped => throw new NotImplementedException();
+
+            public CancellationToken ApplicationStopping => throw new NotImplementedException();
+
+            public void StopApplication()
+            {
+                throw new NotImplementedException();
+            }
         }
 
         public void Dispose()

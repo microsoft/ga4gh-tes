@@ -69,7 +69,7 @@ namespace Tes.Runner.Docker
 
             if (!expandedPath.StartsWith(mountParentDirectory))
             {
-                logger.LogDebug(
+                logger.LogTrace(
                     @"The expanded path value {ExpandedPath} does not contain the specified mount parent directory: {MountParentDirectory}. No volume binding will be created for this file in the container.",
                     expandedPath, mountParentDirectory);
                 return default;
@@ -79,7 +79,7 @@ namespace Tes.Runner.Docker
 
             var volBinding = $"{mountParentDirectory.TrimEnd('/')}/{targetDir}:/{targetDir}";
 
-            logger.LogDebug(@"Volume binding for {ExpandedPath} is {VolBinding}", expandedPath, volBinding);
+            logger.LogTrace(@"Volume binding for {ExpandedPath} is {VolBinding}", expandedPath, volBinding);
 
             return volBinding;
         }

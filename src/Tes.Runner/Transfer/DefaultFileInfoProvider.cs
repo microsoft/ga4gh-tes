@@ -15,25 +15,25 @@ public class DefaultFileInfoProvider : IFileInfoProvider
 
     public long GetFileSize(string fileName)
     {
-        logger.LogDebug("Getting file size for file: {Path}", fileName);
+        logger.LogTrace("Getting file size for file: {Path}", fileName);
 
         return GetFileInfoOrThrowIfFileDoesNotExist(fileName).Length;
     }
 
     public string GetExpandedFileName(string fileName)
     {
-        logger.LogDebug("Expanding file name: {Path}", fileName);
+        logger.LogTrace("Expanding file name: {Path}", fileName);
 
         var expandedValue = Environment.ExpandEnvironmentVariables(fileName);
 
-        logger.LogDebug("Expanded file name: {ExpandedPath}", expandedValue);
+        logger.LogTrace("Expanded file name: {ExpandedPath}", expandedValue);
 
         return expandedValue;
     }
 
     public bool FileExists(string fileName)
     {
-        logger.LogDebug("Checking if file exists: {Path}", fileName);
+        logger.LogTrace("Checking if file exists: {Path}", fileName);
 
         var fileInfo = new FileInfo(Environment.ExpandEnvironmentVariables(fileName));
 
@@ -43,7 +43,7 @@ public class DefaultFileInfoProvider : IFileInfoProvider
 
     public List<FileResult> GetFilesBySearchPattern(string searchPath, string searchPattern)
     {
-        logger.LogInformation("Searching for files in the search path: {Path} with search pattern: {SearchPattern}", searchPath, searchPattern);
+        logger.LogDebug("Searching for files in the search path: {Path} with search pattern: {SearchPattern}", searchPath, searchPattern);
 
         return Directory.GetFiles(Environment.ExpandEnvironmentVariables(searchPath), Environment.ExpandEnvironmentVariables(searchPattern), SearchOption.AllDirectories)
             .Select(f => new FileResult(f, ToRelativePathToSearchPath(searchPath, searchPattern, f), searchPath))
@@ -62,7 +62,7 @@ public class DefaultFileInfoProvider : IFileInfoProvider
 
         if (!string.IsNullOrWhiteSpace(prefixToRemove) && absolutePath.StartsWith(prefixToRemove))
         {
-            logger.LogInformation("Removing prefix: {Prefix} from absolute path: {Path}", prefixToRemove, absolutePath);
+            logger.LogDebug("Removing prefix: {Prefix} from absolute path: {Path}", prefixToRemove, absolutePath);
 
             return absolutePath[(prefixToRemove.Length + 1)..];
         }
@@ -74,7 +74,7 @@ public class DefaultFileInfoProvider : IFileInfoProvider
     {
         var expandedPath = Environment.ExpandEnvironmentVariables(path);
 
-        logger.LogInformation("Getting all files in directory: {Path}", expandedPath);
+        logger.LogDebug("Getting all files in directory: {Path}", expandedPath);
 
         if (!Directory.Exists(expandedPath))
         {

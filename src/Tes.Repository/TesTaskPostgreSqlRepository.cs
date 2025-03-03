@@ -5,7 +5,6 @@ namespace Tes.Repository
 {
     using System;
     using System.Collections.Generic;
-    using System.Diagnostics;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Reflection;
@@ -18,15 +17,16 @@ namespace Tes.Repository
     using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Options;
     using Npgsql;
-    using Polly;
     using Tes.Models;
+    using Tes.Repository.Models;
+    using Tes.Repository.Utilities;
     using Tes.Utilities;
 
     /// <summary>
     /// A TesTask specific repository for storing the TesTask as JSON within an Entity Framework Postgres table
     /// </summary>
     /// <typeparam name="TesTask"></typeparam>
-    public sealed class TesTaskPostgreSqlRepository : PostgreSqlCachingRepository<TesTaskDatabaseItem>, IRepository<TesTask>
+    public sealed class TesTaskPostgreSqlRepository : PostgreSqlCachingRepository<TesTaskDatabaseItem, TesTask>, IRepository<TesTask>
     {
         // JsonSerializerOptions singleton factory
         private static readonly Lazy<JsonSerializerOptions> GetSerializerOptions = new(() =>
@@ -102,7 +102,6 @@ namespace Tes.Repository
         {
             var dataSource = NpgsqlDataSourceFunc(ConnectionStringUtility.GetPostgresConnectionString(options)); // The datasource itself must be essentially a singleton.
             CreateDbContext = Initialize(() => new TesDbContext(dataSource, NpgsqlDbContextOptionsBuilder));
-            WarmCacheAsync(CancellationToken.None).GetAwaiter().GetResult();
         }
 
         /// <summary>
@@ -120,42 +119,6 @@ namespace Tes.Repository
             using var dbContext = createDbContext();
             dbContext.Database.MigrateAsync(CancellationToken.None).GetAwaiter().GetResult();
             return createDbContext;
-        }
-
-        private async Task WarmCacheAsync(CancellationToken cancellationToken)
-        {
-            if (Cache is null)
-            {
-                Logger?.LogWarning("Cache is null for TesTaskPostgreSqlRepository; no caching will be used.");
-                return;
-            }
-
-            var sw = Stopwatch.StartNew();
-            Logger?.LogInformation("Warming cache...");
-
-            // Don't allow the state of the system to change until the cache and system are consistent;
-            // this is a fast PostgreSQL query even for 1 million items
-            await Policy
-                .Handle<Exception>()
-                .WaitAndRetryAsync(3,
-                    retryAttempt =>
-                    {
-                        Logger?.LogWarning("Warming cache retry attempt #{RetryAttempt}", retryAttempt);
-                        return TimeSpan.FromSeconds(10);
-                    },
-                    (ex, ts) =>
-                    {
-                        Logger?.LogCritical(ex, "Couldn't warm cache, is the database online?");
-                    })
-                .ExecuteAsync(async ct =>
-                {
-                    var activeTasksCount = (await InternalGetItemsAsync(
-                            ct,
-                            orderBy: q => q.OrderBy(t => t.Json.CreationTime),
-                            efPredicates: Enumerable.Empty<Expression<Func<TesTask, bool>>>().Append(task => TesTask.ActiveStates.Contains(task.State))))
-                        .Count();
-                    Logger?.LogInformation("Cache warmed successfully in {TotalSeconds:n3} seconds. Added {TasksAddedCount:n0} items to the cache.", sw.Elapsed.TotalSeconds, activeTasksCount);
-                }, cancellationToken);
         }
 
 
@@ -184,7 +147,7 @@ namespace Tes.Repository
         public async Task<TesTask> CreateItemAsync(TesTask task, CancellationToken cancellationToken)
         {
             var item = new TesTaskDatabaseItem { Json = task };
-            item = await ExecuteNpgsqlActionAsync(async () => await AddUpdateOrRemoveItemInDbAsync(item, WriteAction.Add, cancellationToken));
+            item = await ExecuteNpgsqlActionAsync(async () => await AddUpdateOrRemoveItemInDbAsync(item, db => db.Json, WriteAction.Add, cancellationToken));
             return EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState(), CopyTesTask).TesTask;
         }
 
@@ -193,6 +156,7 @@ namespace Tes.Repository
         /// </summary>
         /// <param name="item">TesTask to store as JSON in the database</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
         public async Task<List<TesTask>> CreateItemsAsync(List<TesTask> items, CancellationToken cancellationToken)
              => [.. (await Task.WhenAll(items.Select(task => CreateItemAsync(task, cancellationToken))))];
 
@@ -201,14 +165,14 @@ namespace Tes.Repository
         {
             var item = await ExecuteNpgsqlActionAsync(async () => await GetItemFromCacheOrDatabase(tesTask.Id, true, cancellationToken));
             item.Json = tesTask;
-            item = await ExecuteNpgsqlActionAsync(async () => await AddUpdateOrRemoveItemInDbAsync(item, WriteAction.Update, cancellationToken));
+            item = await ExecuteNpgsqlActionAsync(async () => await AddUpdateOrRemoveItemInDbAsync(item, db => db.Json, WriteAction.Update, cancellationToken));
             return EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState(), CopyTesTask).TesTask;
         }
 
         /// <inheritdoc/>
         public async Task DeleteItemAsync(string id, CancellationToken cancellationToken)
         {
-            _ = await ExecuteNpgsqlActionAsync(async () => await AddUpdateOrRemoveItemInDbAsync(await GetItemFromCacheOrDatabase(id, true, cancellationToken), WriteAction.Delete, cancellationToken));
+            _ = await ExecuteNpgsqlActionAsync(async () => await AddUpdateOrRemoveItemInDbAsync(await GetItemFromCacheOrDatabase(id, true, cancellationToken), db => db.Json, WriteAction.Delete, cancellationToken));
             _ = Cache?.TryRemove(id);
         }
 
@@ -307,7 +271,7 @@ namespace Tes.Repository
                 using var dbContext = CreateDbContext();
 
                 // Search for Id within the JSON
-                item = await ExecuteNpgsqlActionAsync(async () => await asyncPolicy.ExecuteAsync(ct => dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id, ct), cancellationToken));
+                item = await ExecuteNpgsqlActionAsync(async () => await asyncPolicy.ExecuteWithRetryAsync(ct => dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id, ct), cancellationToken));
 
                 if (throwIfNotFound && item is null)
                 {
@@ -315,7 +279,7 @@ namespace Tes.Repository
                 }
             }
 
-            return item;
+            return item.Clone();
         }
 
         /// <summary>
