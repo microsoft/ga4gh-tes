@@ -42,7 +42,7 @@ namespace GenerateBatchVmSkus
             var configurationProperties = typeof(Configuration).GetTypeInfo().DeclaredProperties.Select(p => p.Name).ToList();
 
             var invalidArguments = configurationSource.Providers
-                .SelectMany(p => p.GetChildKeys(Enumerable.Empty<string>(), null))
+                .SelectMany(p => p.GetChildKeys([], null))
                 .Where(k => !configurationProperties.Contains(k, StringComparer.OrdinalIgnoreCase));
 
             if (invalidArguments.Any())
@@ -57,33 +57,36 @@ namespace GenerateBatchVmSkus
         }
     }
 
-    internal class Program
+    internal static class Program
     {
+        private static string? _cloudName;
+
         static Program()
         {
             Thread.CurrentThread.CurrentCulture = CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
         }
 
         internal static RootCommand RootCommand { get; } = new RootCommand("Determine TES Azure Compute SKU whitelist.");
+
         internal static Option<FileInfo> NoValidateWhitelistFile { get; } = new Option<FileInfo>(aliases: ["-V"], "--no-validation")
         {
             Arity = ArgumentArity.ExactlyOne,
             Description = "Suppress validation. Use the following whitelist. (a file spec is required if this option is selected)"
         };
+
         internal static Option<string> CloudName { get; } = new Option<string>(aliases: ["-c"], "--azure-cloud")
         {
             Arity = ArgumentArity.ExactlyOne,
             Description = "Short name of the azure cloud.",
-            IsRequired = true
+            IsRequired = true,
         };
 
         private static CommandLineBuilder BuildHostBuilder()
         {
-            var jsonFile = new Argument<FileInfo>("destination", "Minimized SKU list.") { Arity = ArgumentArity.ZeroOrOne /*Arity = ArgumentArity.ExactlyOne*/ };
-            RootCommand.AddArgument(jsonFile);
             RootCommand.AddOption(NoValidateWhitelistFile);
             RootCommand.AddOption(CloudName);
             CloudName.FromAmong([nameof(AzureAuthorityHosts.AzurePublicCloud), nameof(AzureAuthorityHosts.AzureGovernment), nameof(AzureAuthorityHosts.AzureChina)]);
+            CloudName.SetDefaultValue(nameof(AzureAuthorityHosts.AzurePublicCloud));
 
             CommandLineBuilder builder = new(RootCommand);
 
@@ -92,65 +95,95 @@ namespace GenerateBatchVmSkus
                 {
                     builder.ConfigureHostOptions(options => options.ShutdownTimeout = TimeSpan.FromSeconds(60))
 
-                    .ConfigureAppConfiguration((context, config) =>
-                    {
-                        config.AddJsonFile("appsettings.json");
-                        var cfg = config.Build();
-                        var value = cfg["OutputFilePath"];
-                        if (!string.IsNullOrWhiteSpace(value))
-                        {
-                            jsonFile.SetDefaultValue(value);
-                        }
-                    })
+                    .ConfigureAppConfiguration((context, config) => config.AddJsonFile("appsettings.json"))
 
                     .ConfigureLogging((context, logging) =>
                         logging.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Warning)
 
-                    .AddSystemdConsole(options =>
-                    {
-                        options.IncludeScopes = true;
-                        options.UseUtcTimestamp = true;
-                    })
+                        .AddSystemdConsole(options =>
+                        {
+                            options.IncludeScopes = true;
+                            options.UseUtcTimestamp = true;
+                        })
 
-                    .SetMinimumLevel(LogLevel.Debug)
-                    .Configure(options => options.ActivityTrackingOptions = ActivityTrackingOptions.ParentId)
-                    .AddConfiguration(context.Configuration))
+                        .SetMinimumLevel(LogLevel.Information)
+                        .AddFilter("Azure.Core", LogLevel.Error)
+                        .AddFilter("Azure.Identity", LogLevel.Warning)
+                        .Configure(options => options.ActivityTrackingOptions = ActivityTrackingOptions.ParentId)
+                        .AddConfiguration(context.Configuration))
 
                     .ConfigureServices((context, services) =>
                     {
                         services.AddSingleton(Configuration.BuildConfiguration());
-                        services.AddTransient<TokenCredentialOptions>();
-                        services.AddTransient<AzureCliCredentialOptions>();
+                        services.AddOptions<CommonUtilities.Options.RetryPolicyOptions>();
+
+                        services.AddSingleton(s
+                            => new Func<BatchAccountData, string, int, CancellationToken, BatchAccountInfo>((data, subnetId, index, token)
+                                => ActivatorUtilities.CreateInstance<BatchAccountInfo>(s, data, subnetId, index, token)));
+
+                        services.AddSingleton(_
+                            => new Func<BatchAccountDataAndTokenProvider, Lazy<Microsoft.Azure.Batch.BatchClient>>(provider
+                                => new(()
+                                    => Microsoft.Azure.Batch.BatchClient.Open(
+                                        new Microsoft.Azure.Batch.Auth.BatchTokenCredentials(
+                                            new UriBuilder(Uri.UriSchemeHttps, provider.Data.AccountEndpoint).Uri.AbsoluteUri,
+                                            provider.Provider)))));
+
+                        services.AddSingleton<AzureCloud>(_ => _cloudName switch
+                        {
+                            nameof(ArmEnvironment.AzurePublicCloud) => new(ArmEnvironment.AzurePublicCloud, AzureAuthorityHosts.AzurePublicCloud),
+                            nameof(ArmEnvironment.AzureGovernment) => new(ArmEnvironment.AzureGovernment, AzureAuthorityHosts.AzureGovernment),
+                            nameof(ArmEnvironment.AzureChina) => new(ArmEnvironment.AzureChina, AzureAuthorityHosts.AzureChina),
+                            _ => throw new ArgumentOutOfRangeException(nameof(CloudName)),
+                        });
+
+                        services.AddSingleton<Azure.Core.Pipeline.RetryPolicy>(s =>
+                        {
+                            var retryPolicy = s.GetRequiredService<Microsoft.Extensions.Options.IOptions<CommonUtilities.Options.RetryPolicyOptions>>();
+                            return new(retryPolicy.Value.MaxRetryCount, DelayStrategy.CreateExponentialDelayStrategy(TimeSpan.FromSeconds(retryPolicy.Value.ExponentialBackOffExponent)));
+                        });
+
+                        services.AddSingleton<TokenCredential>(s => s.GetRequiredService<AzureCliCredential>());
+                        services.AddSingleton<AzureCliCredential>(s => new(SetOptions<AzureCliCredentialOptions>(s, new())));
 
                         services.AddAzureClientsCore(true);
                         services.AddAzureClients(configure =>
                         {
-                            configure.AddClient<ManagedIdentityCredential, TokenCredentialOptions>((TokenCredentialOptions o, IServiceProvider s) =>
-                            {
-                                return new(context.Configuration["AZURE_CLIENT_ID"], o);
-                            })
-                            .ConfigureOptions((o, s) =>
-                            {
-                                o.AuthorityHost = AzureAuthorityHosts.AzurePublicCloud;
-                            });
+                            configure.UseCredential(s => s.GetRequiredService<TokenCredential>());
 
-                            configure.AddClient<AzureCliCredential, AzureCliCredentialOptions>((AzureCliCredentialOptions o, IServiceProvider s) =>
-                            {
-                                return new(o);
-                            })
-                            .ConfigureOptions((o, s) =>
-                            {
-                                o.AuthorityHost = AzureAuthorityHosts.AzurePublicCloud;
-                            });
+                            configure.AddArmClient(context.Configuration[nameof(Configuration.SubscriptionId)])
+                                .ConfigureOptions((o, s) =>
+                                {
+                                    o.Environment = s.GetRequiredService<AzureCloud>().ArmEnvironment;
+                                    o.SetApiVersionsFromProfile(AzureStackProfile.Profile20200901Hybrid);
+                                    o.RetryPolicy = s.GetRequiredService<Azure.Core.Pipeline.RetryPolicy>();
+                                });
 
-                            configure.AddArmClient(context.Configuration)
-                            .WithCredential(s => new ChainedTokenCredential(s.GetRequiredService<ManagedIdentityCredential>(), s.GetRequiredService<AzureCliCredential>()))
-                            .ConfigureOptions((o, s) =>
+                            configure.AddClient<Lazy<Microsoft.Azure.Batch.BatchClient>, BatchAccountDataAndTokenProvider>((BatchAccountDataAndTokenProvider dataAndProvider, IServiceProvider s) => new(() =>
                             {
-                                o.Environment = ArmEnvironment.AzurePublicCloud;
-                                o.SetApiVersionsFromProfile(AzureStackProfile.Profile20200901Hybrid);
-                            });
+                                var (data, provider) = dataAndProvider;
+                                var result = Microsoft.Azure.Batch.BatchClient.Open(
+                                    new Microsoft.Azure.Batch.Auth.BatchTokenCredentials(
+                                        new UriBuilder(Uri.UriSchemeHttps, data.AccountEndpoint).Uri.AbsoluteUri,
+                                        provider));
+
+                                result.CustomBehaviors.OfType<Microsoft.Azure.Batch.RetryPolicyProvider>().Single().Policy = new Microsoft.Azure.Batch.Common.ExponentialRetry(TimeSpan.FromSeconds(1), 11, TimeSpan.FromMinutes(1));
+                                return result;
+                            }));
                         });
+
+                        static T SetOptions<T>(IServiceProvider s, T o) where T : TokenCredentialOptions
+                        {
+                            var retryPolicy = s.GetRequiredService<Microsoft.Extensions.Options.IOptions<CommonUtilities.Options.RetryPolicyOptions>>();
+                            o.AuthorityHost = s.GetRequiredService<AzureCloud>().AzureAuthorityHost;
+                            o.Retry.Mode = RetryMode.Exponential;
+                            o.Retry.MaxRetries = retryPolicy.Value.MaxRetryCount;
+                            o.Retry.Delay = TimeSpan.FromSeconds(retryPolicy.Value.ExponentialBackOffExponent);
+                            return o;
+                        };
+
+                        //static T SetOrDefault<T>(string? test, Func<string, T> apply, T @default)
+                        //    => string.IsNullOrEmpty(test) ? @default : apply(test);
                     })
 
                     .UseInvocationLifetime(builder.GetInvocationContext(), options => options.SuppressStatusMessages = true)
@@ -178,15 +211,18 @@ namespace GenerateBatchVmSkus
             return builder;
         }
 
+        internal record class AzureCloud(ArmEnvironment ArmEnvironment, Uri AzureAuthorityHost);
+        internal record class BatchAccountDataAndTokenProvider(BatchAccountData Data, Func<Task<string>> Provider);
+
         static async Task Main(string[] args)
         {
             try
             {
-                var program = new Program();
-                var builder = BuildHostBuilder();
-                Environment.Exit(await builder.Build().Parse(args).InvokeAsync());
+                var results = BuildHostBuilder().Build().Parse(args);
+                _cloudName = results.CommandResult.GetValueForOption(CloudName);
+                Environment.Exit(await results.InvokeAsync());
             }
-            catch (Exception exception)
+            catch (Exception exception) when (exception is not System.OperationCanceledException)
             {
                 Console.ResetColor();
                 Console.ForegroundColor = ConsoleColor.Red;
@@ -228,40 +264,28 @@ namespace GenerateBatchVmSkus
 
         internal sealed class BatchAccountInfo : IDisposable
         {
-            private Microsoft.Azure.Batch.BatchClient ClientFactory(TokenCredential credential, CancellationToken cancellationToken)
-            {
-                var result = Microsoft.Azure.Batch.BatchClient.Open(
-                new Microsoft.Azure.Batch.Auth.BatchTokenCredentials(
-                    new UriBuilder(Uri.UriSchemeHttps, data.AccountEndpoint).Uri.AbsoluteUri,
-                    async () => await BatchTokenProvider(credential, cancellationToken)));
-
-                result.CustomBehaviors.OfType<Microsoft.Azure.Batch.RetryPolicyProvider>().Single().Policy = new Microsoft.Azure.Batch.Common.ExponentialRetry(TimeSpan.FromSeconds(1), 11, TimeSpan.FromMinutes(1));
-                return result;
-            }
-
             private async Task<string> BatchTokenProvider(TokenCredential tokenCredential, CancellationToken cancellationToken)
             {
-                if (accessToken?.ExpiresOn > DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(60)))
+                if (!(accessToken?.ExpiresOn > DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(60))))
                 {
-                    return accessToken.Value.Token;
+                    accessToken = await tokenCredential.GetTokenAsync(
+                        new([new UriBuilder("https://batch.core.windows.net/") { Path = ".default" }.Uri.AbsoluteUri], Guid.NewGuid().ToString("D")),
+                        cancellationToken);
                 }
 
-                accessToken = await tokenCredential.GetTokenAsync(
-                    new([new UriBuilder("https://batch.core.windows.net/") { Path = ".default" }.Uri.AbsoluteUri], Guid.NewGuid().ToString("D")),
-                    cancellationToken);
-                return accessToken.Value.Token;
+                return accessToken?.Token!;
             }
 
             private readonly Lazy<Microsoft.Azure.Batch.BatchClient> batchClient;
             private readonly BatchAccountData data;
             private AccessToken? accessToken;
 
-            public BatchAccountInfo(BatchAccountData data, string subnetId, int index, TokenCredential credential, CancellationToken cancellationToken)
+            public BatchAccountInfo(Func<BatchAccountDataAndTokenProvider, Lazy<Microsoft.Azure.Batch.BatchClient>> batchClientFactory, TokenCredential credential, BatchAccountData data, string subnetId, int index, CancellationToken cancellationToken)
             {
                 SubnetId = subnetId;
                 Index = index;
                 this.data = data;
-                batchClient = new Lazy<Microsoft.Azure.Batch.BatchClient>(() => ClientFactory(credential, cancellationToken));
+                batchClient = batchClientFactory(new(data, async () => await BatchTokenProvider(credential, cancellationToken)));
             }
 
             public string Name => data.Name;

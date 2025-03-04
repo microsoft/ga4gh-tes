@@ -11,14 +11,11 @@ using System.Reflection;
 using System.Text.Json;
 using Azure;
 using Azure.Core;
-using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Batch;
 using Azure.ResourceManager.Compute;
 using Azure.ResourceManager.Compute.Models;
-using Azure.ResourceManager.Resources.Models;
 using CommonUtilities;
-using CommonUtilities.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -35,7 +32,7 @@ namespace GenerateBatchVmSkus
      *   Currently, we consider the Azure APIs to return the same values for each region where any given SKU exists, but that is not the case. Consider implementing a strategy where we, on a case-by-case basis, determine whether we want the "max" or the "min" of all the regions sampled for any given property.
      */
 
-    internal class AzureBatchSkuLocator(Configuration configuration, IConsole console) : ICommandHandler
+    internal class AzureBatchSkuLocator(Configuration configuration, IOptions<CommonUtilities.Options.RetryPolicyOptions> retryPolicyOptions, ArmClient client, Func<BatchAccountData, string, int, CancellationToken, BatchAccountInfo> batchAccountInfoFactory, IConsole console) : ICommandHandler
     {
         private static readonly ConcurrentDictionary<string, ImmutableHashSet<string>> regionsForVm = new(StringComparer.OrdinalIgnoreCase);
         private static readonly ConcurrentDictionary<string, ComputeResourceSku> skuForVm = new(StringComparer.OrdinalIgnoreCase);
@@ -64,7 +61,7 @@ namespace GenerateBatchVmSkus
         private record struct ItemWithIndex<T>(T Item, int Index);
         private record struct ItemWithName<T>(string Name, T Item);
 
-        private static IAsyncEnumerable<BatchAccountInfo> GetBatchAccountsAsync(Azure.ResourceManager.Resources.SubscriptionResource subscription, TokenCredential credential, Configuration configuration, CancellationToken cancellationToken)
+        private IAsyncEnumerable<BatchAccountInfo> GetBatchAccountsAsync(Azure.ResourceManager.Resources.SubscriptionResource subscription, Configuration configuration, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(configuration?.BatchAccounts, nameof(configuration));
             ArgumentNullException.ThrowIfNull(configuration?.SubnetIds, nameof(configuration));
@@ -114,7 +111,7 @@ namespace GenerateBatchVmSkus
                     .Where(resource => accountsAndSubnetsLookup.Contains(resource.Id.Name))
                     .OrderBy(resource => accountsAndSubnetsLookup[resource.Id.Name].Single().Index)
                     .SelectAwaitWithCancellation(async (resource, token) => new ItemWithName<Response<BatchAccountResource>>(resource.Id.Name, await resource.GetAsync(token)))
-                    .Select((resource, index) => new BatchAccountInfo(resource.Item.Value?.Data ?? throw new InvalidOperationException($"Batch account {resource.Name} not retrieved."), accountsAndSubnetsLookup[resource.Name].Single().Item.SubnetId, index, credential, cancellationToken));
+                    .Select((resource, index) => batchAccountInfoFactory(resource.Item.Value?.Data ?? throw new InvalidOperationException($"Batch account {resource.Name} not retrieved."), accountsAndSubnetsLookup[resource.Name].Single().Item.SubnetId, index, cancellationToken));
             }
             catch (InvalidOperationException exception)
             {
@@ -142,32 +139,8 @@ namespace GenerateBatchVmSkus
             ArgumentException.ThrowIfNullOrEmpty(cloudName);
 
             ConsoleHelper.WriteLine("Starting...");
-            TokenCredential tokenCredential = new DefaultAzureCredential(new DefaultAzureCredentialOptions
-            {
-                AuthorityHost = cloudName switch
-                {
-                    nameof(AzureAuthorityHosts.AzurePublicCloud) => AzureAuthorityHosts.AzurePublicCloud,
-                    nameof(AzureAuthorityHosts.AzureGovernment) => AzureAuthorityHosts.AzureGovernment,
-                    nameof(AzureAuthorityHosts.AzureChina) => AzureAuthorityHosts.AzureChina,
-                    _ => throw new ArgumentOutOfRangeException(nameof(cloudName)),
-                }
-            });
-            RetryPolicyOptions retryPolicyOptions = new();
-            ArmClientOptions clientOptions = new()
-            {
-                Environment = cloudName switch
-                {
-                    nameof(ArmEnvironment.AzurePublicCloud) => ArmEnvironment.AzurePublicCloud,
-                    nameof(ArmEnvironment.AzureGovernment) => ArmEnvironment.AzureGovernment,
-                    nameof(ArmEnvironment.AzureChina) => ArmEnvironment.AzureChina,
-                    _ => throw new ArgumentOutOfRangeException(nameof(cloudName)),
-                }
-            };
-            clientOptions.Retry.Mode = RetryMode.Exponential;
-            clientOptions.Retry.MaxRetries = int.Max(clientOptions.Retry.MaxRetries, retryPolicyOptions.MaxRetryCount);
-            var client = new ArmClient(tokenCredential, default, clientOptions);
             var appCache = new MemoryCache(new MemoryCacheOptions());
-            var cacheAndRetryHandler = new CachingRetryPolicyBuilder(appCache, Options.Create(retryPolicyOptions));
+            var cacheAndRetryHandler = new CachingRetryPolicyBuilder(appCache, retryPolicyOptions);
             var priceApiClient = new PriceApiClient(cacheAndRetryHandler, new NullLogger<PriceApiClient>());
 
             var subscription = client.GetSubscriptionResource(new ResourceIdentifier($"/subscriptions/{configuration.SubscriptionId}"));
@@ -222,8 +195,7 @@ namespace GenerateBatchVmSkus
                 async () =>
                 {
                     ConsoleHelper.WriteLine("Getting SKU information from each region in the subscription...");
-                    await Parallel.ForEachAsync(subscription.GetLocationsAsync(cancellationToken: cancellationToken)
-                            .Where(x => x.Metadata.RegionType == RegionType.Physical),
+                    await Parallel.ForEachAsync(subscription.GetLocationsAsync(includeExtendedLocations: true, cancellationToken: cancellationToken),
                         cancellationToken,
                         async (region, token) =>
                         {
@@ -277,7 +249,7 @@ namespace GenerateBatchVmSkus
                 ConsoleHelper.WriteLine("Validating SKUs in Azure Batch...");
                 return await ValidateSkus(
                     batchSupportedVmSet,
-                    GetBatchAccountsAsync(subscription, tokenCredential, configuration, cancellationToken),
+                    GetBatchAccountsAsync(subscription, configuration, cancellationToken),
                     skuForVm
                         .Select(sku => (sku.Key, Info: new BatchSkuInfo(
                             sku.Value.Family,
@@ -377,10 +349,10 @@ namespace GenerateBatchVmSkus
 
             var sku = skuForVm[name] ?? throw new Exception($"Sku info is null for VM {name}");
 
-            if (name.Contains("_L"))
-            {
-                System.Diagnostics.Debugger.Break();
-            }
+            //if (name.Contains("_L"))
+            //{
+            //    System.Diagnostics.Debugger.Break();
+            //}
 
             var generations = AttemptParseString("HyperVGenerations")?.Split(",").ToList() ?? [];
             var vCpusAvailable = AttemptParseInt32("vCPUsAvailable");

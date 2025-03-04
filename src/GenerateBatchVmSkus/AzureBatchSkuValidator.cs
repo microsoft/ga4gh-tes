@@ -343,7 +343,7 @@ namespace GenerateBatchVmSkus
                                                         break;
                                                 }
                                             }
-                                            catch (Exception e)
+                                            catch (Exception e) when (e is not System.OperationCanceledException)
                                             {
                                                 ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.Red(),
                                                     $"Due to the following failure, it is unknown which SKU this failure report is related to. This SKU will not be included in the final results.{Environment.NewLine}{e}");
@@ -434,7 +434,8 @@ namespace GenerateBatchVmSkus
 
                             _ = Interlocked.Add(ref count, -skusToTest.Count);
                         }
-                        catch (Exception e) // TODO: Flag somewhere to prevent any results from being produced.
+                        // TODO: Flag somewhere to prevent any results from being produced.
+                        catch (Exception e) when (e is not System.OperationCanceledException)
                         {
                             ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.Red(),
                                 $"{e}{Environment.NewLine}This failure caused this batch account to not be used again in this session. This will probably produce incorrect results.");
@@ -603,7 +604,7 @@ namespace GenerateBatchVmSkus
                                             var x when StringComparison.OrdinalIgnoreCase.Equals("InternalServerError", x) => (true, default, VerifyVMIResult.Retry),
                                             var x when StringComparison.OrdinalIgnoreCase.Equals("NetworkingInternalOperationError", x) => (true, default, VerifyVMIResult.Retry),
                                             var x when StringComparison.OrdinalIgnoreCase.Equals("BadRequest", x) => (false, $"Note: HyperVGenerations: '{string.Join("', '", vm.HyperVGenerations)}'", VerifyVMIResult.Skip),
-                                            var x when (x?.Contains("Internal", StringComparison.OrdinalIgnoreCase) ?? false) || (providerError?.Error.Message.Contains(" retry later", StringComparison.OrdinalIgnoreCase) ?? false) => (true, default, VerifyVMIResult.Retry),
+                                            var x when (x?.Contains("Internal", StringComparison.OrdinalIgnoreCase) ?? false) || (providerError?.Error.Message?.Contains(" retry later", StringComparison.OrdinalIgnoreCase) ?? false) => (true, default, VerifyVMIResult.Retry),
                                             _ => (false, default, VerifyVMIResult.Skip),
                                         };
 
@@ -780,7 +781,7 @@ namespace GenerateBatchVmSkus
                                 {
                                     pool = await accountInfo.Client.PoolOperations.GetPoolAsync(name, new ODATADetailLevel(selectClause: "id"), cancellationToken: CancellationToken.None);
                                 }
-                                catch (Exception ex)
+                                catch (Exception ex) when (ex is not System.OperationCanceledException)
                                 {
                                     ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.Red(), $"Failed to delete pool '{name}' on '{accountInfo.Name}' due to '{firstStatusCode}'. Attempting to locate the pool resulted in {ex.GetType().FullName}: {ex.Message}{Environment.NewLine}Please check and delete pool manually.");
                                 }
