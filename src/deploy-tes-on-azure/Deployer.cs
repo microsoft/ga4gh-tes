@@ -96,6 +96,10 @@ namespace TesDeployer
             return !dontRetry;
         }
 
+        private static readonly AsyncRetryPolicy acrGetDigestRetryPolicy = Policy
+            .Handle<RequestFailedException>(azureException => (int)HttpStatusCode.NotFound == azureException.Status)
+            .WaitAndRetryAsync(30, retryAttempt => TimeSpan.FromSeconds(10));
+
         private static readonly AsyncRetryPolicy generalRetryPolicy = Policy
             .Handle<Exception>()
             .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(1));
@@ -1418,7 +1422,7 @@ namespace TesDeployer
                     return build;
                 }));
 
-            var tesDigest = (await (client ??= GetClient()).GetArtifact("cromwellonazure/tes", build.Tag.ToString()).GetManifestPropertiesAsync(cts.Token)).Value.Digest;
+            var tesDigest = (await acrGetDigestRetryPolicy.ExecuteAsync(token => (client ??= GetClient()).GetArtifact("cromwellonazure/tes", build.Tag.ToString()).GetManifestPropertiesAsync(token), cts.Token)).Value.Digest;
             settings["ActualTesImageName"] = $"{acr.Data.LoginServer}/cromwellonazure/tes@{tesDigest}";
 
             Azure.Containers.ContainerRegistry.ContainerRegistryClient GetClient()

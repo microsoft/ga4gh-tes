@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.CommandLine.Rendering;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -9,6 +10,7 @@ using System.Threading.Channels;
 using Azure.Core;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
+using Microsoft.Extensions.Primitives;
 using Polly;
 using Polly.Retry;
 using Tes.Models;
@@ -36,18 +38,18 @@ namespace GenerateBatchVmSkus
             {
                 DiskEncryptionConfiguration = encryptionAtHostSupported
                     ? new DiskEncryptionConfiguration(
-                        targets: new List<DiskEncryptionTarget>()
-                        {
+                        targets:
+                        [
                             DiskEncryptionTarget.OsDisk,
                             DiskEncryptionTarget.TemporaryDisk
-                        })
+                        ])
                     : null
             };
         }
 
         private static TimeSpan RetryWaitTime => TimeSpan.FromMinutes(8);
 
-        private static readonly int UnknownVCpuCores = 200; // TODO: should be maintained larger than the largest VCpusAvailable.
+        private static int UnknownVCpuCores;
 
         internal static bool WriteLogs { get; set; } = false;
         internal static bool ShowCounts { get; set; } = false;
@@ -82,17 +84,19 @@ namespace GenerateBatchVmSkus
             ArgumentNullException.ThrowIfNull(batchSkus);
 
             AzureBatchSkuValidator.batchSkus = batchSkus;
-            await using var batchAccountEnumerator = batchAccounts.GetAsyncEnumerator(cancellationToken);
-            List<Validator> validators = new();
-            var asyncSkus = skus.Select(WrappedVmSku.Create).ToAsyncEnumerable();
+            List<Validator> validators = [];
+            skus = skus.ToList();
+            UnknownVCpuCores = skus.Max(vm => vm.Sku.VCpusAvailable ?? 1);
+            var asyncSkus = skus.ToAsyncEnumerable().Select(WrappedVmSku.Create);
 
             try
             {
-                for (var validator = await GetNextValidator(); validator is not null; validator = await GetNextValidator())
+                await foreach (var account in batchAccounts)
                 {
-                    asyncSkus = validator.ValidateSkus(asyncSkus, cancellationToken);
+                    validators.Add(new Validator(account));
                 }
 
+                validators.ForEach(validator => asyncSkus = validator.ValidateSkus(asyncSkus, cancellationToken));
                 return await GetResults(asyncSkus, cancellationToken);
 
                 async ValueTask<ValidationResults> GetResults(IAsyncEnumerable<WrappedVmSku> results, CancellationToken cancellationToken)
@@ -101,10 +105,10 @@ namespace GenerateBatchVmSkus
 
                     if (ShowCounts)
                     {
-                        ConsoleWriteLine("Tally", ConsoleColor.Blue, $"Qty-in: {skus.Where(sku => sku.Validated).Count()} validated / {skus.Where(sku => !sku.Validated).Count()} nonvalidated. strt/cmpt/cnt {started}/{completed}/{count}");
+                        ConsoleHelper.WriteLine("Tally", ForegroundColorSpan.Blue(), $"Qty-in: {skus.Where(sku => sku.Validated).Count()} validated / {skus.Where(sku => !sku.Validated).Count()} nonvalidated. strt/cmpt/cnt {started}/{completed}/{count}");
                     }
 
-                    ConsoleWriteLine("SKU validation in Batch", ConsoleColor.Green, $"Completed in {DateTimeOffset.UtcNow - startTime:g}.");
+                    ConsoleHelper.WriteLine("SKU validation in Batch", ForegroundColorSpan.Green(), $"Completed in {DateTimeOffset.UtcNow - startTime:g}.");
 
                     return new(
                         skus.Where(sku => sku.Validated).SelectMany(sku => sku.VmSku.Skus),
@@ -114,18 +118,6 @@ namespace GenerateBatchVmSkus
             finally
             {
                 validators.ForEach(validator => ((IDisposable)validator).Dispose());
-            }
-
-            async ValueTask<Validator?> GetNextValidator()
-            {
-                if (await batchAccountEnumerator!.MoveNextAsync())
-                {
-                    var validator = new Validator(batchAccountEnumerator.Current);
-                    validators.Add(validator);
-                    return validator;
-                }
-
-                return default;
             }
         }
 
@@ -139,67 +131,12 @@ namespace GenerateBatchVmSkus
         private static long started = 0;
         private static long completed = 0;
 
-        private static readonly object consoleLock = new();
-        private static string linePrefix = string.Empty;
-
-        private static void ConsoleWriteTempLine()
-        {
-            if (!Console.IsOutputRedirected)
-            {
-                lock (consoleLock)
-                {
-                    var line = $"SKU validations: Started: {started / (double)count:P2} / Completed: {completed / (double)count:P2}";
-                    var sb = new StringBuilder();
-                    sb.Append(linePrefix);
-                    sb.Append(line);
-                    sb.Append('\r');
-                    Console.Write(sb.ToString());
-
-                    sb.Clear();
-                    Enumerable.Repeat(' ', line.Length).ForEach(space => sb.Append(space));
-                    sb.Append('\r');
-                    linePrefix = sb.ToString();
-                }
-            }
-        }
-
-        internal static void ConsoleWriteLine(string name, ConsoleColor foreground, string? content = null)
-        {
-            var result = string.Empty;
-
-            if (!string.IsNullOrEmpty(content))
-            {
-                var lines = content
-                    .ReplaceLineEndings(Environment.NewLine)
-                    .Split(Environment.NewLine);
-
-                if (string.IsNullOrEmpty(lines.Last()))
-                {
-                    lines = lines.SkipLast(1).ToArray();
-                }
-
-                result = string.Join(Environment.NewLine,
-                    lines.Select((line, i) => (i == 0 ? $"[{name}]: " : @"    ") + line));
-            }
-            else
-            {
-                result = Environment.NewLine;
-            }
-
-            lock (consoleLock)
-            {
-                Console.ForegroundColor = foreground;
-                Console.WriteLine(linePrefix + result);
-                linePrefix = string.Empty;
-                Console.ResetColor();
-            }
-        }
+        private static readonly Func<string> progressLineFunc = static () => $"SKU validations: Started: {started / (double)count:P2} / Completed: {completed / (double)count:P2}";
 
         private sealed class Validator : IDisposable
         {
             private readonly Channel<WrappedVmSku> resultSkus = Channel.CreateUnbounded<WrappedVmSku>(new() { SingleReader = true, SingleWriter = true });
             private readonly Channel<WrappedVmSku> candidateSkus = Channel.CreateUnbounded<WrappedVmSku>(new() { SingleReader = true, SingleWriter = true });
-            private readonly object consoleLock = new();
             private readonly BatchAccountInfo accountInfo;
 
             public Validator(BatchAccountInfo batchAccount)
@@ -293,7 +230,7 @@ namespace GenerateBatchVmSkus
 
                     if (ShowCounts)
                     {
-                        AzureBatchSkuValidator.ConsoleWriteLine(accountInfo.Name, ConsoleColor.Blue, $"Qty-in: {validatedCount} validated / {nonvalidatedCount} nonvalidated.{Environment.NewLine}Qty-sorted: {forwarded} forwarded / {considered} considered.");
+                        ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.Blue(), $"Qty-in: {validatedCount} validated / {nonvalidatedCount} nonvalidated.{Environment.NewLine}Qty-sorted: {forwarded} forwarded / {considered} considered.");
                     }
 
                     candidateSkus.Writer.Complete();
@@ -323,9 +260,9 @@ namespace GenerateBatchVmSkus
                     });
 
                     Dictionary<string, (bool Ignore, int RetryCount, DateTime NextAttempt, WrappedVmSku VmSize)> retries = new(StringComparer.OrdinalIgnoreCase);
-                    List<Task<(WrappedVmSku vmSize, VerifyVMIResult result)>> tests = new();
+                    List<Task<(WrappedVmSku vmSize, VerifyVMIResult result)>> tests = [];
 
-                    List<Task> tasks = new();
+                    List<Task> tasks = [];
                     Task? retryReadyTask = default;
                     tasks.Add(candidateSkus.Reader.Completion);
                     var moreInputTask = candidateSkus.Reader.WaitToReadAsync(cancellationToken).AsTask();
@@ -335,18 +272,18 @@ namespace GenerateBatchVmSkus
                     {
                         try
                         {
-                            List<WrappedVmSku> skusToTest = new(await GetVmSkusAsync(context, cancellationToken));
+                            List<WrappedVmSku> skusToTest = [.. await GetVmSkusAsync(context, cancellationToken)];
                             await skusToTest.ToAsyncEnumerable()
                                 .ForEachAwaitWithCancellationAsync(async (sku, token) => await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "queue", sku), token), cancellationToken);
                             var loadedTests = skusToTest.Where(CanTestNow).ToList();
 
-                            for (tests = loadedTests.Select(StartLoadedTest).ToList();
+                            for (tests = [.. loadedTests.Select(StartLoadedTest)];
                                 (tests.Any() || tasks.Any()) && !cancellationToken.IsCancellationRequested;
                                 tests.AddRange(loadedTests.Select(StartLoadedTest)))
                             {
                                 loadedTests.ForEach(loadedTest => _ = skusToTest.Remove(loadedTest));
                                 loadedTests.Clear();
-                                ConsoleWriteTempLine();
+                                ConsoleHelper.WriteTemporaryLine(progressLineFunc);
                                 var task = await Task.WhenAny(tasks.Concat(tests.Cast<Task>()));
                                 _ = tasks.Remove(task);
 
@@ -396,30 +333,20 @@ namespace GenerateBatchVmSkus
                                                         }
                                                         else
                                                         {
-                                                            lock (consoleLock)
-                                                            {
-                                                                SetForegroundColor(ConsoleColor.Yellow);
-                                                                ConsoleWriteLine($"Skipping {vmSize.VmSku.Name} because retry attempts were exhausted.");
-                                                                ResetColor();
-                                                            }
-
+                                                            ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.LightYellow(), $"Deferring {vmSize.VmSku.Name} because retry attempts were exhausted.");
                                                             ++processed;
                                                             _ = retries.Remove(vmSize.VmSku.Name);
-                                                            await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "skipRT", vmSize), cancellationToken);
+                                                            await resultSkus.Writer.WriteAsync(vmSize, cancellationToken);
+                                                            await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "forwardRT", vmSize), cancellationToken);
                                                         }
 
                                                         break;
                                                 }
                                             }
-                                            catch (Exception e)
+                                            catch (Exception e) when (e is not System.OperationCanceledException)
                                             {
-                                                lock (consoleLock)
-                                                {
-                                                    SetForegroundColor(ConsoleColor.Red);
-                                                    ConsoleWriteLine("Due to the following failure, it is unknown which SKU this failure report is related to. This SKU will not be included in the final results.");
-                                                    ConsoleWriteLine(e.ToString());
-                                                    ResetColor();
-                                                }
+                                                ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.Red(),
+                                                    $"Due to the following failure, it is unknown which SKU this failure report is related to. This SKU will not be included in the final results.{Environment.NewLine}{e}");
                                             }
                                         }
                                         break;
@@ -446,12 +373,7 @@ namespace GenerateBatchVmSkus
                                         }
                                         else
                                         {
-                                            lock (consoleLock)
-                                            {
-                                                SetForegroundColor(ConsoleColor.Yellow);
-                                                ConsoleWriteLine("Unexpected Task<bool> completion. Contact developer.");
-                                                ResetColor();
-                                            }
+                                            ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.Red(), "Unexpected Task<bool> completion. Contact developer.");
                                         }
                                         break;
 
@@ -478,22 +400,12 @@ namespace GenerateBatchVmSkus
                                         }
                                         else
                                         {
-                                            lock (consoleLock)
-                                            {
-                                                SetForegroundColor(ConsoleColor.Yellow);
-                                                ConsoleWriteLine("Unexpected Task completion. Contact developer.");
-                                                ResetColor();
-                                            }
+                                            ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.Red(), "Unexpected Task completion. Contact developer.");
                                         }
                                         break;
 
                                     default:
-                                        lock (consoleLock)
-                                        {
-                                            SetForegroundColor(ConsoleColor.Yellow);
-                                            ConsoleWriteLine("Unexpected task (unknown type) completion. Contact developer.");
-                                            ResetColor();
-                                        }
+                                        ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.Red(), "Unexpected task (unknown type) completion. Contact developer.");
                                         break;
                                 }
 
@@ -509,37 +421,28 @@ namespace GenerateBatchVmSkus
                                     }
                                 }
 
-                                loadedTests = skusToTest.Where(CanTestNow).ToList();
+                                loadedTests = [.. skusToTest.Where(CanTestNow)];
                             }
 
                             await skusToTest.ToAsyncEnumerable().ForEachAwaitWithCancellationAsync(async (vmSize, token) =>
                             {
                                 await resultSkus.Writer.WriteAsync(vmSize, token);
                                 await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "dump", vmSize), cancellationToken);
-                                lock (consoleLock)
-                                {
-                                    SetForegroundColor(ConsoleColor.Yellow);
-                                    ConsoleWriteLine($"Deferring '{vmSize.VmSku.Name}' due to quota (end of processing).");
-                                    ResetColor();
-                                }
+                                ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.LightYellow(), $"Deferring '{vmSize.VmSku.Name}' due to quota (end of processing).");
                             },
                             cancellationToken);
 
                             _ = Interlocked.Add(ref count, -skusToTest.Count);
                         }
-                        catch (Exception e) // TODO: Flag somewhere to prevent any results from being produced.
+                        // TODO: Flag somewhere to prevent any results from being produced.
+                        catch (Exception e) when (e is not System.OperationCanceledException)
                         {
-                            lock (consoleLock)
-                            {
-                                SetForegroundColor(ConsoleColor.Red);
-                                ConsoleWriteLine(e.ToString());
-                                ConsoleWriteLine(Environment.NewLine + "This failure caused this batch account to not be used again in this session. This will probably produce incorrect results.");
-                                ResetColor();
-                            }
+                            ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.Red(),
+                                $"{e}{Environment.NewLine}This failure caused this batch account to not be used again in this session. This will probably produce incorrect results.");
                         }
                         finally
                         {
-                            ConsoleWriteTempLine();
+                            ConsoleHelper.WriteTemporaryLine(progressLineFunc);
                             // Keep the batch account around long enough to allow the batch pools to be deleted.
                             _ = await Task.WhenAll(tests);
                         }
@@ -549,12 +452,7 @@ namespace GenerateBatchVmSkus
 
                     if (ShowCounts)
                     {
-                        lock (consoleLock)
-                        {
-                            SetForegroundColor(ConsoleColor.Green);
-                            ConsoleWriteLine($"Validated a net of {processed} SKUs out of {processed + processedDeferred + processedRetried} attempts.");
-                            ResetColor();
-                        }
+                        ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.Green(), $"Validated a net of {processed} SKUs out of {processed + processedDeferred + processedRetried} attempts.");
                     }
 
                     bool CanTestNow(WrappedVmSku sku) => AddSkuMetadataToQuotaIfQuotaPermits(sku, context);
@@ -563,18 +461,13 @@ namespace GenerateBatchVmSkus
                 { }
                 catch (Exception e)
                 {
-                    lock (consoleLock)
-                    {
-                        SetForegroundColor(ConsoleColor.Red);
-                        ConsoleWriteLine($"'{accountInfo.Name}' has completed processing its inputs due to an error.");
-                        ResetColor();
-                    }
+                    ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.Red(), $"'{accountInfo.Name}' has completed processing its inputs due to an error.");
 
                     resultSkus.Writer.Complete(e);
                 }
                 finally
                 {
-                    ConsoleWriteTempLine();
+                    ConsoleHelper.WriteTemporaryLine(progressLineFunc);
                 }
             }
 
@@ -584,26 +477,6 @@ namespace GenerateBatchVmSkus
                 Skip,
                 NextRegion,
                 Retry
-            }
-
-            private readonly StringBuilder consoleLines = new();
-            private ConsoleColor? consoleColor = null;
-
-            private void SetForegroundColor(ConsoleColor color)
-            {
-                consoleLines.Clear();
-                consoleColor = color;
-            }
-
-            private void ConsoleWriteLine(string? content = null)
-            {
-                consoleLines.AppendLine(content);
-            }
-
-            private void ResetColor()
-            {
-                AzureBatchSkuValidator.ConsoleWriteLine($"{accountInfo.Name} ({accountInfo.Location.DisplayName})", consoleColor!.Value, consoleLines.ToString());
-                consoleColor = null;
             }
 
             private async Task<VerifyVMIResult> TestVMSizeInBatchAsync(WrappedVmSku vmSize, CancellationToken cancellationToken)
@@ -652,13 +525,7 @@ namespace GenerateBatchVmSkus
                     {
                         if (pool.ResizeErrors.Any(e => PoolResizeErrorCodes.UnsupportedVMSize.Equals(e.Code, StringComparison.OrdinalIgnoreCase)))
                         {
-                            lock (consoleLock)
-                            {
-                                SetForegroundColor(ConsoleColor.Yellow);
-                                ConsoleWriteLine($"Deferring {name} due to 'UnsupportedVMSize'");
-                                ResetColor();
-                            }
-
+                            ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.LightYellow(), $"Deferring {name} due to 'UnsupportedVMSize'");
                             return VerifyVMIResult.NextRegion;
                         }
                         else if (pool.ResizeErrors.Any(e =>
@@ -667,6 +534,11 @@ namespace GenerateBatchVmSkus
                             PoolResizeErrorCodes.AccountSpotCoreQuotaReached.Equals(e.Code, StringComparison.OrdinalIgnoreCase) ||
                             (!vm.LowPriority && @"AccountVMSeriesCoreQuotaReached".Equals(e.Code, StringComparison.OrdinalIgnoreCase))))
                         {
+                            if (!vm.LowPriority)
+                            {
+                                ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.Yellow(), $"Retrying {name} ({vm.VmFamily}) for '~CoreQuotaReached'.");
+                            }
+
                             return VerifyVMIResult.Retry; // Either a timing race condition or other concurrent use of the batch account. Try again.
                         }
                         else
@@ -675,19 +547,27 @@ namespace GenerateBatchVmSkus
                             var isAllocationFailed = errorCodes.Count == 1 && errorCodes.Contains(PoolResizeErrorCodes.AllocationFailed, StringComparer.OrdinalIgnoreCase);
                             var isAllocationTimedOut = errorCodes.Count == 1 && errorCodes.Contains(PoolResizeErrorCodes.AllocationTimedOut, StringComparer.OrdinalIgnoreCase);
                             var isOverconstrainedAllocationRequest = errorCodes.Count == 1 && errorCodes.Contains(PoolResizeErrorCodes.OverconstrainedAllocationRequestError, StringComparer.OrdinalIgnoreCase);
+                            var isBatchOutOfCapacity = errorCodes.Count == 1 && errorCodes.Contains("BatchOutOfCapacity", StringComparer.OrdinalIgnoreCase);
                             ProviderError? providerError = default;
                             string? additionalReport = default;
                             VerifyVMIResult? result = default;
 
                             if (isAllocationTimedOut)
                             {
+                                ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.Yellow(), $"Retrying {name} ({vm.VmFamily}) for '{PoolResizeErrorCodes.AllocationTimedOut}'.");
                                 return VerifyVMIResult.Retry;
+                            }
+
+                            if (isBatchOutOfCapacity)
+                            {
+                                ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.LightYellow(), $"Deferring {name} due to 'BatchOutOfCapacity'");
+                                return VerifyVMIResult.NextRegion;
                             }
 
                             if (isAllocationFailed)
                             {
                                 var values = pool.ResizeErrors
-                                    .SelectMany(e => e.Values ?? new List<NameValuePair>())
+                                    .SelectMany(e => e.Values ?? [])
                                     .ToDictionary(pair => pair.Name, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
 
                                 if (values.TryGetValue("Reason", out var reason))
@@ -695,12 +575,19 @@ namespace GenerateBatchVmSkus
                                     if ("The server encountered an internal error.".Equals(reason, StringComparison.OrdinalIgnoreCase))
                                     {
                                         // https://learn.microsoft.com/troubleshoot/azure/general/azure-batch-pool-resizing-failure#symptom-for-scenario-4
+                                        ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.LightYellow(), $"Retrying {name} ({vm.VmFamily}) for 'internal error'.");
                                         return VerifyVMIResult.Retry;
                                     }
                                     else if ("Allocation failed as subnet has delegation to external resources.".Equals(reason, StringComparison.OrdinalIgnoreCase))
                                     {
                                         // https://learn.microsoft.com/troubleshoot/azure/general/azure-batch-pool-resizing-failure#symptom-for-scenario-1
                                         result = VerifyVMIResult.Skip;
+                                    }
+                                    else if ("Deployment allocation failed due to insufficient capacity for the requested VM size in the region.".Equals(reason, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        // https://learn.microsoft.com/en-us/troubleshoot/azure/hpc/batch/azure-batch-pool-resizing-failure#scenario-5-insufficient-capacity-for-the-requested-vm-size-in-the-current-region
+                                        ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.LightYellow(), $"Deferring {name} due to 'InsufficientCapacity'");
+                                        return VerifyVMIResult.NextRegion;
                                     }
                                 }
 
@@ -717,7 +604,7 @@ namespace GenerateBatchVmSkus
                                             var x when StringComparison.OrdinalIgnoreCase.Equals("InternalServerError", x) => (true, default, VerifyVMIResult.Retry),
                                             var x when StringComparison.OrdinalIgnoreCase.Equals("NetworkingInternalOperationError", x) => (true, default, VerifyVMIResult.Retry),
                                             var x when StringComparison.OrdinalIgnoreCase.Equals("BadRequest", x) => (false, $"Note: HyperVGenerations: '{string.Join("', '", vm.HyperVGenerations)}'", VerifyVMIResult.Skip),
-                                            var x when (x?.Contains("Internal", StringComparison.OrdinalIgnoreCase) ?? false) || (providerError?.Error.Message.Contains(" retry later", StringComparison.OrdinalIgnoreCase) ?? false) => (true, default, VerifyVMIResult.Retry),
+                                            var x when (x?.Contains("Internal", StringComparison.OrdinalIgnoreCase) ?? false) || (providerError?.Error.Message?.Contains(" retry later", StringComparison.OrdinalIgnoreCase) ?? false) => (true, default, VerifyVMIResult.Retry),
                                             _ => (false, default, VerifyVMIResult.Skip),
                                         };
 
@@ -728,6 +615,7 @@ namespace GenerateBatchVmSkus
                                                 System.Diagnostics.Debugger.Break();
                                             }
 
+                                            ConsoleHelper.WriteLine($"{VerbFromResult(result)} {name} ({vm.VmFamily}) for '{providerError?.Error.Code}'.");
                                             return result.Value;
                                         }
                                     }
@@ -736,40 +624,35 @@ namespace GenerateBatchVmSkus
 
                             result ??= VerifyVMIResult.Skip;
 
-                            lock (consoleLock)
+                            StringBuilder sb = new($"{VerbFromResult(result)} {name} ({vm.VmFamily}) due to allocation failure(s): '{string.Join("', '", pool.ResizeErrors.Select(e => e.Code))}'.");
+
+                            if (providerError is null && !isOverconstrainedAllocationRequest)
                             {
-                                SetForegroundColor(ConsoleColor.Yellow);
-                                ConsoleWriteLine($"{VerbFromResult(result)} {name} ({vm.VmFamily}) due to allocation failure(s): '{string.Join("', '", pool.ResizeErrors.Select(e => e.Code))}'.");
-
-                                if (providerError is null && !isOverconstrainedAllocationRequest)
-                                {
-                                    ConsoleWriteLine($"Additional information: Message: '{string.Join($"',{Environment.NewLine}'", pool.ResizeErrors.Select(e => e.Message))}'");
-                                    pool.ResizeErrors!.SelectMany(e => e.Values ?? Enumerable.Empty<NameValuePair>())
-                                        .ForEach(detail => ConsoleWriteLine($"'{detail.Name}': '{detail.Value}'."));
-                                }
-
-                                if (providerError is not null)
-                                {
-                                    ConsoleWriteLine($"Code: {providerError.Value.Error.Code}{Environment.NewLine}Message: '{providerError.Value.Error.Message}'.");
-                                }
-
-                                if (additionalReport is not null)
-                                {
-                                    ConsoleWriteLine(additionalReport);
-                                }
-
-                                ResetColor();
-
-                                static string VerbFromResult(VerifyVMIResult? value) => value switch
-                                {
-                                    VerifyVMIResult.Skip => "Skipping",
-                                    VerifyVMIResult.NextRegion => "Deferring",
-                                    VerifyVMIResult.Retry => "Retrying",
-                                    _ => throw new System.Diagnostics.UnreachableException($"Invalid value of VerifyVMIResult: {value?.ToString() ?? "<null>"}."),
-                                };
+                                sb.AppendLine($"Additional information: Message: '{string.Join($"',{Environment.NewLine}'", pool.ResizeErrors.Select(e => e.Message))}'");
+                                pool.ResizeErrors!.SelectMany(e => e.Values ?? [])
+                                    .ForEach(detail => sb.Append($"'{detail.Name}': '{detail.Value}'."));
                             }
 
+                            if (providerError is not null)
+                            {
+                                sb.AppendLine($"Code: {providerError.Value.Error.Code}{Environment.NewLine}Message: '{providerError.Value.Error.Message}'.");
+                            }
+
+                            if (additionalReport is not null)
+                            {
+                                sb.AppendLine(additionalReport);
+                            }
+
+                            ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.LightYellow(), sb.ToString());
                             return result.Value;
+
+                            static string VerbFromResult(VerifyVMIResult? value) => value switch
+                            {
+                                VerifyVMIResult.Skip => "Skipping",
+                                VerifyVMIResult.NextRegion => "Deferring",
+                                VerifyVMIResult.Retry => "Retrying",
+                                _ => throw new System.Diagnostics.UnreachableException($"Invalid value of VerifyVMIResult: {value?.ToString() ?? "<null>"}."),
+                            };
                         }
                     }
 
@@ -782,29 +665,18 @@ namespace GenerateBatchVmSkus
 
                         if (nodes.Any(n => n.Errors?.Any() ?? false))
                         {
-                            lock (consoleLock)
-                            {
-                                SetForegroundColor(ConsoleColor.Yellow);
-                                ConsoleWriteLine($"Skipping {name} ({vm.VmFamily}) due to node startup failure(s): '{string.Join("', '", nodes.SelectMany(n => n.Errors).Select(e => e.Code))}'.");
-                                ConsoleWriteLine($"Additional information: Message: '{string.Join("', '", nodes.SelectMany(n => n.Errors).Select(e => e.Message))}'");
-                                nodes.SelectMany(n => n.Errors).SelectMany(e => e.ErrorDetails ?? Enumerable.Empty<NameValuePair>())
-                                    .ForEach(detail => ConsoleWriteLine($"'{detail.Name}': '{detail.Value}'."));
-                                ResetColor();
-                            }
-
+                            StringBuilder sb = new($"Skipping {name} ({vm.VmFamily}) due to node startup failure(s): '{string.Join("', '", nodes.SelectMany(n => n.Errors).Select(e => e.Code))}'.");
+                            sb.AppendLine($"Additional information: Message: '{string.Join("', '", nodes.SelectMany(n => n.Errors).Select(e => e.Message))}'");
+                            nodes.SelectMany(n => n.Errors).SelectMany(e => e.ErrorDetails ?? Enumerable.Empty<NameValuePair>())
+                                .ForEach(detail => sb.AppendLine($"'{detail.Name}': '{detail.Value}'."));
+                            ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.LightYellow(), sb.ToString());
                             return VerifyVMIResult.Skip;
                         }
 
                         if (nodes.Any(n => ComputeNodeState.Unusable == n.State
                             || ComputeNodeState.Unknown == n.State))
                         {
-                            lock (consoleLock)
-                            {
-                                SetForegroundColor(ConsoleColor.Yellow);
-                                ConsoleWriteLine($"Skipping {name} ({vm.VmFamily}) due to node startup-to-unusable transition without errors (likely batch node agent startup failure).");
-                                ResetColor();
-                            }
-
+                            ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.LightYellow(), $"Skipping {name} ({vm.VmFamily}) due to node startup-to-unusable transition without errors (likely batch node agent startup failure).");
                             return VerifyVMIResult.Skip;
                         }
                     }
@@ -830,30 +702,19 @@ namespace GenerateBatchVmSkus
                                 pool = default;
                             }
 
-                            lock (consoleLock)
+                            StringBuilder sb = new(isTimedOut
+                                ? $"Retrying {name} due to pool creation failure(s): '{error?.Code ?? "[unknown]"}'."
+                                : $"Deferring {name} due to pool creation failure(s): '{error?.Code ?? "[unknown]"}'.");
+
+                            if (error is not null)
                             {
-                                SetForegroundColor(ConsoleColor.Yellow);
-
-                                if (isTimedOut)
-                                {
-                                    ConsoleWriteLine($"Retrying {name} due to pool creation failure(s): '{error?.Code ?? "[unknown]"}'.");
-                                }
-                                else
-                                {
-                                    ConsoleWriteLine($"Deferring {name} due to pool creation failure(s): '{error?.Code ?? "[unknown]"}'.");
-                                }
-
-                                if (error is not null)
-                                {
-                                    ConsoleWriteLine($"'{error.Code}'({error.Message.Language}): '{error.Message.Value}'");
-                                    (error.Values ?? Enumerable.Empty<BatchErrorDetail>())
-                                        .ForEach(value => ConsoleWriteLine($"'{value.Key}': '{value.Value}'"));
-                                }
-
-                                ConsoleWriteLine("Please check and delete pool manually.");
-                                ResetColor();
+                                sb.AppendLine($"'{error.Code}'({error.Message.Language}): '{error.Message.Value}'");
+                                (error.Values ?? Enumerable.Empty<BatchErrorDetail>())
+                                    .ForEach(value => sb.AppendLine($"'{value.Key}': '{value.Value}'"));
                             }
 
+                            sb.AppendLine("Please check and delete pool manually.");
+                            ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.LightYellow(), sb.ToString());
                             return isTimedOut ? VerifyVMIResult.Retry : VerifyVMIResult.NextRegion;
                         }
                         else if (exception.RequestInformation.HttpStatusCode == System.Net.HttpStatusCode.Conflict)
@@ -868,33 +729,21 @@ namespace GenerateBatchVmSkus
                                 return VerifyVMIResult.Retry;
                             }
 
-                            lock (consoleLock)
+                            StringBuilder sb = new($"Deferring {name} due to due to pool creation failure(s):'{error?.Code ?? "[unknown]"}'.");
+
+                            if (error is not null)
                             {
-                                SetForegroundColor(ConsoleColor.Yellow);
-                                ConsoleWriteLine($"Deferring {name} due to due to pool creation failure(s):'{error?.Code ?? "[unknown]"}'.");
-
-                                if (error is not null)
-                                {
-                                    ConsoleWriteLine($"'{error.Code}'({error.Message.Language}): '{error.Message.Value}'");
-                                    (error.Values ?? Enumerable.Empty<BatchErrorDetail>())
-                                        .ForEach(value => ConsoleWriteLine($"'{value.Key}': '{value.Value}'"));
-                                }
-
-                                ResetColor();
+                                sb.AppendLine($"'{error.Code}'({error.Message.Language}): '{error.Message.Value}'");
+                                (error.Values ?? Enumerable.Empty<BatchErrorDetail>())
+                                    .ForEach(value => sb.AppendLine($"'{value.Key}': '{value.Value}'"));
                             }
 
+                            ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.LightYellow(), sb.ToString());
                             return VerifyVMIResult.NextRegion;
                         }
                         else
                         {
-                            lock (consoleLock)
-                            {
-                                SetForegroundColor(ConsoleColor.Yellow);
-                                ConsoleWriteLine($"Deferring {name} due to pool creation '{exception.RequestInformation.HttpStatusCode}' failure ('{exception.RequestInformation?.BatchError?.Code}' error).");
-                                ConsoleWriteLine("Please check and delete pool manually.");
-                                ResetColor();
-                            }
-
+                            ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.LightYellow(), $"Deferring {name} due to pool creation '{exception.RequestInformation.HttpStatusCode}' failure ('{exception.RequestInformation?.BatchError?.Code}' error).{Environment.NewLine}Please check and delete pool manually.");
                             pool = default;
                             return VerifyVMIResult.NextRegion;
                         }
@@ -920,14 +769,7 @@ namespace GenerateBatchVmSkus
                                     break;
 
                                 default:
-                                    lock (consoleLock)
-                                    {
-                                        SetForegroundColor(ConsoleColor.Red);
-                                        ConsoleWriteLine($"Failed to delete pool '{name}' ('{exception.RequestInformation.HttpStatusCode?.ToString("G") ?? "[no response]"}', initial attempt '{firstStatusCode}') {exception.GetType().FullName}: {exception.Message}");
-                                        ConsoleWriteLine("Please check and delete pool manually.");
-                                        ConsoleWriteLine();
-                                        ResetColor();
-                                    }
+                                    ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.Red(), $"Failed to delete pool '{name}' ('{exception.RequestInformation.HttpStatusCode?.ToString("G") ?? "[no response]"}', initial attempt '{firstStatusCode}') {exception.GetType().FullName}: {exception.Message}{Environment.NewLine}Please check and delete pool manually.{Environment.NewLine}");
                                     break;
                             }
                         }
@@ -939,28 +781,14 @@ namespace GenerateBatchVmSkus
                                 {
                                     pool = await accountInfo.Client.PoolOperations.GetPoolAsync(name, new ODATADetailLevel(selectClause: "id"), cancellationToken: CancellationToken.None);
                                 }
-                                catch (Exception ex)
+                                catch (Exception ex) when (ex is not System.OperationCanceledException)
                                 {
-                                    lock (consoleLock)
-                                    {
-                                        SetForegroundColor(ConsoleColor.Red);
-                                        ConsoleWriteLine($"Failed to delete pool '{name}' on '{accountInfo.Name}' due to '{firstStatusCode}'. Attempting to locate the pool resulted in {ex.GetType().FullName}: {ex.Message}");
-                                        ConsoleWriteLine("Please check and delete pool manually.");
-                                        ConsoleWriteLine();
-                                        ResetColor();
-                                    }
+                                    ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.Red(), $"Failed to delete pool '{name}' on '{accountInfo.Name}' due to '{firstStatusCode}'. Attempting to locate the pool resulted in {ex.GetType().FullName}: {ex.Message}{Environment.NewLine}Please check and delete pool manually.");
                                 }
                             }
                             else
                             {
-                                lock (consoleLock)
-                                {
-                                    SetForegroundColor(ConsoleColor.Red);
-                                    ConsoleWriteLine($"Failed to delete pool '{name}' on '{accountInfo.Name}' due to '{firstStatusCode}' {exception.GetType().FullName}: {exception.Message}");
-                                    ConsoleWriteLine("Please check and delete pool manually.");
-                                    ConsoleWriteLine();
-                                    ResetColor();
-                                }
+                                ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.Red(), $"Failed to delete pool '{name}' on '{accountInfo.Name}' due to '{firstStatusCode}' {exception.GetType().FullName}: {exception.Message}{Environment.NewLine}Please check and delete pool manually.");
                             }
                         }
                     }

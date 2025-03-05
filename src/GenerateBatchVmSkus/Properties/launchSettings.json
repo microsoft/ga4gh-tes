@@ -6,7 +6,7 @@
     },
     "GenerateBatchVmSkus": {
       "commandName": "Project",
-      "commandLineArgs": ""
+      "commandLineArgs": "-c AzurePublicCloud"
     }
   }
 }
