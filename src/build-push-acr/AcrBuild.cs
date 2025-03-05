@@ -10,7 +10,6 @@ using Azure.ResourceManager;
 using Azure.ResourceManager.ContainerRegistry;
 using Azure.ResourceManager.ContainerRegistry.Models;
 using Azure.Storage.Blobs;
-using GitHub.Octokit.Client;
 
 namespace BuildPushAcr
 {
@@ -28,13 +27,13 @@ namespace BuildPushAcr
         CoA
     }
 
-    public partial class AcrBuild
+    public partial class AcrBuild(BuildType buildType, Version tag, ResourceIdentifier acrId, TokenCredential credential, ContainerRegistryAudience audience)
     {
-        private readonly BuildType buildType;
-        private readonly Version tag;
-        private readonly ResourceIdentifier acrId;
-        private readonly TokenCredential credential;
-        private readonly ContainerRegistryAudience audience;
+        private readonly BuildType buildType = buildType;
+        private readonly Version tag = tag ?? throw new ArgumentNullException(nameof(tag));
+        private readonly ResourceIdentifier acrId = acrId ?? throw new ArgumentNullException(nameof(acrId));
+        private readonly TokenCredential credential = credential ?? throw new ArgumentNullException(nameof(credential));
+        private readonly ContainerRegistryAudience audience = audience;
         private readonly Dictionary<string, Regex>? replacements = new()
         {
             ["CommonAssemblyInfo.props"] = VersionRegex()
@@ -46,58 +45,7 @@ namespace BuildPushAcr
 
         private const string Root = "root";
 
-        public AcrBuild(BuildType buildType, Version tag, ResourceIdentifier acrId, TokenCredential credential, ContainerRegistryAudience audience)
-        {
-            ArgumentNullException.ThrowIfNull(tag);
-            ArgumentNullException.ThrowIfNull(acrId);
-            ArgumentNullException.ThrowIfNull(credential);
-            ArgumentNullException.ThrowIfNull(audience);
-
-            this.buildType = buildType;
-            this.tag = tag;
-            this.acrId = acrId;
-            this.credential = credential;
-            this.audience = audience;
-        }
-
         public Version Tag => build ?? new();
-
-        public static IArchive GetGitHubArchive(BuildType buildType, string @ref, Microsoft.Kiota.Abstractions.Authentication.IAccessTokenProvider? tokenProvider = default)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(@ref);
-
-            Console.WriteLine("Downloading source code");
-            return new GitHubArchive(new(new ClientFactory()
-                    .WithAuthenticationProvider(tokenProvider is null
-                        ? new Microsoft.Kiota.Abstractions.Authentication.AnonymousAuthenticationProvider()
-                        : new GitHub.Octokit.Client.Authentication.TokenAuthProvider(tokenProvider))
-                    .WithUserAgent("microsoft-ga4gh-tes", string.Empty)
-                    .WithRequestTimeout(TimeSpan.FromHours(1.5))
-                    //.WithBaseUrl("https://api.github.com")
-                    .Build()),
-                "microsoft",
-                buildType switch
-                {
-                    BuildType.Tes => "ga4gh-tes",
-                    BuildType.CoA => "CromwellOnAzure",
-                    _ => throw new System.Diagnostics.UnreachableException()
-                },
-                @ref,
-                submodulePaths: buildType switch
-                {
-                    BuildType.Tes => default,
-                    BuildType.CoA => ["src/ga4gh-tes"],
-                    _ => throw new System.Diagnostics.UnreachableException()
-                });
-        }
-
-        public static IArchive GetLocalGitArchiveAsync(DirectoryInfo solution)
-        {
-            ArgumentNullException.ThrowIfNull(solution);
-
-            Console.WriteLine("Scanning source code");
-            return new LocalGitArchive(solution);
-        }
 
         public async ValueTask LoadAsync(IArchive archive, ArmEnvironment environment, CancellationToken cancellationToken)
         {
@@ -105,32 +53,37 @@ namespace BuildPushAcr
             ArgumentNullException.ThrowIfNull(archive);
 
             Console.WriteLine("Determining build revision");
-            acr = await (new ArmClient(credential, null, new()
-            {
-                Environment = environment,
-                RetryPolicy = new Azure.Core.Pipeline.RetryPolicy(3, DelayStrategy.CreateExponentialDelayStrategy(TimeSpan.FromSeconds(5)))
-            }))
+            acr = await new ArmClient(
+                    credential,
+                    null,
+                    new()
+                    {
+                        Environment = environment,
+                        RetryPolicy = new Azure.Core.Pipeline.RetryPolicy(3, DelayStrategy.CreateExponentialDelayStrategy(TimeSpan.FromSeconds(5)))
+                    })
                 .GetContainerRegistryResource(acrId)
                 .GetAsync(cancellationToken);
 
             var repository = new ContainerRegistryClient(
-                    new UriBuilder(Uri.UriSchemeHttps, acr.Data.LoginServer).Uri,
-                    credential,
-                    new()
+                new UriBuilder(
+                        Uri.UriSchemeHttps,
+                        acr.Data.LoginServer).Uri,
+                        credential,
+                        new()
+                        {
+                            Audience = audience,
+                            RetryPolicy = new Azure.Core.Pipeline.RetryPolicy(3, DelayStrategy.CreateExponentialDelayStrategy(TimeSpan.FromSeconds(2)))
+                        })
+                    .GetRepository(buildType switch
                     {
-                        Audience = audience,
-                        RetryPolicy = new Azure.Core.Pipeline.RetryPolicy(3, DelayStrategy.CreateExponentialDelayStrategy(TimeSpan.FromSeconds(2)))
-                    })
-                .GetRepository(buildType switch
-                {
-                    BuildType.Tes => "ga4gh/tes",
-                    BuildType.CoA => "cromwellonazure/triggerservice",
-                    _ => throw new System.Diagnostics.UnreachableException()
-                });
+                        BuildType.Tes => "ga4gh/tes",
+                        BuildType.CoA => "cromwellonazure/triggerservice",
+                        _ => throw new System.Diagnostics.UnreachableException()
+                    });
 
             Version? maxTag;
 
-            // figure out version from acr using tag
+            // Figure out version from ACR using tag
             try
             {
                 maxTag = await repository.GetAllManifestPropertiesAsync(cancellationToken: cancellationToken)
@@ -331,6 +284,8 @@ namespace BuildPushAcr
                     {
                         return false;
                     }
+
+                    await Task.Delay(1000, cancellationToken);
                 }
             }
 
