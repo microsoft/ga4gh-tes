@@ -53,28 +53,33 @@ namespace BuildPushAcr
             ArgumentNullException.ThrowIfNull(archive);
 
             Console.WriteLine("Determining build revision");
-            acr = await new ArmClient(credential, null, new()
-                {
-                    Environment = environment,
-                    RetryPolicy = new Azure.Core.Pipeline.RetryPolicy(3, DelayStrategy.CreateExponentialDelayStrategy(TimeSpan.FromSeconds(5)))
-                })
+            acr = await new ArmClient(
+                    credential,
+                    null,
+                    new()
+		    {
+			Environment = environment,
+			RetryPolicy = new Azure.Core.Pipeline.RetryPolicy(3, DelayStrategy.CreateExponentialDelayStrategy(TimeSpan.FromSeconds(5)))
+		    })
                 .GetContainerRegistryResource(acrId)
                 .GetAsync(cancellationToken);
 
             var repository = new ContainerRegistryClient(
-                new UriBuilder(Uri.UriSchemeHttps, acr.Data.LoginServer).Uri,
-                credential,
-                new()
-                {
-                    Audience = audience,
-                    RetryPolicy = new Azure.Core.Pipeline.RetryPolicy(3, DelayStrategy.CreateExponentialDelayStrategy(TimeSpan.FromSeconds(2)))
-                })
-                .GetRepository(buildType switch
-                {
-                    BuildType.Tes => "ga4gh/tes",
-                    BuildType.CoA => "cromwellonazure/triggerservice",
-                    _ => throw new System.Diagnostics.UnreachableException()
-                });
+                new UriBuilder(
+                        Uri.UriSchemeHttps,
+                        acr.Data.LoginServer).Uri,
+                        credential,
+                        new()
+                        {
+                            Audience = audience,
+                            RetryPolicy = new Azure.Core.Pipeline.RetryPolicy(3, DelayStrategy.CreateExponentialDelayStrategy(TimeSpan.FromSeconds(2)))
+                        })
+                    .GetRepository(buildType switch
+                    {
+                        BuildType.Tes => "ga4gh/tes",
+                        BuildType.CoA => "cromwellonazure/triggerservice",
+                        _ => throw new System.Diagnostics.UnreachableException()
+                    });
 
             Version? maxTag;
 
