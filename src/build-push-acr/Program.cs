@@ -97,10 +97,10 @@ async Task Handler(System.CommandLine.Invocation.InvocationContext context, Func
 }
 
 IArchive GetLocalGitArchive(System.CommandLine.Invocation.InvocationContext context)
-    => AcrBuild.GetLocalGitArchiveAsync(context.ParseResult.GetValueForOption(directoryOption)!);
+    => LocalGitArchive.Create(context.ParseResult.GetValueForOption(directoryOption)!);
 
 IArchive GetGitHubArchive(System.CommandLine.Invocation.InvocationContext context)
-    => AcrBuild.GetGitHubArchive(context.ParseResult.GetValueForOption(buildTypeOption),
+    => GitHubArchive.Create(context.ParseResult.GetValueForOption(buildTypeOption),
         context.ParseResult.GetValueForOption(tagOption)!.ToString(3),
         GitHubArchive.GetAccessTokenProvider());
 

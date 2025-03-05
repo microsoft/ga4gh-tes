@@ -3,7 +3,11 @@
 
 using System.IO.Compression;
 using System.Net;
+using System.Reflection;
 using CommonUtilities;
+using GitHub.Octokit.Client;
+using GitHub.Octokit.Client.Authentication;
+using Microsoft.Kiota.Abstractions;
 using Microsoft.Kiota.Abstractions.Authentication;
 
 namespace BuildPushAcr
@@ -25,6 +29,58 @@ namespace BuildPushAcr
         private string? srcRoot;
         private string? root;
 
+        // Rerunning ClientFactory's ChainHandlersCollectionAndGetFirstLink methods (which Create and Build both do) in the same process always results in either InvalidOperationException or ObjectDisposedException. So we cache the request adapter and inject the authentication mechanism.
+        private static readonly Lazy<IRequestAdapter> _requestAdapter = new(
+            () => new ClientFactory()
+                .WithAuthenticationProvider(new PrivateAuthenticationProvider())
+                .WithUserAgent("microsoft-ga4gh-tes", Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyVersionAttribute>()?.Version!)
+                .WithRequestTimeout(TimeSpan.FromHours(1.5))
+                .Build(),
+            LazyThreadSafetyMode.ExecutionAndPublication);
+
+        /// <summary>
+        /// Creates a source code archive from our GitHub repositories
+        /// </summary>
+        /// <param name="buildType">Build type.</param>
+        /// <param name="ref">Git commit reference. Can be long or short, tag, or branch name.</param>
+        /// <param name="tokenProvider">GitHub API authentication. <c>null</c> (the default) for anonymous access.</param>
+        /// <returns>The archive.</returns>
+        /// <exception cref="System.ArgumentException"></exception>
+        public static IArchive Create(BuildType buildType, string @ref, IAccessTokenProvider? tokenProvider = default)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(@ref);
+
+            AccessTokenProvider = tokenProvider;
+
+            Console.WriteLine("Downloading source code");
+            return new GitHubArchive(
+                client: new(_requestAdapter.Value),
+                owner: "microsoft",
+                repo: buildType switch
+                {
+                    BuildType.Tes => "ga4gh-tes",
+                    BuildType.CoA => "CromwellOnAzure",
+                    _ => throw new System.Diagnostics.UnreachableException()
+                },
+                @ref: @ref,
+                submodulePaths: buildType switch
+                {
+                    BuildType.Tes => default,
+                    BuildType.CoA => ["src/ga4gh-tes"],
+                    _ => throw new System.Diagnostics.UnreachableException()
+                });
+        }
+
+        /// <summary>
+        /// GitHub access token provider
+        /// </summary>
+        /// <remarks>If <c>null</c>, Anonymous access is used.</remarks>
+        public static IAccessTokenProvider? AccessTokenProvider { get; set; }
+
+        /// <summary>
+        /// Create an <see cref="IAccessTokenProvider"/> that uses a GITHUB_TOKEN environment variable
+        /// </summary>
+        /// <returns>An access token provider if the environment variable is set, <c>null</c> otherwise.</returns>
         public static IAccessTokenProvider? GetAccessTokenProvider()
         {
             var pat = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
@@ -34,10 +90,10 @@ namespace BuildPushAcr
                 return default;
             }
 
-            return new AccessTokenProvider(pat);
+            return new PrivateAccessTokenProvider(pat);
         }
 
-        private class AccessTokenProvider(string pat) : IAccessTokenProvider
+        private sealed class PrivateAccessTokenProvider(string pat) : IAccessTokenProvider
         {
             private readonly string pat = pat;
 
@@ -45,6 +101,26 @@ namespace BuildPushAcr
 
             Task<string> IAccessTokenProvider.GetAuthorizationTokenAsync(Uri uri, Dictionary<string, object>? additionalAuthenticationContext, CancellationToken cancellationToken)
                 => Task.FromResult(pat);
+        }
+
+        private sealed class PrivateAuthenticationProvider : IAuthenticationProvider
+        {
+            private readonly IAuthenticationProvider _anonymous = new AnonymousAuthenticationProvider();
+            private readonly IAuthenticationProvider _provider = new TokenAuthProvider(new PrivateAccessTokenProvider());
+
+            private IAuthenticationProvider GetAuthenticationProvider()
+                => AccessTokenProvider is null ? _anonymous : _provider;
+
+            Task IAuthenticationProvider.AuthenticateRequestAsync(RequestInformation request, Dictionary<string, object>? additionalAuthenticationContext, CancellationToken cancellationToken)
+                => GetAuthenticationProvider().AuthenticateRequestAsync(request, additionalAuthenticationContext, cancellationToken);
+
+            private sealed class PrivateAccessTokenProvider : IAccessTokenProvider
+            {
+                AllowedHostsValidator IAccessTokenProvider.AllowedHostsValidator => throw new NotImplementedException();
+
+                Task<string> IAccessTokenProvider.GetAuthorizationTokenAsync(Uri uri, Dictionary<string, object>? additionalAuthenticationContext, CancellationToken cancellationToken)
+                    => AccessTokenProvider!.GetAuthorizationTokenAsync(uri, additionalAuthenticationContext, cancellationToken);
+            }
         }
 
         async ValueTask<Version> IArchive.GetTagAsync(CancellationToken cancellationToken)
