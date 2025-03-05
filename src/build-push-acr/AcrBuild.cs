@@ -57,10 +57,10 @@ namespace BuildPushAcr
                     credential,
                     null,
                     new()
-		    {
-			Environment = environment,
-			RetryPolicy = new Azure.Core.Pipeline.RetryPolicy(3, DelayStrategy.CreateExponentialDelayStrategy(TimeSpan.FromSeconds(5)))
-		    })
+                    {
+                        Environment = environment,
+                        RetryPolicy = new Azure.Core.Pipeline.RetryPolicy(3, DelayStrategy.CreateExponentialDelayStrategy(TimeSpan.FromSeconds(5)))
+                    })
                 .GetContainerRegistryResource(acrId)
                 .GetAsync(cancellationToken);
 
