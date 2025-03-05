@@ -7,8 +7,23 @@ using System.Text;
 
 namespace BuildPushAcr
 {
-    internal sealed class LocalGitArchive : IArchive
+    public sealed class LocalGitArchive(DirectoryInfo solutionDir) : IArchive
     {
+        private readonly DirectoryInfo srcDir = solutionDir ?? throw new ArgumentNullException(nameof(solutionDir));
+
+        /// <summary>
+        /// Creates a source code archive from the local filesystem
+        /// </summary>
+        /// <param name="solution">The directory containing the VisualStudio solution file.</param>
+        /// <returns>The archive.</returns>
+        public static IArchive Create(DirectoryInfo solution)
+        {
+            ArgumentNullException.ThrowIfNull(solution);
+
+            Console.WriteLine("Scanning source code");
+            return new LocalGitArchive(solution);
+        }
+
         private const UnixFileMode FileMode =
             UnixFileMode.UserRead |
             UnixFileMode.UserWrite |
@@ -16,15 +31,6 @@ namespace BuildPushAcr
             UnixFileMode.GroupWrite |
             UnixFileMode.OtherRead |
             UnixFileMode.OtherWrite;
-
-        private readonly DirectoryInfo srcDir;
-
-        public LocalGitArchive(DirectoryInfo solutionDir)
-        {
-            ArgumentNullException.ThrowIfNull(solutionDir);
-
-            this.srcDir = solutionDir;
-        }
 
         async ValueTask<Version> IArchive.GetTagAsync(CancellationToken cancellationToken)
         {
@@ -61,7 +67,7 @@ namespace BuildPushAcr
 
         IAsyncEnumerable<TarEntry> IArchive.Get(CancellationToken _1, string? root)
         {
-            string[] foldersToIgnore = ["bin", "obj", "TestResults"];
+            string[] subFoldersToIgnore = ["bin", "obj", "TestResults"];
             string[] rootFoldersToIgnore = [".git", ".github", ".vs"];
             var prefix = string.IsNullOrWhiteSpace(root) ? string.Empty : root + '/';
             var sourceRootLength = srcDir.FullName.Length + 1;
@@ -70,7 +76,7 @@ namespace BuildPushAcr
                 .EnumerateFileSystemInfos("*", SearchOption.AllDirectories)
                 .Where(entry => !rootFoldersToIgnore.Contains(Path.GetRelativePath(srcDir.FullName, entry.FullName).Split((char[]?)['/', '\\'], 2)[0]))
                 .OrderBy(entry => entry.FullName, StringComparer.Ordinal)
-                .Where(entry => !(NormalizePath(entry.FullName)[sourceRootLength..].Split('/', StringSplitOptions.RemoveEmptyEntries).Any(name => foldersToIgnore.Contains(name))))
+                .Where(entry => !(NormalizePath(entry.FullName)[sourceRootLength..].Split('/', StringSplitOptions.RemoveEmptyEntries).Any(name => subFoldersToIgnore.Contains(name))))
                 .Select(Convert)
                 .Where(entry => entry is not null)
                 .Cast<PaxTarEntry>()
@@ -82,7 +88,7 @@ namespace BuildPushAcr
                 {
                     DirectoryInfo dir => new PaxTarEntry(TarEntryType.Directory, prefix + NormalizePath(dir.FullName[sourceRootLength..])),
                     FileInfo file => CreateFileEntry(file, prefix, sourceRootLength),
-                    _ => throw new NotSupportedException()
+                    _ => throw new UnreachableException(),
                 };
 
             static PaxTarEntry? CreateFileEntry(FileInfo file, string prefix, int sourceRootLength)
