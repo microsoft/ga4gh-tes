@@ -20,7 +20,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.Containers.ContainerRegistry" Version="1.1.1" />
+    <PackageReference Include="Azure.Containers.ContainerRegistry" Version="1.2.0" />
     <PackageReference Include="Azure.ResourceManager.ContainerRegistry" Version="1.2.1" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.23.0" />
     <PackageReference Include="GitHub.Octokit.SDK" Version="0.0.31" />
