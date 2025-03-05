@@ -34,17 +34,22 @@ namespace BuildPushAcr
 
         async ValueTask<Version> IArchive.GetTagAsync(CancellationToken cancellationToken)
         {
+            var gitBinary = FindExecutable.FindExecutable.FullPath("git");
+
+            if (string.IsNullOrWhiteSpace(gitBinary))
+            {
+                throw new InvalidOperationException("Failed to locate the `git` tool.");
+            }
+
             ProcessStartInfo startInfo = new()
             {
-                FileName = Environment.GetEnvironmentVariable(Environment.OSVersion.Platform is PlatformID.Win32NT ? "ComSpec" : "SHELL"),
+                FileName = gitBinary,
                 WorkingDirectory = srcDir.FullName,
                 RedirectStandardOutput = true,
                 StandardOutputEncoding = Encoding.UTF8,
                 UseShellExecute = false
             };
 
-            startInfo.ArgumentList.Add(Environment.OSVersion.Platform is PlatformID.Win32NT ? "/C" : "-c");
-            startInfo.ArgumentList.Add("git");
             startInfo.ArgumentList.Add("tag");
             startInfo.ArgumentList.Add("-l");
 
