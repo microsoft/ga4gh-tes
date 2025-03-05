@@ -49,6 +49,7 @@ using CommonUtilities.AzureCloud;
 using k8s;
 using Microsoft.Graph;
 using Newtonsoft.Json;
+using Polly;
 using Polly.Utilities;
 using Tes.Models;
 using Tes.SDK;
@@ -84,6 +85,7 @@ namespace TesDeployer
         private static bool AsyncRetryExceptionPolicy(Exception ex)
         {
             var dontRetry = ex is InvalidOperationException
+                || (ex is Microsoft.Kiota.Abstractions.ApiException ae && (int)HttpStatusCode.Unauthorized == ae.ResponseStatusCode)
                 || (ex is GitHub.Models.ValidationError ve && (int)HttpStatusCode.UnprocessableContent == ve.ResponseStatusCode)
                 || (ex is GitHub.Models.BasicError be &&
                     ((int)HttpStatusCode.Forbidden == be.ResponseStatusCode
@@ -97,6 +99,12 @@ namespace TesDeployer
 
             return !dontRetry;
         }
+
+        private static readonly AsyncRetryHandlerPolicy acrGetDigestRetryPolicy = new RetryPolicyBuilder(Microsoft.Extensions.Options.Options.Create(new CommonUtilities.Options.RetryPolicyOptions()))
+            .PolicyBuilder.OpinionatedRetryPolicy(Polly.Policy.Handle<RequestFailedException>(azureException => (int)HttpStatusCode.NotFound == azureException.Status))
+            .WithCustomizedRetryPolicyOptionsWait(30, (_, _) => TimeSpan.FromSeconds(10))
+            .SetOnRetryBehavior()
+            .AsyncBuild();
 
         private static readonly AsyncRetryHandlerPolicy generalRetryPolicy = new RetryPolicyBuilder(Microsoft.Extensions.Options.Options.Create(new CommonUtilities.Options.RetryPolicyOptions()))
             .PolicyBuilder.OpinionatedRetryPolicy()
@@ -1363,46 +1371,61 @@ namespace TesDeployer
             var build = await Execute($"Building TES image on {acr.Id.Name}...",
                 () => buildPushAcrRetryPolicy.ExecuteWithRetryAsync(async () =>
                 {
-                    AcrBuild build;
-                    {
-                        IAsyncDisposable tarDisposable = default;
-
-                        try
+                    AcrBuild build = default;
+                    await Policy.Handle<Microsoft.Kiota.Abstractions.ApiException>(ae => (int)HttpStatusCode.Unauthorized == ae.ResponseStatusCode)
+                        .WaitAndRetryAsync([TimeSpan.FromSeconds(1)], (ae, _) =>
                         {
-                            IArchive tar;
-
-                            if (string.IsNullOrWhiteSpace(configuration.SolutionDir))
+                            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("GITHUB_TOKEN")))
                             {
-                                tar = AcrBuild.GetGitHubArchive(BuildType.Tes, string.IsNullOrWhiteSpace(configuration.GitHubCommit) ? new Version(targetVersion).ToString(3) : configuration.GitHubCommit, GitHubArchive.GetAccessTokenProvider());
-                                tarDisposable = tar as IAsyncDisposable;
-                            }
-                            else
-                            {
-                                tar = AcrBuild.GetLocalGitArchiveAsync(new(configuration.SolutionDir));
+                                throw new InvalidOperationException("GitHub returned an authentication error.", ae);
                             }
 
-                            build = new(BuildType.Tes, await tar.GetTagAsync(cts.Token), acr.Id, tokenCredential, new Azure.Containers.ContainerRegistry.ContainerRegistryAudience(azureCloudConfig.ArmEnvironment.Value.Endpoint.AbsoluteUri));
-                            await build.LoadAsync(tar, azureCloudConfig.ArmEnvironment.Value, cts.Token);
-                        }
-                        finally
+                            Console.WriteLine("GitHub returned an authentication error. Retrying anonymously.");
+                            Environment.SetEnvironmentVariable("GITHUB_TOKEN", null);
+                        })
+                        .ExecuteAsync(async token =>
                         {
-                            await (tarDisposable?.DisposeAsync() ?? ValueTask.CompletedTask);
-                        }
-                    }
+                            IAsyncDisposable tarDisposable = default;
 
-                    var buildSuccess = false;
+                            try
+                            {
+                                IArchive tar;
 
-                    for (var i = 3; i > 0 && !buildSuccess; --i, await Task.Delay(TimeSpan.FromSeconds(1), cts.Token))
-                    {
-                        (buildSuccess, var buildLog) = await build.BuildAsync(configuration.DebugLogging ? LogType.Interactive : LogType.CapturedOnError, cts.Token);
+                                if (string.IsNullOrWhiteSpace(configuration.SolutionDir))
+                                {
+                                    tar = GitHubArchive.Create(BuildType.Tes, string.IsNullOrWhiteSpace(configuration.GitHubCommit) ? new Version(targetVersion).ToString(3) : configuration.GitHubCommit, GitHubArchive.GetAccessTokenProvider());
+                                    tarDisposable = tar as IAsyncDisposable;
+                                }
+                                else
+                                {
+                                    tar = LocalGitArchive.Create(new(configuration.SolutionDir));
+                                }
 
-                        if (!buildSuccess && !string.IsNullOrWhiteSpace(buildLog))
+                                build = new(BuildType.Tes, await tar.GetTagAsync(token), acr.Id, tokenCredential, new Azure.Containers.ContainerRegistry.ContainerRegistryAudience(azureCloudConfig.ArmEnvironment.Value.Endpoint.AbsoluteUri));
+                                await build.LoadAsync(tar, azureCloudConfig.ArmEnvironment.Value, token);
+                            }
+                            finally
+                            {
+                                await (tarDisposable?.DisposeAsync() ?? ValueTask.CompletedTask);
+                            }
+                        },
+                        cts.Token);
+
+                    if (!await Policy
+                        .HandleResult(false)
+                        .WaitAndRetryAsync(Enumerable.Repeat(TimeSpan.FromSeconds(1), 2), (_, _) => Console.WriteLine("Retrying build."))
+                        .ExecuteAsync(async token =>
                         {
-                            ConsoleEx.WriteLine(buildLog);
-                        }
-                    }
+                            var (buildSuccess, buildLog) = await build.BuildAsync(configuration.DebugLogging ? LogType.Interactive : LogType.CapturedOnError, token);
 
-                    if (!buildSuccess)
+                            if (!buildSuccess && !string.IsNullOrWhiteSpace(buildLog))
+                            {
+                                ConsoleEx.WriteLine(buildLog);
+                            }
+
+                            return buildSuccess;
+                        },
+                        cts.Token))
                     {
                         throw new InvalidOperationException("Build failed.");
                     }
@@ -1410,7 +1433,7 @@ namespace TesDeployer
                     return build;
                 }));
 
-            var tesDigest = (await (client ??= GetClient()).GetArtifact("cromwellonazure/tes", build.Tag.ToString()).GetManifestPropertiesAsync(cts.Token)).Value.Digest;
+            var tesDigest = (await acrGetDigestRetryPolicy.ExecuteWithRetryAsync(token => (client ??= GetClient()).GetArtifact("cromwellonazure/tes", build.Tag.ToString()).GetManifestPropertiesAsync(token), cts.Token)).Value.Digest;
             settings["ActualTesImageName"] = $"{acr.Data.LoginServer}/cromwellonazure/tes@{tesDigest}";
 
             Azure.Containers.ContainerRegistry.ContainerRegistryClient GetClient()
