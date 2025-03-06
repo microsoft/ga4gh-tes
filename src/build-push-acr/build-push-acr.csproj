@@ -24,6 +24,7 @@
     <PackageReference Include="Azure.ResourceManager.ContainerRegistry" Version="1.2.1" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.23.0" />
     <PackageReference Include="GitHub.Octokit.SDK" Version="0.0.31" />
+    <PackageReference Include="SGrottel.FindExecutable" Version="0.4.0.5" />
     <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
   </ItemGroup>
 
