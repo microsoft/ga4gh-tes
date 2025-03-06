@@ -97,6 +97,9 @@ namespace TesApi.Web
         Task<CloudPool> IAzureProxy.GetBatchPoolAsync(string poolId, CancellationToken cancellationToken, DetailLevel detailLevel) => cachingAsyncRetry.ExecuteWithRetryAsync(ct => azureProxy.GetBatchPoolAsync(poolId, ct, detailLevel), cancellationToken);
 
         /// <inheritdoc/>
+        Task IAzureProxy.PatchBatchPoolStartTaskCommandline(string poolId, string command, CancellationToken cancellationToken) => cachingAsyncRetry.ExecuteWithRetryAsync(ct => azureProxy.PatchBatchPoolStartTaskCommandline(poolId, command, ct), cancellationToken);
+
+        /// <inheritdoc/>
         Task<CloudJob> IAzureProxy.GetBatchJobAsync(string jobId, CancellationToken cancellationToken, DetailLevel detailLevel) => cachingAsyncRetry.ExecuteWithRetryAsync(ct => azureProxy.GetBatchJobAsync(jobId, ct, detailLevel), cancellationToken);
 
         /// <inheritdoc/>

@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
 using Tes.Models;
+using TesApi.Web.Runner;
 
 namespace TesApi.Web
 {
@@ -129,6 +130,14 @@ namespace TesApi.Web
         IAsyncEnumerable<Task> PerformLongBackgroundTasksAsync(CancellationToken cancellationToken);
 
         /// <summary>
+        /// Generates refreshed start task command-line.
+        /// </summary>
+        /// <param name="assets"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        ValueTask<string> ParseBatchStartCommand(BatchScriptAssetsInfo assets, CancellationToken cancellationToken);
+
+        /// <summary>
         /// Identifies an azure cloud task.
         /// </summary>
         /// <param name="JobId"><see cref="CloudJob.Id"/> that contains the task.</param>
@@ -142,8 +151,9 @@ namespace TesApi.Web
         /// <param name="HostName"><see cref="Options.BatchSchedulingOptions.Prefix"/>.</param>
         /// <param name="IsDedicated">Compute nodes in pool are not preemptible.</param>
         /// <param name="RunnerMD5">NodeTaskRunner hash.</param>
+        /// <param name="StartTaskUri">URL of start task node file.</param>
         /// <param name="EventsVersion"><see cref="Events.RunnerEventsMessage.EventsVersion"/>.</param>
-        record struct PoolMetadata(string HostName, bool IsDedicated, string RunnerMD5, IDictionary<string, object> EventsVersion)
+        record struct PoolMetadata(string HostName, bool IsDedicated, string RunnerMD5, Uri StartTaskUri, IDictionary<string, object> EventsVersion)
         {
             private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
 

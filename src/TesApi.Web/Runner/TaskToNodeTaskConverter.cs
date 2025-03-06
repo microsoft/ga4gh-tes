@@ -119,6 +119,45 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
+        /// Generates <see cref="NodeTaskResolverOptions"/>.
+        /// </summary>
+        /// <param name="startTaskConversionOptions">The start task conversion options.</param>
+        /// <returns>Environment required for runner to retrieve blobs from storage.</returns>
+        public virtual NodeTaskResolverOptions ToNodeTaskResolverOptions(StartTaskConversionOptions startTaskConversionOptions)
+        {
+            try
+            {
+                var builder = new NodeTaskBuilder();
+
+                if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
+                {
+                    logger.LogDebug("Setting up Terra as the runtime environment for the runner");
+                    builder.WithTerraAsRuntimeEnvironment(terraOptions.WsmApiHost, terraOptions.LandingZoneApiHost,
+                        terraOptions.SasAllowedIpRange);
+                }
+
+                builder.WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
+                    .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken($"pools/{startTaskConversionOptions.PoolId}/nodes/%AZ_BATCH_NODE_ID%"))
+                    .WithLogPublisher(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken($"pools/{startTaskConversionOptions.PoolId}/nodes/%AZ_BATCH_NODE_ID%"))
+                    .WithResourceIdManagedIdentity(startTaskConversionOptions.GlobalManagedIdentity);
+
+                var runtimeOptions = builder.Build().RuntimeOptions;
+                runtimeOptions.StorageEventSink.TargetUrl = default;
+
+                return new()
+                {
+                    RuntimeOptions = runtimeOptions,
+                    TransformationStrategy = runtimeOptions.StorageEventSink.TransformationStrategy,
+                };
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed to create the node task resolver options.");
+                throw;
+            }
+        }
+
+        /// <summary>
         /// Converts TesTask to a new NodeTask
         /// </summary>
         /// <param name="task">Node task</param>
@@ -181,13 +220,49 @@ namespace TesApi.Web.Runner
             }
         }
 
+        /// <summary>
+        /// Converts TesTask to a new NodeTask
+        /// </summary>
+        /// <param name="startTaskConversionOptions"></param>
+        /// <param name="cancellationToken"></param>
+        public virtual NodeTask ToNodeTask(StartTaskConversionOptions startTaskConversionOptions, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var builder = new NodeTaskBuilder();
+
+                if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
+                {
+                    logger.LogDebug("Setting up Terra as the runtime environment for the runner");
+                    builder.WithTerraAsRuntimeEnvironment(terraOptions.WsmApiHost, terraOptions.LandingZoneApiHost,
+                        terraOptions.SasAllowedIpRange);
+                }
+
+                builder
+                    .WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
+                    .WithResourceIdManagedIdentity(startTaskConversionOptions.GlobalManagedIdentity)
+                    .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken($"pools/{startTaskConversionOptions.PoolId}/nodes/%AZ_BATCH_NODE_ID%"))
+                    .WithLogPublisher(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken($"pools/{startTaskConversionOptions.PoolId}/nodes/%AZ_BATCH_NODE_ID%"))
+                    .WithWorkDir(startTaskConversionOptions.WorkDir);
+
+                MapScripts(startTaskConversionOptions.Scripts, $"%{NodeTaskBuilder.BatchStartTaskDirEnvVarName}%", builder);
+
+                return builder.Build();
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed to convert the start task to a Node Task");
+                throw;
+            }
+        }
+
         private void AddTaskOutputs(TesTask task, NodeTaskBuilder builder)
         {
             foreach (var (path, url) in new List<string>(["stderr.txt", "stdout.txt", $"wd/{MetricsFileName}"])
                 .Select(file => (Path: $"/{file}", Url: storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, System.IO.Path.GetFileName(file)))))
             {
                 builder.WithOutputUsingCombinedTransformationStrategy(
-                    AppendParentDirectoryIfSet(path, $"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%"),
+                    PrependParentDirectoryIfSet(path, $"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%"),
                     url.AbsoluteUri,
                     fileType: FileType.File,
                     taskOutputs: true);
@@ -548,13 +623,23 @@ namespace TesApi.Web.Runner
             return await UploadContentAndCreateTesInputAsync(tesTask, input.Path, input.Content, cancellationToken);
         }
 
+        private static void MapScripts(IEnumerable<BatchStartTaskScript> scripts, string pathParentDirectory,
+            NodeTaskBuilder builder)
+        {
+            scripts?.ForEach(script =>
+            {
+                builder.WithScriptUsingCombinedTransformationStrategy(
+                    PrependParentDirectoryIfSet(script.FileName, pathParentDirectory), script.ScriptUrl.AbsoluteUri, script.SetExecute, script.Run);
+            });
+        }
+
         private static void MapOutputs(List<TesOutput> outputs, string pathParentDirectory,
             NodeTaskBuilder builder)
         {
             outputs?.ForEach(output =>
             {
                 builder.WithOutputUsingCombinedTransformationStrategy(
-                    AppendParentDirectoryIfSet(output.Path, pathParentDirectory), output.Url, ToNodeTaskFileType(output.Type));
+                    PrependParentDirectoryIfSet(output.Path, pathParentDirectory), output.Url, ToNodeTaskFileType(output.Type));
             });
         }
 
@@ -611,7 +696,7 @@ namespace TesApi.Web.Runner
             void AddInputToBuilder(string path, string url)
             {
                 builder.WithInputUsingCombinedTransformationStrategy(
-                    AppendParentDirectoryIfSet(path, pathParentDirectory), url);
+                    PrependParentDirectoryIfSet(path, pathParentDirectory), url);
             }
         }
 
@@ -625,7 +710,7 @@ namespace TesApi.Web.Runner
             };
         }
 
-        private static string AppendParentDirectoryIfSet(string inputPath, string pathParentDirectory)
+        private static string PrependParentDirectoryIfSet(string inputPath, string pathParentDirectory)
         {
             if (!string.IsNullOrWhiteSpace(pathParentDirectory))
             {
@@ -650,4 +735,13 @@ namespace TesApi.Web.Runner
     public record NodeTaskConversionOptions(IList<TesInput> AdditionalInputs = default, string DefaultStorageAccountName = default,
         string GlobalManagedIdentity = default, string AcrPullIdentity = default, string DrsHubApiHost = default, bool SetContentMd5OnUpload = false,
             BatchScheduler.VmFamilySeries VmFamilyGroup = default);
+
+    /// <summary>
+    /// Additional configuration options for the start task.
+    /// </summary>
+    /// <param name="PoolId"></param>
+    /// <param name="Scripts"></param>
+    /// <param name="WorkDir"></param>
+    /// <param name="GlobalManagedIdentity"></param>
+    public record StartTaskConversionOptions(string PoolId, IList<BatchStartTaskScript> Scripts = default, string WorkDir = default, string GlobalManagedIdentity = default);
 }

@@ -1246,7 +1246,7 @@ namespace TesApi.Web
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         /// <remarks>This method also mitigates errors associated with docker daemons that are not configured to place their filesystem assets on the data drive.</remarks>
-        private async Task<BatchModels.BatchAccountPoolStartTask> GetStartTaskAsync(string poolId, BatchModels.BatchVmConfiguration machineConfiguration, VirtualMachineInformationWithDataDisks vmInfo, CancellationToken cancellationToken)
+        private async Task<(BatchModels.BatchAccountPoolStartTask StartTask, Uri NodeTaskUri)> GetStartTaskAsync(string poolId, BatchModels.BatchVmConfiguration machineConfiguration, VirtualMachineInformationWithDataDisks vmInfo, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
             ArgumentNullException.ThrowIfNull(machineConfiguration);
@@ -1254,6 +1254,7 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(vmInfo.DataDisks, nameof(vmInfo));
             ArgumentNullException.ThrowIfNull(vmInfo.VM, nameof(vmInfo));
 
+            List<BatchStartTaskScript> scripts = [];
             List<BatchModels.BatchVmExtension> extensions = [];
 
             var nodeOs = GetNodeOS(machineConfiguration);
@@ -1263,7 +1264,7 @@ namespace TesApi.Web
             var globalStartTaskConfigured = !string.IsNullOrWhiteSpace(globalStartTaskPath);
 
             var globalStartTaskSasUrl = globalStartTaskConfigured
-                ? await storageAccessProvider.MapLocalPathToSasUrlAsync(globalStartTaskPath, BlobSasPermissions.Read, cancellationToken, sasTokenDuration: PoolScheduler.RunInterval.Multiply(2).Add(poolLifetime).Add(TimeSpan.FromMinutes(15)))
+                ? await storageAccessProvider.MapLocalPathToSasUrlAsync(globalStartTaskPath, BlobSasPermissions.Read, cancellationToken, sasTokenDuration: TimeSpan.FromMinutes(5))
                 : default;
 
             if (globalStartTaskSasUrl is not null)
@@ -1283,9 +1284,6 @@ namespace TesApi.Web
             var dockerConfigured = machineConfiguration.ImageReference.Publisher.Equals("microsoft-azure-batch", StringComparison.OrdinalIgnoreCase)
                 && (machineConfiguration.ImageReference.Offer.StartsWith("ubuntu-server-container", StringComparison.OrdinalIgnoreCase) || machineConfiguration.ImageReference.Offer.StartsWith("centos-container", StringComparison.OrdinalIgnoreCase));
 
-            StringBuilder cmd = new("#!/bin/sh\n");
-            cmd.Append($"mkdir -p {BatchNodeSharedEnvVar} && {DownloadViaWget(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, BlobSasPermissions.Read, cancellationToken), $"{BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)}");
-
             if (!dockerConfigured)
             {
                 var packageInstallScript = nodeOs switch
@@ -1297,7 +1295,11 @@ namespace TesApi.Web
 
                 var script = "config-docker.sh";
                 // TODO: optimize this by uploading all vmfamily scripts when uploading runner binary rather then for each individual pool as relevant
-                cmd.Append($" && {DownloadAndExecuteScriptAsync(await UploadScriptAsync(script, await ReadScriptAsync("config-docker.sh", sb => sb.Replace("{PackageInstalls}", packageInstallScript))), $"{BatchNodeTaskWorkingDirEnvVar}/{script}")}");
+                scripts.Add(new(
+                    ScriptUrl: await UploadScriptAsync(script, await ReadScriptAsync("config-docker.sh", sb => sb.Replace("{PackageInstalls}", packageInstallScript))),
+                    FileName: script,
+                    SetExecute: true,
+                    Run: true));
             }
 
             string vmFamilyStartupScript = null;
@@ -1315,7 +1317,11 @@ namespace TesApi.Web
             {
                 var script = "config-vmfamily.sh";
                 // TODO: optimize this by uploading all vmfamily scripts when uploading runner binary rather then for each individual pool as relevant
-                cmd.Append($" && {DownloadAndExecuteScriptAsync(await UploadScriptAsync(script, await ReadScriptAsync(vmFamilyStartupScript, sb => sb.Replace("{HctlPrefix}", vmGen switch { "V1" => "3:0:0", "V2" => "1:0:0", _ => throw new InvalidOperationException($"Unrecognized VM Generation. Please send open an issue @ 'https://github.com/microsoft/ga4gh-tes/issues' with this message ({vmGen})") }))), $"{BatchNodeTaskWorkingDirEnvVar}/{script}")}");
+                scripts.Add(new(
+                    ScriptUrl: await UploadScriptAsync(script, await ReadScriptAsync(vmFamilyStartupScript, sb => sb.Replace("{HctlPrefix}", vmGen switch { "V1" => "3:0:0", "V2" => "1:0:0", _ => throw new InvalidOperationException($"Unrecognized VM Generation. Please send open an issue @ 'https://github.com/microsoft/ga4gh-tes/issues' with this message ({vmGen})") }))),
+                    FileName: script,
+                    SetExecute: true,
+                    Run: true));
             }
 
             switch (vmFamilySeries)
@@ -1334,36 +1340,42 @@ namespace TesApi.Web
                             _ => throw new InvalidOperationException($"Unrecognized OS. Please send open an issue @ 'https://github.com/microsoft/ga4gh-tes/issues' with this message ({machineConfiguration.NodeAgentSkuId})"),
                         };
                         // TODO: optimize this by uploading all non-personalized scripts when uploading runner binary rather then for each individual pool
-                        cmd.Append($" && {DownloadAndExecuteScriptAsync(await UploadScriptAsync(script, await ReadScriptAsync(script)), $"{BatchNodeTaskWorkingDirEnvVar}/{script}")}");
+                        scripts.Add(new(
+                            ScriptUrl: await UploadScriptAsync(script, await ReadScriptAsync(script)),
+                            FileName: script,
+                            SetExecute: true,
+                            Run: true));
                     }
                     break;
             }
 
             if (globalStartTaskConfigured)
             {
-                cmd.Append($" && {DownloadAndExecuteScriptAsync(globalStartTaskSasUrl, $"{BatchNodeTaskWorkingDirEnvVar}/global-{StartTaskScriptFilename}")}");
+                scripts.Add(new(
+                    ScriptUrl: new BlobUriBuilder(globalStartTaskSasUrl) { Sas = default }.ToUri(),
+                    FileName: $"global-{StartTaskScriptFilename}",
+                    SetExecute: true,
+                    Run: true));
             }
 
             machineConfiguration.Extensions.AddRange(extensions);
 
-            return new()
+            var assets = await taskExecutionScriptingManager.PrepareBatchStartAsync(new(poolId, scripts, NodeTaskBuilder.BatchStartTaskDirEnvVarName, globalManagedIdentity), cancellationToken);
+
+            BatchModels.BatchAccountPoolStartTask result = new()
             {
-                CommandLine = $"/bin/sh -c \"{DownloadViaWget(await UploadScriptAsync(StartTaskScriptFilename, cmd), $"{BatchNodeTaskWorkingDirEnvVar}/{StartTaskScriptFilename}", execute: true)}\"",
+                CommandLine = await ParseBatchStartCommand(assets, cancellationToken),
                 UserIdentity = new() { AutoUser = new() { ElevationLevel = BatchModels.BatchUserAccountElevationLevel.Admin, Scope = BatchModels.BatchAutoUserScope.Pool } },
                 MaxTaskRetryCount = 4,
                 WaitForSuccess = true
             };
 
-            string DownloadAndExecuteScriptAsync(Uri url, string localFilePathDownloadLocation) // TODO: download via node runner
-                => DownloadViaWget(url, localFilePathDownloadLocation, execute: true);
+            result.EnvironmentSettings.AddRange([
+                .. assets.Environment.Select(pair => new BatchModels.BatchEnvironmentSetting(pair.Key) { Value = pair.Value }),
+                .. Enumerable.Repeat<BatchModels.BatchEnvironmentSetting>(new("DEBUG_DELAY") { Value = debugDelay?.ToString("c") }, debugDelay is null ? 0 : 1)
+            ]);
 
-            string DownloadViaWget(Uri url, string localFilePathDownloadLocation, bool execute = false, bool setExecutable = false)
-            {
-                var content = CreateWgetDownloadCommand(url, localFilePathDownloadLocation, setExecutable: execute || setExecutable);
-                return execute
-                    ? $"{content} && {localFilePathDownloadLocation}"
-                    : content;
-            }
+            return (result, assets.NodeTaskUrl);
 
             async ValueTask<Uri> UploadScriptAsync(string name, StringBuilder content)
             {
@@ -1371,7 +1383,7 @@ namespace TesApi.Web
                 var path = $"/pools/{poolId}/{name}";
                 await azureProxy.UploadBlobAsync(await storageAccessProvider.GetInternalTesBlobUrlAsync(path, BlobSasPermissions.Write, cancellationToken), content.ToString(), cancellationToken);
                 content.Clear();
-                return await storageAccessProvider.GetInternalTesBlobUrlAsync(path, BlobSasPermissions.Read, cancellationToken);
+                return storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(path);
             }
 
             async ValueTask<StringBuilder> ReadScriptAsync(string name, Action<StringBuilder> munge = default)
@@ -1381,6 +1393,20 @@ namespace TesApi.Web
                     .ReplaceLineEndings("\n"));
                 munge?.Invoke(content);
                 return content;
+            }
+        }
+
+        /// <inheritdoc/>
+        public async ValueTask<string> ParseBatchStartCommand(BatchScriptAssetsInfo assets, CancellationToken cancellationToken)
+        {
+            return taskExecutionScriptingManager.ParseBatchStartCommand(assets, DownloadViaWget(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, BlobSasPermissions.Read, cancellationToken), $"{BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true));
+
+            static string DownloadViaWget(Uri url, string localFilePathDownloadLocation, bool execute = false, bool setExecutable = false)
+            {
+                var content = CreateWgetDownloadCommand(url, localFilePathDownloadLocation, setExecutable: execute || setExecutable);
+                return execute
+                    ? $"{content} && {localFilePathDownloadLocation}"
+                    : content;
             }
         }
 
@@ -1415,7 +1441,7 @@ namespace TesApi.Web
         /// <remarks>
         /// Devs: Any changes to any properties set in this method will require corresponding changes to all classes implementing <see cref="Management.Batch.IBatchPoolManager"/> along with possibly any systems they call, with the possible exception of <seealso cref="Management.Batch.ArmBatchPoolManager"/>.
         /// </remarks>
-        private async ValueTask<BatchAccountPoolData> GetPoolSpecification(string name, string displayName, Azure.ResourceManager.Models.ManagedServiceIdentity poolIdentity, VirtualMachineInformationWithDataDisks vmInfo, int initialTarget, BatchNodeInfo nodeInfo, CancellationToken cancellationToken)
+        private async ValueTask<(BatchAccountPoolData Pool, Uri StartTask)> GetPoolSpecification(string name, string displayName, Azure.ResourceManager.Models.ManagedServiceIdentity poolIdentity, VirtualMachineInformationWithDataDisks vmInfo, int initialTarget, BatchNodeInfo nodeInfo, CancellationToken cancellationToken)
         {
             ValidateString(name, 64);
             ValidateString(displayName, 1024);
@@ -1437,6 +1463,8 @@ namespace TesApi.Web
 
             vmConfig.DataDisks.AddRange(vmInfo.DataDisks.Select(VirtualMachineInformationWithDataDisks.ToBatchVmDataDisk));
 
+            var (startTask, startTaskUri) = await GetStartTaskAsync(name, vmConfig, vmInfo, cancellationToken);
+
             BatchAccountPoolData poolSpecification = new()
             {
                 DisplayName = displayName,
@@ -1445,7 +1473,7 @@ namespace TesApi.Web
                 ScaleSettings = new() { AutoScale = new(BatchPool.AutoPoolFormula(vmInfo.VM.LowPriority, initialTarget)) { EvaluationInterval = BatchPool.AutoScaleEvaluationInterval } },
                 DeploymentVmConfiguration = vmConfig,
                 //ApplicationPackages = ,
-                StartTask = await GetStartTaskAsync(name, vmConfig, vmInfo, cancellationToken),
+                StartTask = startTask,
                 TargetNodeCommunicationMode = BatchModels.NodeCommunicationMode.Simplified,
             };
 
@@ -1460,7 +1488,7 @@ namespace TesApi.Web
                 };
             }
 
-            return poolSpecification;
+            return (poolSpecification, startTaskUri);
 
             static void ValidateString(string value, int maxLength, [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(value))] string paramName = null)
             {

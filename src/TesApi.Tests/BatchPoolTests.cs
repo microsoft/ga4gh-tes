@@ -168,7 +168,7 @@ namespace TesApi.Tests
         }
 
         private static async Task<BatchPool> AddPool(BatchScheduler batchPools, bool isPreemtable)
-            => (BatchPool)await batchPools.GetOrAddPoolAsync("key1", isPreemtable, (id, _1) => ValueTask.FromResult(CreatePoolData(name: id, displayName: "display1", vmSize: "vmSize1")), System.Threading.CancellationToken.None);
+            => (BatchPool)await batchPools.GetOrAddPoolAsync("key1", isPreemtable, (id, _1) => ValueTask.FromResult((CreatePoolData(name: id, displayName: "display1", vmSize: "vmSize1"), new Uri($"local://{id}"))), System.Threading.CancellationToken.None);
 
         internal static Azure.ResourceManager.Batch.BatchAccountPoolData CreatePoolData(string name, string displayName = default, string vmSize = default)
         {

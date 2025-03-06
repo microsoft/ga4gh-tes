@@ -271,6 +271,29 @@ namespace TesApi.Web
             => batchClient.PoolOperations.GetPoolAsync(poolId, detailLevel: detailLevel, cancellationToken: cancellationToken);
 
         /// <inheritdoc/>
+        public async Task PatchBatchPoolStartTaskCommandline(string poolId, string command, CancellationToken cancellationToken)
+        {
+            await batchServiceClient.Pool.PatchWithHttpMessagesAsync(poolId, new()
+            {
+                StartTask = new()
+                {
+                    CommandLine = command,
+                    UserIdentity = new()
+                    {
+                        AutoUser = new()
+                        {
+                            ElevationLevel = BatchProtocol.Models.ElevationLevel.Admin,
+                            Scope = BatchProtocol.Models.AutoUserScope.Pool
+                        }
+                    },
+                    MaxTaskRetryCount = 4,
+                    WaitForSuccess = true
+                }
+            },
+            cancellationToken: cancellationToken);
+        }
+
+        /// <inheritdoc/>
         public Task<CloudJob> GetBatchJobAsync(string jobId, CancellationToken cancellationToken, DetailLevel detailLevel)
             => batchClient.JobOperations.GetJobAsync(jobId, detailLevel, cancellationToken: cancellationToken);
 

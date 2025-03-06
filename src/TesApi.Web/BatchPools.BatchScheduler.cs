@@ -24,7 +24,7 @@ namespace TesApi.Web
         [GeneratedRegex("^[a-zA-Z0-9_-]+$")]
         private static partial Regex PoolNameRegex();
 
-        internal delegate ValueTask<BatchAccountPoolData> ModelPoolFactory(string poolId, CancellationToken cancellationToken);
+        internal delegate ValueTask<(BatchAccountPoolData Pool, Uri StartTask)> ModelPoolFactory(string poolId, CancellationToken cancellationToken);
 
         private string GetPoolKey(Tes.Models.TesTask tesTask, ref VirtualMachineInformationWithDataDisks virtualMachineInformation)
         {
@@ -82,7 +82,7 @@ namespace TesApi.Web
 
             static string FlattenChars(string text) // ^[a-zA-Z0-9_-]+$
             {
-                return new(text.AsEnumerable().Select(Flatten).ToArray());
+                return new([.. text.AsEnumerable().Select(Flatten)]);
 
                 static char Flatten(char ch)
                     => ch switch
@@ -148,8 +148,8 @@ namespace TesApi.Web
                 var uniquifier = new byte[5]; // This always becomes 8 chars when converted to base32
                 RandomNumberGenerator.Fill(uniquifier);
                 var poolId = $"{key}-{uniquifier.ConvertToBase32().TrimEnd('=').ToLowerInvariant()}"; // embedded '-' is required by GetKeyFromPoolId()
-                var modelPool = await modelPoolFactory(poolId, cancellationToken);
-                modelPool.Metadata.Add(new(PoolMetadata, new IBatchScheduler.PoolMetadata(this.batchPrefix, !isPreemptable, this.runnerMD5, Events.RunnerEventsMessage.EventsVersion).ToString()));
+                var (modelPool, startTask) = await modelPoolFactory(poolId, cancellationToken);
+                modelPool.Metadata.Add(new(PoolMetadata, new IBatchScheduler.PoolMetadata(this.batchPrefix, !isPreemptable, this.runnerMD5, startTask, Events.RunnerEventsMessage.EventsVersion).ToString()));
                 pool = batchPoolFactory();
                 await pool.CreatePoolAndJobAsync(modelPool, isPreemptable, runnerMD5, cancellationToken);
             }

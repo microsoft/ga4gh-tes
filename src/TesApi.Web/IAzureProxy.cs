@@ -174,6 +174,14 @@ namespace TesApi.Web
         Task<CloudPool> GetBatchPoolAsync(string poolId, CancellationToken cancellationToken, DetailLevel detailLevel = default);
 
         /// <summary>
+        /// Patches the specified pool's start task command line.
+        /// </summary>
+        /// <param name="poolId">The <see cref="CloudPool.Id"/> of the pool to patch.</param>
+        /// <param name="command">The new command line.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        Task PatchBatchPoolStartTaskCommandline(string poolId, string command, CancellationToken cancellationToken);
+
+        /// <summary>
         /// Retrieves the specified batch job.
         /// </summary>
         /// <param name="jobId">The <see cref="Microsoft.Azure.Batch.Protocol.Models.CloudJob"/> of the job to retrieve.</param>

@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Diagnostics;
+using CommonUtilities;
 using Microsoft.Extensions.Logging;
 using Tes.Runner;
 using Tes.Runner.Docker;
@@ -113,6 +114,125 @@ namespace Tes.RunnerCLI.Commands
         }
 
         /// <summary>
+        /// Start task command. Executes all operations (download, scripts) as sub-processes.
+        /// </summary>
+        /// <param name="fileUri">Node task definition uri</param>
+        /// <param name="file">Node task definition file</param>
+        /// <param name="blockSize">Blob block size in bytes</param>
+        /// <param name="writers">Number of concurrent writers</param>
+        /// <param name="readers">Number of concurrent readers</param>
+        /// <param name="bufferCapacity">Pipeline buffer capacity</param>
+        /// <param name="apiVersion">Azure Storage API version</param>
+        /// <returns></returns>
+        /// <exception cref="NotImplementedException"></exception>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "This tool is currently only supported on Linux.")]
+        internal static async Task<int> ExecuteStartTaskCommandAsync(
+            Uri? fileUri,
+            FileInfo? file,
+            int blockSize,
+            int writers,
+            int readers,
+            int bufferCapacity,
+            string apiVersion)
+        {
+            try
+            {
+                var duration = Stopwatch.StartNew();
+
+                var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: false);
+                file ??= new(CommandFactory.DefaultTaskDefinitionFile);
+
+                ArgumentNullException.ThrowIfNull(nodeTask.StartTask, nameof(nodeTask.StartTask));
+
+                nodeTask.Id = Environment.GetEnvironmentVariable("AZ_BATCH_NODE_ID") ?? new Guid().ToString();
+
+                await using var eventsPublisher = await EventsPublisher.CreateEventsPublisherAsync(nodeTask, apiVersion);
+
+                try
+                {
+                    await eventsPublisher.PublishTaskCommencementEventAsync(nodeTask);
+
+                    if (!string.IsNullOrWhiteSpace(nodeTask.StartTask.WorkDir))
+                    {
+                        Environment.CurrentDirectory = Environment.ExpandEnvironmentVariables(nodeTask.StartTask.WorkDir);
+                    }
+
+                    Runner.Models.NodeTask download = new()
+                    {
+                        Id = nodeTask.Id,
+                        Inputs = nodeTask.StartTask.StartTaskScripts?
+                            .Select(script => new Runner.Models.FileInput() { SourceUrl = script.SourceUrl, Path = script.Path, TransformationStrategy = script.TransformationStrategy })
+                            .ToList(),
+                        RuntimeOptions = nodeTask.RuntimeOptions,
+                    };
+
+                    if (download.Inputs is not null)
+                    {
+                        FileInfo downloadNodeFile = new(Path.Combine(Environment.CurrentDirectory, Path.GetFileName(Path.GetRandomFileName())));
+                        await File.WriteAllTextAsync(downloadNodeFile.FullName, System.Text.Json.JsonSerializer.Serialize(download, System.Text.Json.JsonSerializerOptions.Default));
+                        downloadNodeFile.Refresh();
+                        await ExecuteDownloadsAsSubProcessesAsync(download, downloadNodeFile, blockSize, writers, readers, bufferCapacity, apiVersion);
+
+                        if (!OperatingSystem.IsWindows())
+                        {
+                            (nodeTask.StartTask.StartTaskScripts ?? [])
+                                .Where(script => script.SetExecute)
+                                .Select(script => new FileInfo(script.Path!))
+                                .Where(file => file.Exists)
+                                .ForEach(file => file.UnixFileMode |= UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
+                        }
+                    }
+
+                    foreach (var script in (nodeTask.StartTask.StartTaskScripts ?? []).Where(script => script.Run))
+                    {
+                        ProcessStartInfo startInfo = new(new FileInfo(script.Path!).FullName, [])
+                        {
+                            CreateNoWindow = true,
+                            ErrorDialog = false,
+                            UseShellExecute = false,
+                        };
+
+                        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Unable to start script.");
+
+                        await process.WaitForExitAsync();
+
+                        if (process.ExitCode != 0)
+                        {
+                            throw new CommandExecutionException(process.ExitCode, "Start task script failed.");
+                        }
+                    }
+
+                    await eventsPublisher.PublishTaskCompletionEventAsync(nodeTask, duration.Elapsed,
+                        EventsPublisher.SuccessStatus, errorMessage: string.Empty);
+                }
+                catch (Exception e)
+                {
+                    await eventsPublisher.PublishTaskCompletionEventAsync(nodeTask, duration.Elapsed,
+                        EventsPublisher.FailedStatus, errorMessage: e.Message);
+                    throw;
+                }
+            }
+            catch (Exception e)
+            {
+                try
+                {
+                    CommandLauncher.HandleFatalLauncherError(CommandFactory.ExecutorCommandName, e);
+                }
+                catch (CommandExecutionException commandExecutionException)
+                {
+                    Logger.LogError(commandExecutionException, "Failed to execute Node Task: {NodeTaskPath}", file?.FullName ?? fileUri?.AbsoluteUri ?? "<missing>");
+                    return commandExecutionException.ExitCode;
+                }
+
+                Logger.LogError(e, "Failed to execute Node Task: {NodeTaskPath}", file?.FullName ?? fileUri?.AbsoluteUri ?? "<missing>");
+
+                return (int)ProcessExitCode.UncategorizedError;
+            }
+
+            return (int)ProcessExitCode.Success;
+        }
+
+        /// <summary>
         /// Executor (exec) command. Executes the executor operation as defined in the node task definition file.
         /// </summary>
         /// <param name="fileUri">Node task definition uri</param>
@@ -213,6 +333,40 @@ namespace Tes.RunnerCLI.Commands
             var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri, apiVersion);
 
             return await ExecuteTransferTaskAsync(nodeTask, exec => exec.DownloadInputsAsync(options), apiVersion);
+        }
+
+        private static async Task ExecuteDownloadsAsSubProcessesAsync(Runner.Models.NodeTask nodeTask, FileInfo file, int blockSize, int writers, int readers, int bufferCapacity,
+            string apiVersion)
+        {
+            ArgumentNullException.ThrowIfNull(nodeTask);
+            ArgumentNullException.ThrowIfNull(file);
+
+            if (!file.Exists)
+            {
+                throw new ArgumentException($"Node task definition file '{file.FullName}' not found.", nameof(file));
+            }
+
+            var options =
+                BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity,
+                    apiVersion);
+
+            try
+            {
+                await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.DownloadCommandName, nodeTask, file, options);
+            }
+            finally
+            {
+                try
+                {
+                    await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
+                    await executor.AppendMetrics();
+                    await executor.UploadTaskOutputsAsync(options);
+                }
+                catch (Exception e)
+                {
+                    Logger.LogError(e, "Failed to perform transfer. Operation: {TransferOperation}", nameof(Executor.UploadTaskOutputsAsync));
+                }
+            }
         }
 
         private static async Task ExecuteAllOperationsAsSubProcessesAsync(Runner.Models.NodeTask nodeTask, FileInfo file, int blockSize, int writers, int readers, int bufferCapacity,

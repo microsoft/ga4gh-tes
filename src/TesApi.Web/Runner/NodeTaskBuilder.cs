@@ -12,16 +12,23 @@ namespace TesApi.Web.Runner
     /// <summary>
     /// Builder of NodeTask
     /// </summary>
-    public class NodeTaskBuilder
+    public partial class NodeTaskBuilder
     {
+        [GeneratedRegex(@"^/subscriptions/[^/]+/resourcegroups/[^/]+/providers/Microsoft.ManagedIdentity/userAssignedIdentities/[^/]+$", RegexOptions.IgnoreCase)]
+        private static partial Regex ManagedIdentityResourceIdPatternRegex();
+
         /// <summary>
         /// Name of the environment variable that contains the path to the task directory
         /// </summary>
         public const string BatchTaskDirEnvVarName = "AZ_BATCH_TASK_DIR";
 
-        internal const string BatchTaskDirEnvVar = $"${BatchTaskDirEnvVarName}";
+        /// <summary>
+        /// Name of the environment variable that contains the path to the start task directory
+        /// </summary>
+        public const string BatchStartTaskDirEnvVarName = "AZ_BATCH_NODE_STARTUP_DIR";
 
-        private const string ManagedIdentityResourceIdPattern = @"^/subscriptions/[^/]+/resourcegroups/[^/]+/providers/Microsoft.ManagedIdentity/userAssignedIdentities/[^/]+$";
+        internal const string BatchTaskDirEnvVar = $"${BatchTaskDirEnvVarName}";
+        private static Regex ManagedIdentityResourceIdPattern = ManagedIdentityResourceIdPatternRegex();
 
         private const string DefaultDockerImageTag = "latest";
         private readonly NodeTask nodeTask;
@@ -112,7 +119,7 @@ namespace TesApi.Web.Runner
         public NodeTaskBuilder WithInputUsingCombinedTransformationStrategy(string path, string sourceUrl)
         {
             ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
-            TransformationStrategy transformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions();
+            var transformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions();
 
             if (path.Contains('?'))
             {
@@ -127,7 +134,7 @@ namespace TesApi.Web.Runner
                 transformationStrategy = TransformationStrategy.None;
             }
 
-            nodeTask.Inputs ??= new List<FileInput>();
+            nodeTask.Inputs ??= [];
 
             nodeTask.Inputs.Add(
                 new FileInput()
@@ -154,8 +161,8 @@ namespace TesApi.Web.Runner
         public NodeTaskBuilder WithOutputUsingCombinedTransformationStrategy(string path, string targetUrl,
             FileType? fileType, bool taskOutputs = false)
         {
-            ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
-            ArgumentException.ThrowIfNullOrEmpty(targetUrl, nameof(targetUrl));
+            ArgumentException.ThrowIfNullOrEmpty(path);
+            ArgumentException.ThrowIfNullOrEmpty(targetUrl);
 
             var outputs = taskOutputs
                 ? nodeTask.TaskOutputs ??= []
@@ -167,6 +174,33 @@ namespace TesApi.Web.Runner
                 TargetUrl = targetUrl,
                 TransformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions(),
                 FileType = fileType ?? FileType.File
+            });
+
+            return this;
+        }
+
+        /// <summary>
+        /// Creates a start-task script for the NodeTask using a combined transformation strategy.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="sourceUrl"></param>
+        /// <param name="setExecute"></param>
+        /// <param name="run"></param>
+        /// <returns></returns>
+        public NodeTaskBuilder WithScriptUsingCombinedTransformationStrategy(string path, string sourceUrl, bool setExecute = true, bool run = true)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(path);
+            ArgumentException.ThrowIfNullOrEmpty(sourceUrl);
+
+            var scripts = (nodeTask.StartTask ??= new()).StartTaskScripts ??= [];
+
+            scripts.Add(new()
+            {
+                Path = path,
+                SourceUrl = sourceUrl,
+                TransformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions(),
+                SetExecute = setExecute,
+                Run = run,
             });
 
             return this;
@@ -415,7 +449,7 @@ namespace TesApi.Web.Runner
 
             //Ignore the case because constant segments could be lower case, pascal case or camel case.
             // e.g. /resourcegroup/ or /resourceGroup/
-            return Regex.IsMatch(resourceId, ManagedIdentityResourceIdPattern, RegexOptions.IgnoreCase);
+            return ManagedIdentityResourceIdPattern.IsMatch(resourceId);
         }
 
         /// <summary>
@@ -489,6 +523,16 @@ namespace TesApi.Web.Runner
             nodeTask.RuntimeOptions.SetContentMd5OnUpload = enable;
 
             return this;
+        }
+
+        /// <summary>
+        /// Set StartTask working directory
+        /// </summary>
+        /// <param name="workDir"></param>
+        public void WithWorkDir(string workDir)
+        {
+            nodeTask.StartTask ??= new();
+            nodeTask.StartTask.WorkDir = workDir;
         }
 
         private static string GetApiHostFromUrl(string drsHubUrl)
