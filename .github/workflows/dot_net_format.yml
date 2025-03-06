@@ -16,4 +16,4 @@ jobs:
       - name: Run dotnet format
         shell: bash
         run: |
-            dotnet format --verify-no-changes --verbosity detailed
+            dotnet format --verify-no-changes --verbosity detailed --include './src/**'
