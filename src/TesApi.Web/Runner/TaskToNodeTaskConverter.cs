@@ -646,7 +646,7 @@ namespace TesApi.Web.Runner
             scripts?.ForEach(script =>
             {
                 builder.WithScriptUsingCombinedTransformationStrategy(
-                    PrependParentDirectoryIfSet(script.FileName, pathParentDirectory), script.ScriptUrl.AbsoluteUri, script.SetExecute, script.Run);
+                    PrependParentDirectoryIfSet(script.FileName, pathParentDirectory), script.ScriptUrl.AbsoluteUri, script.Run, script.SetExecute);
             });
         }
 

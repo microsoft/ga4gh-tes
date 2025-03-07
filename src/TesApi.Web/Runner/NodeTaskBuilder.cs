@@ -184,10 +184,10 @@ namespace TesApi.Web.Runner
         /// </summary>
         /// <param name="path"></param>
         /// <param name="sourceUrl"></param>
-        /// <param name="setExecute"></param>
         /// <param name="run"></param>
+        /// <param name="setExecute"></param>
         /// <returns></returns>
-        public NodeTaskBuilder WithScriptUsingCombinedTransformationStrategy(string path, string sourceUrl, bool setExecute = true, bool run = true)
+        public NodeTaskBuilder WithScriptUsingCombinedTransformationStrategy(string path, string sourceUrl, bool run = false, bool setExecute = false)
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
             ArgumentException.ThrowIfNullOrEmpty(sourceUrl);
@@ -200,7 +200,7 @@ namespace TesApi.Web.Runner
                 Path = path,
                 SourceUrl = sourceUrl,
                 TransformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions(),
-                SetExecute = setExecute,
+                SetExecute = setExecute || run,
                 Run = run,
             });
 

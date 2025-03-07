@@ -146,6 +146,7 @@ namespace Tes.RunnerCLI.Commands
 
                 nodeTask.RuntimeOptions.StorageEventSink = PersonalizeStorageTargetLocation(nodeTask.RuntimeOptions.StorageEventSink);
                 nodeTask.RuntimeOptions.StreamingLogPublisher = PersonalizeStorageTargetLocation(nodeTask.RuntimeOptions.StreamingLogPublisher);
+                nodeTask.TaskOutputs?.ForEach(output => output.TargetUrl = ExpandEnvironmentVariablesInUriPath(output.TargetUrl));
 
                 await using var eventsPublisher = await EventsPublisher.CreateEventsPublisherAsync(nodeTask, apiVersion);
 
@@ -156,6 +157,8 @@ namespace Tes.RunnerCLI.Commands
                     var options =
                         BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity,
                             apiVersion);
+
+                    var runtimeOptions = nodeTask.RuntimeOptions;
 
                     try
                     {
@@ -172,10 +175,9 @@ namespace Tes.RunnerCLI.Commands
 
                             if (download.Inputs is not null)
                             {
-                                FileInfo downloadNodeFile = new(Path.Combine(Environment.CurrentDirectory, Path.GetFileName(Path.GetRandomFileName())));
-                                await File.WriteAllTextAsync(downloadNodeFile.FullName, System.Text.Json.JsonSerializer.Serialize(download, System.Text.Json.JsonSerializerOptions.Default));
-                                downloadNodeFile.Refresh();
-                                await ExecuteDownloadsAsSubProcessesAsync(download, downloadNodeFile, options);
+                                await File.WriteAllTextAsync(file.FullName, System.Text.Json.JsonSerializer.Serialize(download, System.Text.Json.JsonSerializerOptions.Default));
+                                file.Refresh();
+                                await ExecuteDownloadsAsSubProcessesAsync(download, file, options);
 
                                 if (!OperatingSystem.IsWindows())
                                 {
@@ -209,6 +211,8 @@ namespace Tes.RunnerCLI.Commands
                     }
                     finally
                     {
+                        nodeTask.RuntimeOptions = runtimeOptions;
+
                         try
                         {
                             await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
@@ -251,7 +255,24 @@ namespace Tes.RunnerCLI.Commands
         }
 
         static Runner.Models.StorageTargetLocation? PersonalizeStorageTargetLocation(Runner.Models.StorageTargetLocation? location)
-            => location is null ? default : new() { TransformationStrategy = location.TransformationStrategy, TargetUrl = Environment.ExpandEnvironmentVariables(location.TargetUrl) };
+            => location is null ? default : new() { TransformationStrategy = location.TransformationStrategy, TargetUrl = ExpandEnvironmentVariablesInUriPath(location.TargetUrl)! };
+
+        static string? ExpandEnvironmentVariablesInUriPath(string? uri)
+        {
+            if (uri is null)
+            {
+                return default;
+            }
+
+            UriBuilder builder = new(uri);
+
+            if (!string.IsNullOrEmpty(builder.Path))
+            {
+                builder.Path = Environment.ExpandEnvironmentVariables(System.Web.HttpUtility.UrlDecode(builder.Path));
+            }
+
+            return builder.Uri.AbsoluteUri;
+        }
 
         /// <summary>
         /// Executor (exec) command. Executes the executor operation as defined in the node task definition file.
@@ -384,6 +405,8 @@ namespace Tes.RunnerCLI.Commands
                 BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity,
                     apiVersion);
 
+            var runtimeOptions = nodeTask.RuntimeOptions;
+
             try
             {
                 await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.DownloadCommandName, nodeTask, file, options);
@@ -394,6 +417,8 @@ namespace Tes.RunnerCLI.Commands
             }
             finally
             {
+                nodeTask.RuntimeOptions = runtimeOptions;
+
                 try
                 {
                     await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
