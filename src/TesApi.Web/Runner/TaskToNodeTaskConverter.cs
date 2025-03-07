@@ -137,6 +137,7 @@ namespace TesApi.Web.Runner
                 }
 
                 builder.WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
+                    .WithContainerMountParentDirectory("%AZ_BATCH_NODE_STARTUP_DIR%")
                     .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken($"pools/{startTaskConversionOptions.PoolId}/nodes/%AZ_BATCH_NODE_ID%"))
                     .WithLogPublisher(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken($"pools/{startTaskConversionOptions.PoolId}/nodes/%AZ_BATCH_NODE_ID%"))
                     .WithResourceIdManagedIdentity(startTaskConversionOptions.GlobalManagedIdentity);
