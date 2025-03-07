@@ -166,6 +166,8 @@ namespace Tes.RunnerCLI.Commands
                         RuntimeOptions = nodeTask.RuntimeOptions,
                     };
 
+                    download.RuntimeOptions.MountParentDirectoryPath ??= "%AZ_BATCH_NODE_STARTUP_DIR%";
+
                     if (download.Inputs is not null)
                     {
                         FileInfo downloadNodeFile = new(Path.Combine(Environment.CurrentDirectory, Path.GetFileName(Path.GetRandomFileName())));
