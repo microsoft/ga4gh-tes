@@ -1360,7 +1360,7 @@ namespace TesApi.Web
 
             machineConfiguration.Extensions.AddRange(extensions);
 
-            var assets = await taskExecutionScriptingManager.PrepareBatchStartAsync(new(poolId, Scripts: scripts, GlobalManagedIdentity: globalManagedIdentity), cancellationToken);
+            var assets = await taskExecutionScriptingManager.PrepareBatchStartAsync(new(PoolId: poolId, Scripts: scripts, GlobalManagedIdentity: globalManagedIdentity), cancellationToken);
 
             BatchModels.BatchAccountPoolStartTask result = new()
             {

@@ -192,9 +192,10 @@ namespace TesApi.Web.Runner
             ArgumentException.ThrowIfNullOrEmpty(path);
             ArgumentException.ThrowIfNullOrEmpty(sourceUrl);
 
-            var scripts = (nodeTask.StartTask ??= new()).StartTaskScripts ??= [];
+            nodeTask.StartTask ??= new();
+            nodeTask.StartTask.StartTaskScripts ??= [];
 
-            scripts.Add(new()
+            nodeTask.StartTask.StartTaskScripts.Add(new()
             {
                 Path = path,
                 SourceUrl = sourceUrl,
