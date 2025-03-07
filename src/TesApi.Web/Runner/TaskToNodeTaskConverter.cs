@@ -243,10 +243,11 @@ namespace TesApi.Web.Runner
                     .WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
                     .WithResourceIdManagedIdentity(startTaskConversionOptions.GlobalManagedIdentity)
                     .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken($"pools/{startTaskConversionOptions.PoolId}/nodes/%AZ_BATCH_NODE_ID%"))
-                    .WithLogPublisher(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken($"pools/{startTaskConversionOptions.PoolId}/nodes/%AZ_BATCH_NODE_ID%"))
-                    .WithWorkDir(startTaskConversionOptions.WorkDir);
+                    .WithLogPublisher(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken($"pools/{startTaskConversionOptions.PoolId}/nodes/%AZ_BATCH_NODE_ID%"));
 
                 MapScripts(startTaskConversionOptions.Scripts, pathParentDirectory, builder);
+
+                AddTaskOutputs(null, builder);
 
                 return builder.Build();
             }
@@ -259,14 +260,29 @@ namespace TesApi.Web.Runner
 
         private void AddTaskOutputs(TesTask task, NodeTaskBuilder builder)
         {
-            foreach (var (path, url) in new List<string>(["stderr.txt", "stdout.txt", $"wd/{MetricsFileName}"])
-                .Select(file => (Path: $"/{file}", Url: storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, System.IO.Path.GetFileName(file)))))
+            if (task is null)
             {
-                builder.WithOutputUsingCombinedTransformationStrategy(
-                    PrependParentDirectoryIfSet(path, $"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%"),
-                    url.AbsoluteUri,
-                    fileType: FileType.File,
-                    taskOutputs: true);
+                foreach (var (path, url) in new List<string>(["stderr.txt", "stdout.txt"])
+                    .Select(file => (Path: $"/{file}", Url: storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken($"pools/%AZ_BATCH_POOL_ID%/nodes/%AZ_BATCH_NODE_ID%/{System.IO.Path.GetFileName(file)}"))))
+                {
+                    builder.WithOutputUsingCombinedTransformationStrategy(
+                        PrependParentDirectoryIfSet(path, $"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%"),
+                        url.AbsoluteUri,
+                        fileType: FileType.File,
+                        taskOutputs: true);
+                }
+            }
+            else
+            {
+                foreach (var (path, url) in new List<string>(["stderr.txt", "stdout.txt", $"wd/{MetricsFileName}"])
+                    .Select(file => (Path: $"/{file}", Url: storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, System.IO.Path.GetFileName(file)))))
+                {
+                    builder.WithOutputUsingCombinedTransformationStrategy(
+                        PrependParentDirectoryIfSet(path, $"%{NodeTaskBuilder.BatchTaskDirEnvVarName}%"),
+                        url.AbsoluteUri,
+                        fileType: FileType.File,
+                        taskOutputs: true);
+                }
             }
         }
 
@@ -742,7 +758,6 @@ namespace TesApi.Web.Runner
     /// </summary>
     /// <param name="PoolId"></param>
     /// <param name="Scripts"></param>
-    /// <param name="WorkDir"></param>
     /// <param name="GlobalManagedIdentity"></param>
-    public record StartTaskConversionOptions(string PoolId, IList<BatchStartTaskScript> Scripts = default, string WorkDir = default, string GlobalManagedIdentity = default);
+    public record StartTaskConversionOptions(string PoolId, IList<BatchStartTaskScript> Scripts = default, string GlobalManagedIdentity = default);
 }

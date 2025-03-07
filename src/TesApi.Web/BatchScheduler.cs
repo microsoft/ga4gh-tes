@@ -448,7 +448,7 @@ namespace TesApi.Web
 
             if (setExecutable)
             {
-                command += $" && chmod +x {localFilePathDownloadLocation}";
+                command += $" && chmod ug+x {localFilePathDownloadLocation}";
             }
 
             return command;
@@ -1360,7 +1360,7 @@ namespace TesApi.Web
 
             machineConfiguration.Extensions.AddRange(extensions);
 
-            var assets = await taskExecutionScriptingManager.PrepareBatchStartAsync(new(poolId, scripts, NodeTaskBuilder.BatchStartTaskDirEnvVarName, globalManagedIdentity), cancellationToken);
+            var assets = await taskExecutionScriptingManager.PrepareBatchStartAsync(new(poolId, Scripts: scripts, GlobalManagedIdentity: globalManagedIdentity), cancellationToken);
 
             BatchModels.BatchAccountPoolStartTask result = new()
             {
@@ -1395,6 +1395,7 @@ namespace TesApi.Web
                 return content;
             }
         }
+
         private async ValueTask<string> ParseBatchStartCommand(BatchScriptAssetsInfo assets, CancellationToken cancellationToken)
         {
             return taskExecutionScriptingManager.ParseBatchStartCommand(assets, DownloadViaWget(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, BlobSasPermissions.Read, cancellationToken), $"{BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true));
@@ -1402,8 +1403,9 @@ namespace TesApi.Web
             static string DownloadViaWget(Uri url, string localFilePathDownloadLocation, bool execute = false, bool setExecutable = false)
             {
                 var content = CreateWgetDownloadCommand(url, localFilePathDownloadLocation, setExecutable: execute || setExecutable);
+
                 return execute
-                    ? $"{content} && {localFilePathDownloadLocation}"
+                    ? $"{content} && ./{localFilePathDownloadLocation}"
                     : content;
             }
         }
@@ -1412,12 +1414,26 @@ namespace TesApi.Web
         public async ValueTask PatchBatchPoolStartTaskCommandline(string poolId, Uri startTaskNodeFile, CancellationToken cancellationToken)
         {
             BatchScriptAssetsInfo assets = new(startTaskNodeFile, taskExecutionScriptingManager.GetStartTaskEnvironment(poolId, globalManagedIdentity));
+
             await azureProxy.PatchBatchPoolStartTaskCommandline(
-                poolId,
-                await ParseBatchStartCommand(assets, cancellationToken),
-                cancellationToken,
-                debugDelay: debugDelay,
-                environment: assets.Environment);
+                poolId: poolId,
+                command: await ParseBatchStartCommand(assets, cancellationToken),
+                userIdentity: new()
+                {
+                    AutoUser = new()
+                    {
+                        ElevationLevel = Microsoft.Azure.Batch.Protocol.Models.ElevationLevel.Admin,
+                        Scope = Microsoft.Azure.Batch.Protocol.Models.AutoUserScope.Pool
+                    }
+                },
+                cancellationToken: cancellationToken,
+                environment:
+                [
+                    .. assets.Environment.Select(pair => new Microsoft.Azure.Batch.Protocol.Models.EnvironmentSetting(pair.Key, pair.Value)),
+                    .. Enumerable.Repeat<Microsoft.Azure.Batch.Protocol.Models.EnvironmentSetting>(new("DEBUG_DELAY", debugDelay?.ToString("c")), debugDelay is null ? 0 : 1)
+                ],
+                maxTaskRetryCount: 4,
+                waitForSuccess: true);
         }
 
         /// <summary>

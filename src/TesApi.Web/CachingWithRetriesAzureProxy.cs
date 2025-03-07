@@ -97,7 +97,7 @@ namespace TesApi.Web
         Task<CloudPool> IAzureProxy.GetBatchPoolAsync(string poolId, CancellationToken cancellationToken, DetailLevel detailLevel) => cachingAsyncRetry.ExecuteWithRetryAsync(ct => azureProxy.GetBatchPoolAsync(poolId, ct, detailLevel), cancellationToken);
 
         /// <inheritdoc/>
-        Task IAzureProxy.PatchBatchPoolStartTaskCommandline(string poolId, string command, CancellationToken cancellationToken, TimeSpan? debugDelay, IReadOnlyDictionary<string, string> environment) => cachingAsyncRetry.ExecuteWithRetryAsync(ct => azureProxy.PatchBatchPoolStartTaskCommandline(poolId, command, ct, debugDelay, environment), cancellationToken);
+        Task IAzureProxy.PatchBatchPoolStartTaskCommandline(string poolId, string command, Microsoft.Azure.Batch.Protocol.Models.UserIdentity userIdentity, CancellationToken cancellationToken, IEnumerable<Microsoft.Azure.Batch.Protocol.Models.EnvironmentSetting> environment, int? maxTaskRetryCount, bool? waitForSuccess) => cachingAsyncRetry.ExecuteWithRetryAsync(ct => azureProxy.PatchBatchPoolStartTaskCommandline(poolId, command, userIdentity, ct, environment, maxTaskRetryCount, waitForSuccess), cancellationToken);
 
         /// <inheritdoc/>
         Task<CloudJob> IAzureProxy.GetBatchJobAsync(string jobId, CancellationToken cancellationToken, DetailLevel detailLevel) => cachingAsyncRetry.ExecuteWithRetryAsync(ct => azureProxy.GetBatchJobAsync(jobId, ct, detailLevel), cancellationToken);

@@ -155,11 +155,6 @@ namespace Tes.RunnerCLI.Commands
                 {
                     await eventsPublisher.PublishTaskCommencementEventAsync(nodeTask);
 
-                    if (!string.IsNullOrWhiteSpace(nodeTask.StartTask.WorkDir))
-                    {
-                        Environment.CurrentDirectory = Environment.ExpandEnvironmentVariables(nodeTask.StartTask.WorkDir);
-                    }
-
                     Runner.Models.NodeTask download = new()
                     {
                         Id = nodeTask.Id,
@@ -182,7 +177,7 @@ namespace Tes.RunnerCLI.Commands
                                 .Where(script => script.SetExecute)
                                 .Select(script => new FileInfo(script.Path!))
                                 .Where(file => file.Exists)
-                                .ForEach(file => file.UnixFileMode |= UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
+                                .ForEach(file => file.UnixFileMode |= UnixFileMode.UserExecute | UnixFileMode.GroupExecute);
                         }
                     }
 
@@ -365,7 +360,6 @@ namespace Tes.RunnerCLI.Commands
                 try
                 {
                     await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
-                    await executor.AppendMetrics();
                     await executor.UploadTaskOutputsAsync(options);
                 }
                 catch (Exception e)

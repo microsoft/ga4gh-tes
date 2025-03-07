@@ -146,7 +146,7 @@ namespace TesApi.Web
         /// <param name="prefix"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        IAsyncEnumerable<Azure.Storage.Blobs.Models.BlobItem> ListBlobsWithTagsAsync(Uri containerUri, string prefix, CancellationToken cancellationToken);
+        IAsyncEnumerable<BlobModels.BlobItem> ListBlobsWithTagsAsync(Uri containerUri, string prefix, CancellationToken cancellationToken);
 
         /// <summary>
         /// Sets tags on the underlying blob.
@@ -177,11 +177,13 @@ namespace TesApi.Web
         /// Patches the specified pool's start task command line.
         /// </summary>
         /// <param name="poolId">The <see cref="CloudPool.Id"/> of the pool to patch.</param>
-        /// <param name="command">The command-line for the start task.</param>
+        /// <param name="command">Sets the command line of the start task.</param>
+        /// <param name="userIdentity">Sets the user identity under which the task runs.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="debugDelay">The amount of time for the runner to pause after a task failure. <c>null</c> for not setting the feature.</param>
-        /// <param name="environment">The environment variables for the start task.</param>
-        Task PatchBatchPoolStartTaskCommandline(string poolId, string command, CancellationToken cancellationToken, TimeSpan? debugDelay = default, IReadOnlyDictionary<string, string> environment = default);
+        /// <param name="environment">Sets the environment variable settings for the start task.</param>
+        /// <param name="maxTaskRetryCount">Sets the maximum number of times the task may be retried.</param>
+        /// <param name="waitForSuccess">Sets whether Batch should wait for the start task to complete successfully before scheduling tasks on the compute node.</param>
+        Task PatchBatchPoolStartTaskCommandline(string poolId, string command, Microsoft.Azure.Batch.Protocol.Models.UserIdentity userIdentity, CancellationToken cancellationToken, IEnumerable<Microsoft.Azure.Batch.Protocol.Models.EnvironmentSetting> environment = default, int? maxTaskRetryCount = default, bool? waitForSuccess = default);
 
         /// <summary>
         /// Retrieves the specified batch job.

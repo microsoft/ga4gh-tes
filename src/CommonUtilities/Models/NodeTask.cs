@@ -101,7 +101,6 @@ namespace Tes.Runner.Models
 
     public class StartTask
     {
-        public string? WorkDir { get; set; }
         public List<StartTaskScript>? StartTaskScripts { get; set; }
     }
 

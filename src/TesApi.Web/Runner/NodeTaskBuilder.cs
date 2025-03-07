@@ -28,7 +28,7 @@ namespace TesApi.Web.Runner
         public const string BatchStartTaskDirEnvVarName = "AZ_BATCH_NODE_STARTUP_DIR";
 
         internal const string BatchTaskDirEnvVar = $"${BatchTaskDirEnvVarName}";
-        private static Regex ManagedIdentityResourceIdPattern = ManagedIdentityResourceIdPatternRegex();
+        private static readonly Regex ManagedIdentityResourceIdPattern = ManagedIdentityResourceIdPatternRegex();
 
         private const string DefaultDockerImageTag = "latest";
         private readonly NodeTask nodeTask;
@@ -523,16 +523,6 @@ namespace TesApi.Web.Runner
             nodeTask.RuntimeOptions.SetContentMd5OnUpload = enable;
 
             return this;
-        }
-
-        /// <summary>
-        /// Set StartTask working directory
-        /// </summary>
-        /// <param name="workDir"></param>
-        public void WithWorkDir(string workDir)
-        {
-            nodeTask.StartTask ??= new();
-            nodeTask.StartTask.WorkDir = workDir;
         }
 
         private static string GetApiHostFromUrl(string drsHubUrl)
