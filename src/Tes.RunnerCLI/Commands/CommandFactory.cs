@@ -139,7 +139,7 @@ namespace Tes.RunnerCLI.Commands
             rootCommand.Add(cmd);
 
             cmd.AddValidator(r => ValidateGlobalOptions(r, cmd));
-            ExecOptions.ForEach(cmd.AddOption);
+            TransferOptions.ForEach(cmd.AddOption);
 
             cmd.SetHandler(CommandHandlers.ExecuteStartTaskCommandAsync,
                 GetOptionByName<Uri>(cmd, BlobPipelineOptionsConverter.UrlOption),
