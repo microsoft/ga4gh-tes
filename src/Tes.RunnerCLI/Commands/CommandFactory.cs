@@ -17,6 +17,7 @@ namespace Tes.RunnerCLI.Commands
         internal const string UploadCommandName = "upload";
         internal const string DownloadCommandName = "download";
         internal const string ExecutorCommandName = "exec";
+        internal const string StartTaskCommandName = "start-task";
         internal const string DockerUriOption = "docker-url";
 
         private static readonly IReadOnlyCollection<Option> GlobalOptions = new List<Option>()
@@ -121,6 +122,26 @@ namespace Tes.RunnerCLI.Commands
             TransferOptions.ForEach(cmd.AddOption);
 
             cmd.SetHandler(CommandHandlers.ExecuteDownloadCommandAsync,
+                GetOptionByName<Uri>(cmd, BlobPipelineOptionsConverter.UrlOption),
+                GetOptionByName<FileInfo>(cmd, BlobPipelineOptionsConverter.FileOption),
+                GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.BlockSizeOption),
+                GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.WritersOption),
+                GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.ReadersOption),
+                GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.BufferCapacityOption),
+                GetOptionByName<string>(cmd, BlobPipelineOptionsConverter.ApiVersionOption));
+
+            return cmd;
+        }
+
+        internal static Command CreateStartTaskCommand(RootCommand rootCommand)
+        {
+            var cmd = new Command(StartTaskCommandName, "");
+            rootCommand.Add(cmd);
+
+            cmd.AddValidator(r => ValidateGlobalOptions(r, cmd));
+            TransferOptions.ForEach(cmd.AddOption);
+
+            cmd.SetHandler(CommandHandlers.ExecuteStartTaskCommandAsync,
                 GetOptionByName<Uri>(cmd, BlobPipelineOptionsConverter.UrlOption),
                 GetOptionByName<FileInfo>(cmd, BlobPipelineOptionsConverter.FileOption),
                 GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.BlockSizeOption),

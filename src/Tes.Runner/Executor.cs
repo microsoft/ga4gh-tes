@@ -220,7 +220,7 @@ namespace Tes.Runner
 
         private async Task<List<UploadInfo>?> CreateUploadTaskOutputsAsync()
         {
-            if ((tesNodeTask.Outputs ?? []).Count == 0)
+            if ((tesNodeTask.TaskOutputs ?? []).Count == 0)
             {
                 logger.LogDebug("No outputs provided");
                 {

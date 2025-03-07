@@ -40,6 +40,7 @@ namespace TesApi.Web
 
         private static readonly TimeSpan StateTransitionTimeForDeletionTimeSpan = 0.75 * Web.BatchScheduler.BatchDeleteNewTaskWorkaroundTimeSpan;
         private static readonly TimeSpan CompletedTaskListTimeSpan = 0.5 * Web.BatchScheduler.BatchDeleteNewTaskWorkaroundTimeSpan;
+        private static readonly TimeSpan PatchSasTokensTimeSpan = TimeSpan.FromMinutes(30);
 
         /// <summary>
         /// Predicate to obtain <see cref="CloudTask"/>s (recently) running on <see cref="ComputeNode"/>s. Used to connect tasks and nodes together.
@@ -65,16 +66,26 @@ namespace TesApi.Web
         /// <inheritdoc />
         protected override async ValueTask ExecuteCoreAsync(CancellationToken cancellationToken)
         {
-            await ExecuteActionOnIntervalAsync(
-                RunInterval,
-                async token => await ExecuteActionOnPoolsAsync(
-                    async (pool, token) =>
-                    {
-                        await pool.ServicePoolAsync(token);
-                        await ProcessTasksAsync(pool, DateTime.UtcNow, pool.ListCloudTasksAsync(), token);
-                    },
-                    token),
-                cancellationToken);
+            Func<CancellationToken, ValueTask> UpdateStartTasks = new(token => ExecuteActionOnPoolsAsync((pool, token) => (pool as BatchPool)?.ServicePoolAsync(BatchPool.ServiceKind.RefreshStartTask, token) ?? ValueTask.CompletedTask, token));
+
+            // Ensure start tasks are good when the service restarts.
+            await UpdateStartTasks(cancellationToken);
+
+            await Task.WhenAll(
+                ExecuteActionOnIntervalAsync(
+                    RunInterval,
+                    async token => await ExecuteActionOnPoolsAsync(
+                        async (pool, token) =>
+                        {
+                            await pool.ServicePoolAsync(token);
+                            await ProcessTasksAsync(pool, DateTime.UtcNow, pool.ListCloudTasksAsync(), token);
+                        },
+                        token),
+                    cancellationToken),
+                ExecuteActionOnIntervalAsync(
+                    PatchSasTokensTimeSpan,
+                    UpdateStartTasks,
+                    cancellationToken));
         }
 
         /// <summary>

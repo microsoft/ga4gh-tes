@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Storage.Blobs;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Tes.Models;
@@ -75,7 +76,7 @@ namespace TesApi.Web.Runner
                         taskToNodeConverter.ToNodeTaskResolverOptions(tesTask, nodeTaskConversionOptions),
                         DefaultSerializerSettings))];
 
-                return new BatchScriptAssetsInfo(nodeTaskUrl, environment.ToDictionary().AsReadOnly());
+                return new(nodeTaskUrl, environment.ToDictionary().AsReadOnly());
             }
             catch (Exception e)
             {
@@ -83,6 +84,44 @@ namespace TesApi.Web.Runner
                     "Failed to perform the preparation steps for the execution of the task on the Batch node");
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Prepares the runtime scripting assets required for the execution of a start task in a Batch node using the TES runner.
+        /// </summary>
+        /// <param name="startTaskConversionOptions"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task<BatchScriptAssetsInfo> PrepareBatchStartAsync(StartTaskConversionOptions startTaskConversionOptions, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var nodeTaskUrl = await CreateAndUploadNodeTaskAsync(startTaskConversionOptions, cancellationToken);
+
+                return new(nodeTaskUrl, GetStartTaskEnvironment(startTaskConversionOptions.PoolId, startTaskConversionOptions.GlobalManagedIdentity));
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e,
+                    "Failed to perform the preparation steps for the execution of the start task on the Batch node");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Prepares the environment variables for start tasks.
+        /// </summary>
+        /// <param name="poolId">Pool ID.</param>
+        /// <param name="globalManagedIdentity">Server's primary identity. Used to access the storage account with the TesInternals container.</param>
+        /// <returns></returns>
+        public IReadOnlyDictionary<string, string> GetStartTaskEnvironment(string poolId, string globalManagedIdentity = default)
+        {
+            List<KeyValuePair<string, string>> environment =
+                [new(nameof(NodeTaskResolverOptions), JsonConvert.SerializeObject(
+                        taskToNodeConverter.ToNodeTaskResolverOptions(new(poolId, GlobalManagedIdentity: globalManagedIdentity)),
+                        DefaultSerializerSettings))];
+
+            return environment.ToDictionary().AsReadOnly();
         }
 
         private async Task TryUploadServerTesTask(TesTask tesTask, string blobName, CancellationToken cancellationToken)
@@ -110,9 +149,24 @@ namespace TesApi.Web.Runner
         /// <returns></returns>
         public string ParseBatchRunCommand(BatchScriptAssetsInfo batchScriptAssets)
         {
-            var batchRunCommand = $"/usr/bin/env -S \"{BatchScheduler.BatchNodeSharedEnvVar}/{BatchScheduler.NodeTaskRunnerFilename} -i '{(new Azure.Storage.Blobs.BlobUriBuilder(batchScriptAssets.NodeTaskUrl) { Sas = null }).ToUri().AbsoluteUri}'\"";
+            var batchRunCommand = $"/usr/bin/env -S \"{BatchScheduler.BatchNodeSharedEnvVar}/{BatchScheduler.NodeTaskRunnerFilename} -i '{batchScriptAssets.NodeTaskUrl.AbsoluteUri}'\"";
 
             logger.LogDebug("Run command: {RunCommand}", batchRunCommand);
+
+            return batchRunCommand;
+        }
+
+        /// <summary>
+        /// Creates the run command the Batch node must run to execute the compute node's start task
+        /// </summary>
+        /// <param name="batchScriptAssets"></param>
+        /// <param name="downloadRunnerCmd"></param>
+        /// <returns></returns>
+        public string ParseBatchStartCommand(BatchScriptAssetsInfo batchScriptAssets, string downloadRunnerCmd)
+        {
+            var batchRunCommand = $"/bin/sh -c \"mkdir -p {BatchScheduler.BatchNodeSharedEnvVar} && {downloadRunnerCmd} && {BatchScheduler.BatchNodeSharedEnvVar}/{BatchScheduler.NodeTaskRunnerFilename} start-task -i '{batchScriptAssets.NodeTaskUrl.AbsoluteUri}'\"";
+
+            logger.LogDebug("Start-task command: {RunCommand}", batchRunCommand);
 
             return batchRunCommand;
         }
@@ -129,7 +183,22 @@ namespace TesApi.Web.Runner
 
             logger.LogDebug("Successfully created and uploaded node task definition file for Task ID: {TesTask}", tesTask.Id);
 
-            return nodeTaskUrl;
+            return new BlobUriBuilder(nodeTaskUrl) { Sas = default }.ToUri();
+        }
+
+        private async Task<Uri> CreateAndUploadNodeTaskAsync(StartTaskConversionOptions startTaskConversionOptions, CancellationToken cancellationToken)
+        {
+            logger.LogDebug("Creating and uploading node task definition file for Batch Pool ID: {BatchPool}", startTaskConversionOptions.PoolId);
+
+            var nodeTask = taskToNodeConverter.ToNodeTask(startTaskConversionOptions, cancellationToken);
+
+            var nodeTaskContent = JsonConvert.SerializeObject(nodeTask, DefaultSerializerSettings);
+
+            var nodeTaskUrl = await UploadContentAsBlobToInternalTesLocationAsync(startTaskConversionOptions.PoolId, nodeTaskContent, NodeTaskFilename, cancellationToken);
+
+            logger.LogDebug("Successfully created and uploaded node task definition file for Batch Pool ID: {BatchPool}", startTaskConversionOptions.PoolId);
+
+            return new BlobUriBuilder(nodeTaskUrl) { Sas = default }.ToUri();
         }
 
         private async Task<Uri> UploadContentAsBlobToInternalTesLocationAsync(TesTask tesTask,
@@ -141,6 +210,16 @@ namespace TesApi.Web.Runner
             await storageAccessProvider.UploadBlobAsync(blobUrl, content, cancellationToken);
             return blobUrl;
         }
+
+        private async Task<Uri> UploadContentAsBlobToInternalTesLocationAsync(string pool,
+            string content, string fileName, CancellationToken cancellationToken)
+        {
+            var blobUrl =
+                await storageAccessProvider.GetInternalTesBlobUrlAsync($"pools/{pool}/{fileName}", storageAccessProvider.BlobPermissionsWithWrite, cancellationToken);
+
+            await storageAccessProvider.UploadBlobAsync(blobUrl, content, cancellationToken);
+            return blobUrl;
+        }
     }
 
     /// <summary>
@@ -148,5 +227,14 @@ namespace TesApi.Web.Runner
     /// </summary>
     /// <param name="NodeTaskUrl"></param>
     /// <param name="Environment"></param>
-    public record BatchScriptAssetsInfo(Uri NodeTaskUrl, IReadOnlyDictionary<string, string> Environment);
+    public record BatchScriptAssetsInfo(Uri NodeTaskUrl, IReadOnlyDictionary<string, string> Environment = default);
+
+    /// <summary>
+    /// Start-task file.
+    /// </summary>
+    /// <param name="ScriptUrl"></param>
+    /// <param name="FileName"></param>
+    /// <param name="SetExecute"></param>
+    /// <param name="Run"></param>
+    public record BatchStartTaskScript(Uri ScriptUrl, string FileName, bool SetExecute, bool Run);
 }
