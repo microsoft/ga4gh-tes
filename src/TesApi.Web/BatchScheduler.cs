@@ -1395,9 +1395,7 @@ namespace TesApi.Web
                 return content;
             }
         }
-
-        /// <inheritdoc/>
-        public async ValueTask<string> ParseBatchStartCommand(BatchScriptAssetsInfo assets, CancellationToken cancellationToken)
+        private async ValueTask<string> ParseBatchStartCommand(BatchScriptAssetsInfo assets, CancellationToken cancellationToken)
         {
             return taskExecutionScriptingManager.ParseBatchStartCommand(assets, DownloadViaWget(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, BlobSasPermissions.Read, cancellationToken), $"{BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true));
 
@@ -1408,6 +1406,18 @@ namespace TesApi.Web
                     ? $"{content} && {localFilePathDownloadLocation}"
                     : content;
             }
+        }
+
+        /// <inheritdoc/>
+        public async ValueTask PatchBatchPoolStartTaskCommandline(string poolId, Uri startTaskNodeFile, CancellationToken cancellationToken)
+        {
+            BatchScriptAssetsInfo assets = new(startTaskNodeFile, taskExecutionScriptingManager.GetStartTaskEnvironment(poolId, globalManagedIdentity));
+            await azureProxy.PatchBatchPoolStartTaskCommandline(
+                poolId,
+                await ParseBatchStartCommand(assets, cancellationToken),
+                cancellationToken,
+                debugDelay: debugDelay,
+                environment: assets.Environment);
         }
 
         /// <summary>

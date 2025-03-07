@@ -130,12 +130,13 @@ namespace TesApi.Web
         IAsyncEnumerable<Task> PerformLongBackgroundTasksAsync(CancellationToken cancellationToken);
 
         /// <summary>
-        /// Generates refreshed start task command-line.
+        /// Generates refreshed start task.
         /// </summary>
-        /// <param name="assets"></param>
+        /// <param name="poolId"></param>
+        /// <param name="startTaskNodeFile"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        ValueTask<string> ParseBatchStartCommand(BatchScriptAssetsInfo assets, CancellationToken cancellationToken);
+        ValueTask PatchBatchPoolStartTaskCommandline(string poolId, Uri startTaskNodeFile, CancellationToken cancellationToken);
 
         /// <summary>
         /// Identifies an azure cloud task.

@@ -440,7 +440,8 @@ namespace TesApi.Web
 
         private async ValueTask ServicePoolRefreshStartTaskAsync(CancellationToken token)
         {
-            await _azureProxy.PatchBatchPoolStartTaskCommandline(PoolId, await _batchPools.ParseBatchStartCommand(new(_startTaskNode), token), token);
+            _logger.LogTrace("Refreshing the start task for pool {Pool}", PoolId);
+            await _batchPools.PatchBatchPoolStartTaskCommandline(PoolId, _startTaskNode, token);
         }
     }
 

@@ -177,9 +177,11 @@ namespace TesApi.Web
         /// Patches the specified pool's start task command line.
         /// </summary>
         /// <param name="poolId">The <see cref="CloudPool.Id"/> of the pool to patch.</param>
-        /// <param name="command">The new command line.</param>
+        /// <param name="command">The command-line for the start task.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        Task PatchBatchPoolStartTaskCommandline(string poolId, string command, CancellationToken cancellationToken);
+        /// <param name="debugDelay">The amount of time for the runner to pause after a task failure. <c>null</c> for not setting the feature.</param>
+        /// <param name="environment">The environment variables for the start task.</param>
+        Task PatchBatchPoolStartTaskCommandline(string poolId, string command, CancellationToken cancellationToken, TimeSpan? debugDelay = default, IReadOnlyDictionary<string, string> environment = default);
 
         /// <summary>
         /// Retrieves the specified batch job.

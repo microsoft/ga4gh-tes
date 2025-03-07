@@ -271,13 +271,18 @@ namespace TesApi.Web
             => batchClient.PoolOperations.GetPoolAsync(poolId, detailLevel: detailLevel, cancellationToken: cancellationToken);
 
         /// <inheritdoc/>
-        public async Task PatchBatchPoolStartTaskCommandline(string poolId, string command, CancellationToken cancellationToken)
+        public async Task PatchBatchPoolStartTaskCommandline(string poolId, string command, CancellationToken cancellationToken, TimeSpan? debugDelay, IReadOnlyDictionary<string, string> environment)
         {
             await batchServiceClient.Pool.PatchWithHttpMessagesAsync(poolId, new()
             {
                 StartTask = new()
                 {
                     CommandLine = command,
+                    EnvironmentSettings =
+                    [
+                        .. (environment ?? new Dictionary<string, string>()).Select(pair => new BatchProtocol.Models.EnvironmentSetting(pair.Key) { Value = pair.Value }),
+                        .. Enumerable.Repeat<BatchProtocol.Models.EnvironmentSetting>(new("DEBUG_DELAY") { Value = debugDelay?.ToString("c") }, debugDelay is null ? 0 : 1)
+                    ],
                     UserIdentity = new()
                     {
                         AutoUser = new()
