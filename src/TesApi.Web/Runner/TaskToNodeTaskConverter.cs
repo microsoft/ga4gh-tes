@@ -137,7 +137,7 @@ namespace TesApi.Web.Runner
                 }
 
                 builder.WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
-                    .WithContainerMountParentDirectory("%AZ_BATCH_NODE_STARTUP_DIR%")
+                    .WithContainerMountParentDirectory(containerMountParentDirectory)
                     .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken($"pools/{startTaskConversionOptions.PoolId}/nodes/%AZ_BATCH_NODE_ID%"))
                     .WithLogPublisher(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken($"pools/{startTaskConversionOptions.PoolId}/nodes/%AZ_BATCH_NODE_ID%"))
                     .WithResourceIdManagedIdentity(startTaskConversionOptions.GlobalManagedIdentity);
@@ -242,6 +242,7 @@ namespace TesApi.Web.Runner
                 builder
                     .WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
                     .WithResourceIdManagedIdentity(startTaskConversionOptions.GlobalManagedIdentity)
+                    .WithContainerMountParentDirectory(containerMountParentDirectory)
                     .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken($"pools/{startTaskConversionOptions.PoolId}/nodes/%AZ_BATCH_NODE_ID%"))
                     .WithLogPublisher(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken($"pools/{startTaskConversionOptions.PoolId}/nodes/%AZ_BATCH_NODE_ID%"));
 
@@ -260,7 +261,7 @@ namespace TesApi.Web.Runner
 
         private void AddTaskOutputs(TesTask task, NodeTaskBuilder builder)
         {
-            if (task is null)
+            if (task is null) // StartTask
             {
                 foreach (var (path, url) in new List<string>(["stderr.txt", "stdout.txt"])
                     .Select(file => (Path: $"/{file}", Url: storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken($"pools/%AZ_BATCH_POOL_ID%/nodes/%AZ_BATCH_NODE_ID%/{System.IO.Path.GetFileName(file)}"))))
@@ -272,7 +273,7 @@ namespace TesApi.Web.Runner
                         taskOutputs: true);
                 }
             }
-            else
+            else // TesTask
             {
                 foreach (var (path, url) in new List<string>(["stderr.txt", "stdout.txt", $"wd/{MetricsFileName}"])
                     .Select(file => (Path: $"/{file}", Url: storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, System.IO.Path.GetFileName(file)))))

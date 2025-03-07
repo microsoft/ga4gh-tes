@@ -158,8 +158,6 @@ namespace Tes.RunnerCLI.Commands
                         BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity,
                             apiVersion);
 
-                    var runtimeOptions = nodeTask.RuntimeOptions;
-
                     try
                     {
                         if (nodeTask.StartTask?.StartTaskScripts is not null)
@@ -211,8 +209,6 @@ namespace Tes.RunnerCLI.Commands
                     }
                     finally
                     {
-                        nodeTask.RuntimeOptions = runtimeOptions;
-
                         try
                         {
                             await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
@@ -405,8 +401,6 @@ namespace Tes.RunnerCLI.Commands
                 BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity,
                     apiVersion);
 
-            var runtimeOptions = nodeTask.RuntimeOptions;
-
             try
             {
                 await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.DownloadCommandName, nodeTask, file, options);
@@ -417,8 +411,6 @@ namespace Tes.RunnerCLI.Commands
             }
             finally
             {
-                nodeTask.RuntimeOptions = runtimeOptions;
-
                 try
                 {
                     await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
