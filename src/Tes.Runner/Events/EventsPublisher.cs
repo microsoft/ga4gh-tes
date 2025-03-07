@@ -78,7 +78,7 @@ public class EventsPublisher : IAsyncDisposable
 
         var transformedUrl = await transformationStrategy.TransformUrlWithStrategyAsync(
             nodeTask.RuntimeOptions.StorageEventSink.TargetUrl,
-             BlobSasPermissions.Write | BlobSasPermissions.Create | BlobSasPermissions.Tag);
+            BlobSasPermissions.Write | BlobSasPermissions.Create | BlobSasPermissions.Tag);
 
         var sink = new BlobStorageEventSink(transformedUrl);
 

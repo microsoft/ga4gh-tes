@@ -246,7 +246,7 @@ namespace TesApi.Web.Runner
                     .WithLogPublisher(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken($"pools/{startTaskConversionOptions.PoolId}/nodes/%AZ_BATCH_NODE_ID%"))
                     .WithWorkDir(startTaskConversionOptions.WorkDir);
 
-                MapScripts(startTaskConversionOptions.Scripts, $"%{NodeTaskBuilder.BatchStartTaskDirEnvVarName}%", builder);
+                MapScripts(startTaskConversionOptions.Scripts, pathParentDirectory, builder);
 
                 return builder.Build();
             }

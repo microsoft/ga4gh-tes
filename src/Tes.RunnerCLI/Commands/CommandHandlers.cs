@@ -146,6 +146,9 @@ namespace Tes.RunnerCLI.Commands
 
                 nodeTask.Id = Environment.GetEnvironmentVariable("AZ_BATCH_NODE_ID") ?? new Guid().ToString();
 
+                nodeTask.RuntimeOptions.StorageEventSink = PersonalizeStorageTargetLocation(nodeTask.RuntimeOptions.StorageEventSink);
+                nodeTask.RuntimeOptions.StreamingLogPublisher = PersonalizeStorageTargetLocation(nodeTask.RuntimeOptions.StreamingLogPublisher);
+
                 await using var eventsPublisher = await EventsPublisher.CreateEventsPublisherAsync(nodeTask, apiVersion);
 
                 try
@@ -231,6 +234,9 @@ namespace Tes.RunnerCLI.Commands
 
             return (int)ProcessExitCode.Success;
         }
+
+        static Runner.Models.StorageTargetLocation? PersonalizeStorageTargetLocation(Runner.Models.StorageTargetLocation? location)
+            => location is null ? default : new() { TransformationStrategy = location.TransformationStrategy, TargetUrl = Environment.ExpandEnvironmentVariables(location.TargetUrl) };
 
         /// <summary>
         /// Executor (exec) command. Executes the executor operation as defined in the node task definition file.

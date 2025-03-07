@@ -82,7 +82,7 @@ namespace Tes.Runner.Storage
 
             var strategy = CreateStrategy(location.TransformationStrategy, runtimeOptions, apiVersion);
 
-            return await strategy.TransformUrlWithStrategyAsync(Environment.ExpandEnvironmentVariables(location.TargetUrl), permissions);
+            return await strategy.TransformUrlWithStrategyAsync(location.TargetUrl, permissions);
         }
     }
 }
