@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using Tes.Models;
@@ -32,31 +31,6 @@ namespace Tes.Extensions
         public static CromwellTaskSubmitter GetCromwellMetadata(this TesTask tesTask)
         {
             return tesTask.TaskSubmitter as CromwellTaskSubmitter;
-        }
-
-        /// <summary>
-        /// Visits each value in an enumeration with an action.
-        /// </summary>
-        /// <typeparam name="T">Type of enumerated items.</typeparam>
-        /// <param name="values">Enumeration on which to visit each item.</param>
-        /// <param name="action">Action to invoke with each item.</param>
-        internal static void ForEach<T>(this IEnumerable<T> values, Action<T> action)
-        {
-            foreach (var value in values)
-            {
-                action(value);
-            }
-        }
-
-        /// <summary>
-        /// Adds a range of items to an <see cref="IList{T}"/>.
-        /// </summary>
-        /// <typeparam name="T">Type of enumerated items.</typeparam>
-        /// <param name="list">List to add <paramref name="items"/> to.</param>
-        /// <param name="items">Items to add to <paramref name="list"/>.</param>
-        public static void AddRange<T>(this IList<T> list, IEnumerable<T> items)
-        {
-            items.ForEach(list.Add);
         }
 
         /// <summary>
@@ -115,9 +89,11 @@ namespace Tes.Extensions
         /// <returns>Last <see cref="TesTaskLog"/></returns>
         public static TesTaskLog GetOrAddTesTaskLog(this TesTask tesTask)
         {
-            if (tesTask.Logs is null || !tesTask.Logs.Any())
+            if ((tesTask.Logs?.Count ?? 0) == 0)
             {
-                tesTask.Logs = [new()];
+                TesTaskLog log = new();
+                tesTask.Logs = [log];
+                return log;
             }
 
             return tesTask.Logs.Last();
@@ -130,10 +106,11 @@ namespace Tes.Extensions
         /// <returns>Last <see cref="TesTaskLog"/></returns>
         public static TesTaskLog AddTesTaskLog(this TesTask tesTask)
         {
+            TesTaskLog log = new();
             tesTask.Logs ??= [];
-            tesTask.Logs.Add(new());
+            tesTask.Logs.Add(log);
 
-            return tesTask.Logs.Last();
+            return log;
         }
 
         /// <summary>
@@ -150,7 +127,7 @@ namespace Tes.Extensions
         /// <param name="tesTaskLog"><see cref="TesTaskLog"/></param>
         /// <returns>Initialized Metadata property</returns>
         public static Dictionary<string, string> GetOrAddMetadata(this TesTaskLog tesTaskLog)
-            => tesTaskLog.Metadata ??= new();
+            => tesTaskLog.Metadata ??= [];
 
         /// <summary>
         /// Returns the last <see cref="TesExecutorLog"/>. Adds it if none exist.
@@ -159,9 +136,11 @@ namespace Tes.Extensions
         /// <returns>Initialized <see cref="TesExecutorLog"/></returns>
         public static TesExecutorLog GetOrAddExecutorLog(this TesTaskLog tesTaskLog)
         {
-            if (tesTaskLog.Logs is null || !tesTaskLog.Logs.Any())
+            if ((tesTaskLog.Logs?.Count ?? 0) == 0)
             {
-                tesTaskLog.Logs = [new()];
+                TesExecutorLog log = new();
+                tesTaskLog.Logs = [log];
+                return log;
             }
 
             return tesTaskLog.Logs.Last();

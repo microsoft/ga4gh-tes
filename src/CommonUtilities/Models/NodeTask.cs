@@ -8,6 +8,8 @@ namespace Tes.Runner.Models
 {
     public class NodeTask
     {
+        public StartTask? StartTask { get; set; }
+
         public string? Id { get; set; }
         public string? WorkflowId { get; set; }
         public string? ImageTag { get; set; }
@@ -28,12 +30,12 @@ namespace Tes.Runner.Models
         public Dictionary<string, string>? ContainerEnv { get; set; }
         public List<FileInput>? Inputs { get; set; }
         public List<FileOutput>? Outputs { get; set; }
+        public List<FileOutput>? TaskOutputs { get; set; }
         public string? MetricsFilename { get; set; }
         public string? InputsMetricsFormat { get; set; }
         public string? OutputsMetricsFormat { get; set; }
         public List<string>? TimestampMetricsFormats { get; set; }
         public List<string>? BashScriptMetricsFormats { get; set; }
-        public string? MountParentDirectoryPath { get; set; }
         public RuntimeOptions RuntimeOptions { get; set; } = null!;
     }
 
@@ -80,6 +82,7 @@ namespace Tes.Runner.Models
         public AzureEnvironmentConfig? AzureEnvironmentConfig { get; set; }
 
         public bool? SetContentMd5OnUpload { get; set; }
+        public string? MountParentDirectoryPath { get; set; }
     }
 
     public class StorageTargetLocation
@@ -94,6 +97,20 @@ namespace Tes.Runner.Models
         public string? LandingZoneApiHost { get; set; }
         public string? SasAllowedIpRange { get; set; }
         public string? DrsHubApiHost { get; set; }
+    }
+
+    public class StartTask
+    {
+        public List<StartTaskScript>? StartTaskScripts { get; set; }
+    }
+
+    public class StartTaskScript
+    {
+        public string? Path { get; set; }
+        public string? SourceUrl { get; set; }
+        public TransformationStrategy? TransformationStrategy { get; set; }
+        public bool SetExecute { get; set; }
+        public bool Run { get; set; }
     }
 
     public class NodeTaskResolverOptions

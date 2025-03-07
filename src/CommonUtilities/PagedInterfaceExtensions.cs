@@ -69,10 +69,10 @@ namespace CommonUtilities
         private sealed class PollyAsyncEnumerable<T> : IAsyncEnumerable<T>
         {
             private readonly IAsyncEnumerable<T> _source;
-            private readonly RetryHandler.AsyncRetryHandlerPolicy _retryPolicy;
+            private readonly AsyncRetryHandlerPolicy _retryPolicy;
             private readonly Polly.Context _ctx;
 
-            public PollyAsyncEnumerable(IAsyncEnumerable<T> source, RetryHandler.AsyncRetryHandlerPolicy retryPolicy, Polly.Context ctx)
+            public PollyAsyncEnumerable(IAsyncEnumerable<T> source, AsyncRetryHandlerPolicy retryPolicy, Polly.Context ctx)
             {
                 ArgumentNullException.ThrowIfNull(source);
                 ArgumentNullException.ThrowIfNull(retryPolicy);

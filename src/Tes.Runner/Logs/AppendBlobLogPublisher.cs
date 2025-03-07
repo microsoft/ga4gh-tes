@@ -13,7 +13,7 @@ namespace Tes.Runner.Logs
     public class AppendBlobLogPublisher : StreamLogReader
     {
         private readonly string targetUrl;
-        private readonly BlobApiHttpUtils blobApiHttpUtils = new BlobApiHttpUtils();
+        private readonly BlobApiHttpUtils blobApiHttpUtils = new();
         private readonly string stdOutLogNamePrefix;
         private readonly string stdErrLogNamePrefix;
         private readonly ILogger logger = PipelineLoggerFactory.Create<AppendBlobLogPublisher>();
@@ -36,7 +36,7 @@ namespace Tes.Runner.Logs
             stdErrLogNamePrefix = $"{logNamePrefix}_stderr_{prefixTimeStamp}";
         }
 
-        private string GetBlobNameConsideringBlockCountCurrentState(int blockCount, string logName)
+        private static string GetBlobNameConsideringBlockCountCurrentState(int blockCount, string logName)
         {
             var blobNumber = blockCount / BlobSizeUtils.MaxBlobBlocksCount;
 

@@ -53,7 +53,7 @@ namespace TesApi.Tests.Storage
             string blobName)
         {
             var task = new TesTask { Name = "taskName", Id = Guid.NewGuid().ToString() };
-            var uri = await defaultStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, CancellationToken.None);
+            var uri = await defaultStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, Azure.Storage.Sas.BlobSasPermissions.Read, CancellationToken.None);
 
             Assert.IsNotNull(uri);
             Assert.AreEqual($"{StorageAccountBlobEndpoint}{StorageAccessProvider.TesExecutionsPathPrefix}/tasks/{task.Id}/{blobName.TrimStart('/')}", ToHostWithAbsolutePathOnly(uri));
@@ -79,7 +79,7 @@ namespace TesApi.Tests.Storage
                 { TesResources.SupportedBackendParameters.internal_path_prefix.ToString(), internalPathPrefix }
             };
 
-            var uri = await defaultStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, CancellationToken.None);
+            var uri = await defaultStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, Azure.Storage.Sas.BlobSasPermissions.Read, CancellationToken.None);
 
             Assert.IsNotNull(uri);
             Assert.AreEqual($"{StorageAccountBlobEndpoint}{StorageAccessProvider.TesExecutionsPathPrefix}/{internalPathPrefix}/{blobName.TrimStart('/')}", ToHostWithAbsolutePathOnly(uri));

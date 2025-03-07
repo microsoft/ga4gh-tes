@@ -9,6 +9,7 @@ using System.CommandLine.IO;
 using System.CommandLine.Parsing;
 using System.CommandLine.Rendering;
 using System.Globalization;
+using System.Linq;
 using System.Reflection;
 using Azure.Core;
 using Azure.Identity;
