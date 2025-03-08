@@ -1329,7 +1329,7 @@ namespace TesDeployer
                 }
                 else
                 {
-                    canReturnEarly = sameVersionUpgrade && !tesUpgraded && !string.IsNullOrEmpty(settings["ActualTesImageName"]);
+                    canReturnEarly = !acrRequested && sameVersionUpgrade && !tesUpgraded && !string.IsNullOrEmpty(settings["ActualTesImageName"]);
                 }
 
                 if (canReturnEarly)
