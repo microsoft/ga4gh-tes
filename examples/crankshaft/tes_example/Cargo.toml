@@ -17,6 +17,6 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 base64 = "0.21"
 openssl = "0.10.70"
-ring = "0.17.12"
+ring = "0.17.13"
 tes = { version = "0.3.0", features = ["client", "serde"] }
 
