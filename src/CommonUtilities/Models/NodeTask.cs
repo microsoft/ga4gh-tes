@@ -8,6 +8,8 @@ namespace Tes.Runner.Models
 {
     public class NodeTask
     {
+        public StartTask? StartTask { get; set; }
+
         public string? Id { get; set; }
         public string? WorkflowId { get; set; }
         public List<Executor>? Executors { get; set; }
@@ -95,6 +97,20 @@ namespace Tes.Runner.Models
         public string? LandingZoneApiHost { get; set; }
         public string? SasAllowedIpRange { get; set; }
         public string? DrsHubApiHost { get; set; }
+    }
+
+    public class StartTask
+    {
+        public List<StartTaskScript>? StartTaskScripts { get; set; }
+    }
+
+    public class StartTaskScript
+    {
+        public string? Path { get; set; }
+        public string? SourceUrl { get; set; }
+        public TransformationStrategy? TransformationStrategy { get; set; }
+        public bool SetExecute { get; set; }
+        public bool Run { get; set; }
     }
 
     public class NodeTaskResolverOptions

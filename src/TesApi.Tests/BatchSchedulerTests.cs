@@ -58,7 +58,7 @@ namespace TesApi.Tests
             Assert.IsTrue(batchScheduler.RemovePoolFromList(pool));
             Assert.AreEqual(0, batchScheduler.GetPoolGroupKeys().Count());
 
-            pool = (BatchPool)await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(BatchPoolTests.CreatePoolData(name: id)), CancellationToken.None);
+            pool = (BatchPool)await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult((BatchPoolTests.CreatePoolData(name: id), new Uri($"local://{id}"))), CancellationToken.None);
 
             Assert.IsNotNull(pool);
             Assert.AreEqual(1, batchScheduler.GetPoolGroupKeys().Count());
@@ -77,7 +77,7 @@ namespace TesApi.Tests
             var count = batchScheduler.GetPools().Count();
             serviceProvider.BatchPoolManager.Verify(mock => mock.CreateBatchPoolAsync(It.IsAny<BatchAccountPoolData>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Once);
 
-            var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(BatchPoolTests.CreatePoolData(name: id)), CancellationToken.None);
+            var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult((BatchPoolTests.CreatePoolData(name: id), new Uri($"local://{id}"))), CancellationToken.None);
             await pool.ServicePoolAsync();
 
             Assert.AreEqual(count, batchScheduler.GetPools().Count());
@@ -99,7 +99,7 @@ namespace TesApi.Tests
             var key = batchScheduler.GetPoolGroupKeys().First();
             var count = batchScheduler.GetPools().Count();
 
-            var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(BatchPoolTests.CreatePoolData(name: id)), CancellationToken.None);
+            var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult((BatchPoolTests.CreatePoolData(name: id), new Uri($"local://{id}"))), CancellationToken.None);
             await pool.ServicePoolAsync();
 
             Assert.AreNotEqual(count, batchScheduler.GetPools().Count());
@@ -1592,7 +1592,7 @@ namespace TesApi.Tests
 
         private static IEnumerable<FileToDownload> GetFilesToDownload(Mock<IAzureProxy> azureProxy)
         {
-            var downloadFilesScriptContent = (string)azureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.UploadBlobAsync) && i.Arguments[0].ToString().Contains("/runner-task.json"))?.Arguments[1];
+            var downloadFilesScriptContent = (string)azureProxy.Invocations.LastOrDefault(i => i.Method.Name == nameof(IAzureProxy.UploadBlobAsync) && i.Arguments[0].ToString().Contains("/runner-task.json"))?.Arguments[1];
 
             if (string.IsNullOrEmpty(downloadFilesScriptContent))
             {
@@ -1621,7 +1621,7 @@ namespace TesApi.Tests
         }
 
         private static async Task<BatchPool> AddPool(BatchScheduler batchScheduler)
-            => (BatchPool)await batchScheduler.GetOrAddPoolAsync("key1", false, (id, _1) => ValueTask.FromResult(BatchPoolTests.CreatePoolData(id, "display1", "vmSize1")), CancellationToken.None);
+            => (BatchPool)await batchScheduler.GetOrAddPoolAsync("key1", false, (id, _1) => ValueTask.FromResult((BatchPoolTests.CreatePoolData(id, "display1", "vmSize1"), new Uri($"local://{id}"))), CancellationToken.None);
 
         internal static void GuardAssertsWithTesTask(TesTask tesTask, Action assertBlock)
         {

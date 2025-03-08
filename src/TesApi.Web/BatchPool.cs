@@ -437,6 +437,12 @@ namespace TesApi.Web
                 }
             }
         }
+
+        private async ValueTask ServicePoolRefreshStartTaskAsync(CancellationToken token)
+        {
+            _logger.LogTrace("Refreshing the start task for pool {Pool}", PoolId);
+            await _batchPools.PatchBatchPoolStartTaskCommandline(PoolId, _startTaskNode, token);
+        }
     }
 
     /// <content>
@@ -446,6 +452,7 @@ namespace TesApi.Web
     {
         private static readonly SemaphoreSlim lockObj = new(1, 1);
         private bool _removedFromService = false;
+        private Uri _startTaskNode = default;
 
         /// <summary>
         /// Types of maintenance calls offered by the <see cref="ServicePoolAsync(ServiceKind, CancellationToken)"/> service method.
@@ -471,6 +478,11 @@ namespace TesApi.Web
             /// Stages rotating or retiring this <see cref="CloudPool"/> if needed.
             /// </summary>
             Rotate,
+
+            /// <summary>
+            /// Resets the start task's SAS token
+            /// </summary>
+            RefreshStartTask,
         }
 
         /// <inheritdoc/>
@@ -526,6 +538,7 @@ namespace TesApi.Web
                 ServiceKind.ManagePoolScaling => ServicePoolManagePoolScalingAsync,
                 ServiceKind.RemovePoolIfEmpty => ServicePoolRemovePoolIfEmptyAsync,
                 ServiceKind.Rotate => ServicePoolRotateAsync,
+                ServiceKind.RefreshStartTask => ServicePoolRefreshStartTaskAsync,
                 _ => throw new ArgumentOutOfRangeException(nameof(serviceKind)),
             };
 
@@ -843,6 +856,8 @@ namespace TesApi.Web
 
             PoolId = pool.Id;
 
+            _startTaskNode = metadata.StartTaskUri;
+
             var eventVersionsMatch = Tes.Runner.Events.EventsPublisher.EventVersion.Equals(GetVersion(metadata.EventsVersion[nameof(Tes.Runner.Events.EventsPublisher.EventVersion)])) &&
                 Tes.Runner.Events.EventsPublisher.EventDataVersion.Equals(GetVersion(metadata.EventsVersion[nameof(Tes.Runner.Events.EventsPublisher.EventDataVersion)]));
 
@@ -852,7 +867,8 @@ namespace TesApi.Web
 
             if (!eventVersionsMatch)
             {
-                //
+                IsAvailable = false;
+                MarkRemovedFromService();
             }
 
             //IReadOnlyDictionary<string, string> Identity = pool.Identity.UserAssignedIdentities.ToDictionary(identity => identity.ResourceId, identity => identity.ClientId, StringComparer.OrdinalIgnoreCase).AsReadOnly();
