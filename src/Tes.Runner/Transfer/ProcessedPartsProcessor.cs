@@ -70,7 +70,7 @@ public class ProcessedPartsProcessor
             readBufferChannel.Writer.Complete();
         }
 
-        logger.LogInformation("All parts were successfully processed.");
+        logger.LogDebug("All parts were successfully processed.");
 
         return totalBytes;
     }
@@ -99,7 +99,7 @@ public class ProcessedPartsProcessor
 
             if (!cancellationTokenSource.IsCancellationRequested)
             {
-                logger.LogDebug("Cancelling tasks in the processed parts processor.");
+                logger.LogTrace("Cancelling tasks in the processed parts processor.");
                 cancellationTokenSource.Cancel();
             }
             throw;

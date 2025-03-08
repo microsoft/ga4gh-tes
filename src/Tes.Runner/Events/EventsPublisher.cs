@@ -11,8 +11,8 @@ namespace Tes.Runner.Events;
 
 public class EventsPublisher : IAsyncDisposable
 {
-    const string EventVersion = "1.0";
-    const string EventDataVersion = "1.0";
+    public static readonly Version EventVersion = new(1, 0);
+    public static readonly Version EventDataVersion = new(1, 0);
     public const string TesTaskRunnerEntityType = "TesRunnerTask";
     public const string DownloadStartEvent = "downloadStart";
     public const string DownloadEndEvent = "downloadEnd";
@@ -78,7 +78,7 @@ public class EventsPublisher : IAsyncDisposable
 
         var transformedUrl = await transformationStrategy.TransformUrlWithStrategyAsync(
             nodeTask.RuntimeOptions.StorageEventSink.TargetUrl,
-             BlobSasPermissions.Write | BlobSasPermissions.Create | BlobSasPermissions.Tag);
+            BlobSasPermissions.Write | BlobSasPermissions.Create | BlobSasPermissions.Tag);
 
         var sink = new BlobStorageEventSink(transformedUrl);
 
@@ -95,7 +95,7 @@ public class EventsPublisher : IAsyncDisposable
         await PublishAsync(eventMessage);
     }
 
-    public virtual async Task PublishUploadEndEventAsync(NodeTask nodeTask, int numberOfFiles, long totalSizeInBytes, string statusMessage, string? errorMessage = default)
+    public virtual async Task PublishUploadEndEventAsync(NodeTask nodeTask, int numberOfFiles, long totalSizeInBytes, string statusMessage, string? errorMessage = default, IEnumerable<CompletedUploadFile>? completedFiles = default)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, UploadEndEvent, statusMessage,
             nodeTask.WorkflowId);
@@ -104,38 +104,61 @@ public class EventsPublisher : IAsyncDisposable
         {
             { "numberOfFiles", numberOfFiles.ToString()},
             { "totalSizeInBytes", totalSizeInBytes.ToString()},
-            { "errorMessage", errorMessage??string.Empty}
+            { "errorMessage", errorMessage ?? string.Empty}
         };
+
+        if (completedFiles is not null)
+        {
+            completedFiles = completedFiles.ToList();
+            eventMessage.EventData.Add(@"fileLog-Count", completedFiles.Count().ToString("D"));
+
+            foreach (var (logEntry, index) in completedFiles.Select((logEntry, index) => (logEntry, index)))
+            {
+                eventMessage.EventData.Add($"fileSize-{index}", logEntry.Length.ToString("D"));
+                eventMessage.EventData.Add($"fileUri-{index}", logEntry.BlobUrl?.AbsoluteUri ?? string.Empty);
+                eventMessage.EventData.Add($"filePath-{index}", logEntry.FileName);
+            }
+        }
 
         await PublishAsync(eventMessage);
     }
 
-    public virtual async Task PublishExecutorStartEventAsync(NodeTask nodeTask)
+    private static string ExecutorFormatted(NodeTask nodeTask, int selector)
+        // Maintain format with TesApi.Web.Events.RunnerEventsProcessor.GetMessageBatchStateAsync+ParseExecutorIndex()
+        => $"{selector + 1}/{nodeTask.Executors?.Count ?? 0}";
+
+    public virtual async Task PublishExecutorStartEventAsync(NodeTask nodeTask, int selector)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, ExecutorStartEvent, StartedStatus,
                        nodeTask.WorkflowId);
 
-        var commands = nodeTask.CommandsToExecute ?? [];
+        var executor = nodeTask.Executors?[selector];
+        var commands = executor?.CommandsToExecute ?? [];
 
         eventMessage.EventData = new()
         {
-            { "image", nodeTask.ImageName??string.Empty},
-            { "imageTag", nodeTask.ImageTag??string.Empty},
+            { "executor", ExecutorFormatted(nodeTask, selector) },
+            { "image", executor?.ImageName ?? string.Empty},
+            { "imageTag", executor?.ImageTag ?? string.Empty},
             { "commands", string.Join(' ', commands) }
         };
         await PublishAsync(eventMessage);
     }
 
-    public virtual async Task PublishExecutorEndEventAsync(NodeTask nodeTask, long exitCode, string statusMessage, string? errorMessage = default)
+    public virtual async Task PublishExecutorEndEventAsync(NodeTask nodeTask, int selector, long exitCode, string statusMessage, string? errorMessage = default)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, ExecutorEndEvent, statusMessage,
                                   nodeTask.WorkflowId);
+
+        var executor = nodeTask.Executors?[selector];
+
         eventMessage.EventData = new()
         {
-            { "image", nodeTask.ImageName??string.Empty},
-            { "imageTag", nodeTask.ImageTag??string.Empty},
+            { "executor", ExecutorFormatted(nodeTask, selector) },
+            { "image", executor?.ImageName ?? string.Empty},
+            { "imageTag", executor?.ImageTag ?? string.Empty},
             { "exitCode", exitCode.ToString()},
-            { "errorMessage", errorMessage??string.Empty}
+            { "errorMessage", errorMessage ?? string.Empty}
         };
         await PublishAsync(eventMessage);
     }
@@ -156,7 +179,7 @@ public class EventsPublisher : IAsyncDisposable
         {
             { "numberOfFiles", numberOfFiles.ToString()},
             { "totalSizeInBytes", totalSizeInBytes.ToString()},
-            { "errorMessage", errorMessage??string.Empty}
+            { "errorMessage", errorMessage ?? string.Empty}
         };
         await PublishAsync(eventMessage);
     }
@@ -176,7 +199,7 @@ public class EventsPublisher : IAsyncDisposable
         eventMessage.EventData = new()
         {
             { "duration", duration.ToString()},
-            { "errorMessage", errorMessage??string.Empty}
+            { "errorMessage", errorMessage ?? string.Empty}
         };
 
         await PublishAsync(eventMessage);
@@ -211,7 +234,7 @@ public class EventsPublisher : IAsyncDisposable
 
         foreach (var sink in sinks)
         {
-            logger.LogInformation("Publishing event {MessageName} to sink: {SinkType}", message.Name, sink.GetType().Name);
+            logger.LogDebug("Publishing event {MessageName} to sink: {SinkType}", message.Name, sink.GetType().Name);
 
             await sink.PublishEventAsync(message);
         }
@@ -224,8 +247,14 @@ public class EventsPublisher : IAsyncDisposable
         await Task.WhenAll(stopTasks).WaitAsync(TimeSpan.FromSeconds(waitTimeInSeconds));
     }
 
-    public async ValueTask DisposeAsync()
+    protected async virtual ValueTask DisposeAsyncCore()
     {
         await FlushPublishersAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await DisposeAsyncCore();
+        GC.SuppressFinalize(this);
     }
 }

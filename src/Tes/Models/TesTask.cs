@@ -120,7 +120,7 @@ namespace Tes.Models
         /// <returns>Valid TES task ID</returns>
         public string CreateId()
         {
-            var tesTaskIdPrefix = WorkflowId is not null && Guid.TryParse(WorkflowId, out _) ? $"{WorkflowId[..8]}_" : string.Empty;
+            var tesTaskIdPrefix = WorkflowId is not null && Guid.TryParse(WorkflowId, out var guid) ? guid.ToString()[..8] + "_" : string.Empty;
             return $"{tesTaskIdPrefix}{Guid.NewGuid():N}";
         }
 

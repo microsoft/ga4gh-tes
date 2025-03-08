@@ -53,7 +53,7 @@ namespace Tes.RunnerCLI.Commands
 
             await logReader.WaitUntilAsync(timeout: TimeSpan.FromSeconds(LogWaitTimeoutInSeconds));
 
-            logger.LogInformation("Process exited. Arguments: {ProcessArguments}", process.StartInfo.Arguments);
+            logger.LogDebug("Process exited. Arguments: {ProcessArguments}", process.StartInfo.Arguments);
         }
 
         private void SetupErrorAndOutputReaders(Process process)
@@ -69,7 +69,7 @@ namespace Tes.RunnerCLI.Commands
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardError = true;
 
-            logger.LogInformation("Starting process: {ProcessFileName} {Process.Arguments}", process.StartInfo.FileName, process.StartInfo.Arguments);
+            logger.LogDebug("Starting process: {ProcessFileName} {Process.Arguments}", process.StartInfo.FileName, process.StartInfo.Arguments);
         }
 
         private static string? GetExecutableFullPath()

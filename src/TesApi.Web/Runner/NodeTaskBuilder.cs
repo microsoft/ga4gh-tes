@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using CommonUtilities;
 using Tes.Runner.Models;
@@ -12,16 +13,23 @@ namespace TesApi.Web.Runner
     /// <summary>
     /// Builder of NodeTask
     /// </summary>
-    public class NodeTaskBuilder
+    public partial class NodeTaskBuilder
     {
+        [GeneratedRegex(@"^/subscriptions/[^/]+/resourcegroups/[^/]+/providers/Microsoft.ManagedIdentity/userAssignedIdentities/[^/]+$", RegexOptions.IgnoreCase)]
+        private static partial Regex ManagedIdentityResourceIdPatternRegex();
+
         /// <summary>
         /// Name of the environment variable that contains the path to the task directory
         /// </summary>
         public const string BatchTaskDirEnvVarName = "AZ_BATCH_TASK_DIR";
 
-        internal const string BatchTaskDirEnvVar = $"${BatchTaskDirEnvVarName}";
+        /// <summary>
+        /// Name of the environment variable that contains the path to the start task directory
+        /// </summary>
+        public const string BatchStartTaskDirEnvVarName = "AZ_BATCH_NODE_STARTUP_DIR";
 
-        private const string ManagedIdentityResourceIdPattern = @"^/subscriptions/[^/]+/resourcegroups/[^/]+/providers/Microsoft.ManagedIdentity/userAssignedIdentities/[^/]+$";
+        internal const string BatchTaskDirEnvVar = $"${BatchTaskDirEnvVarName}";
+        private static readonly Regex ManagedIdentityResourceIdPattern = ManagedIdentityResourceIdPatternRegex();
 
         private const string DefaultDockerImageTag = "latest";
         private readonly NodeTask nodeTask;
@@ -77,26 +85,37 @@ namespace TesApi.Web.Runner
         /// <returns></returns>
         public NodeTaskBuilder WithContainerMountParentDirectory(string mountDirectory)
         {
-            nodeTask.MountParentDirectoryPath = mountDirectory;
+            nodeTask.RuntimeOptions ??= new();
+            nodeTask.RuntimeOptions.MountParentDirectoryPath = mountDirectory;
             return this;
         }
 
         /// <summary>
         /// Sets the container working directory of the NodeTask
         /// </summary>
-        /// <param name="workingDirectory"></param>
-        /// <param name="stdId"></param>
-        /// <param name="stdOut"></param>
-        /// <param name="stdErr"></param>
-        /// <param name="env"></param>
+        /// <param name="volumes"></param>
         /// <returns></returns>
-        public NodeTaskBuilder WithContainerExecutionParameters(string workingDirectory, string stdId, string stdOut, string stdErr, Dictionary<string, string> env)
+        public NodeTaskBuilder WithContainerVolumes(List<string> volumes)
         {
-            nodeTask.ContainerWorkDir = workingDirectory;
-            nodeTask.ContainerStdInPath = stdId;
-            nodeTask.ContainerStdOutPath = stdOut;
-            nodeTask.ContainerStdErrPath = stdErr;
-            nodeTask.ContainerEnv = env;
+            nodeTask.ContainerVolumes = volumes;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the executors
+        /// </summary>
+        /// <param name="executors"></param>
+        /// <returns></returns>
+        public NodeTaskBuilder WithExecutors(List<Tes.Models.TesExecutor> executors)
+        {
+            ArgumentNullException.ThrowIfNull(executors);
+
+            if (executors.Count == 0)
+            {
+                throw new ArgumentException("The list executors can't be empty.", nameof(executors));
+            }
+
+            nodeTask.Executors = [.. executors.Select(ConvertExecutor)];
             return this;
         }
 
@@ -111,7 +130,7 @@ namespace TesApi.Web.Runner
         public NodeTaskBuilder WithInputUsingCombinedTransformationStrategy(string path, string sourceUrl)
         {
             ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
-            TransformationStrategy transformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions();
+            var transformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions();
 
             if (path.Contains('?'))
             {
@@ -126,7 +145,7 @@ namespace TesApi.Web.Runner
                 transformationStrategy = TransformationStrategy.None;
             }
 
-            nodeTask.Inputs ??= new List<FileInput>();
+            nodeTask.Inputs ??= [];
 
             nodeTask.Inputs.Add(
                 new FileInput()
@@ -148,69 +167,109 @@ namespace TesApi.Web.Runner
         /// <param name="path"></param>
         /// <param name="targetUrl"></param>
         /// <param name="fileType"></param>
+        /// <param name="taskOutputs">Host task output if <c>True</c>, container task output if <c>False</c>.</param>
         /// <returns></returns>
         public NodeTaskBuilder WithOutputUsingCombinedTransformationStrategy(string path, string targetUrl,
-            FileType? fileType)
+            FileType? fileType, bool taskOutputs = false)
         {
-            ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
-            ArgumentException.ThrowIfNullOrEmpty(targetUrl, nameof(targetUrl));
-            nodeTask.Outputs ??= [];
-            nodeTask.Outputs.Add(
-                new FileOutput()
-                {
-                    Path = path,
-                    TargetUrl = targetUrl,
-                    TransformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions(),
-                    FileType = fileType ?? FileType.File
-                }
-                );
+            ArgumentException.ThrowIfNullOrEmpty(path);
+            ArgumentException.ThrowIfNullOrEmpty(targetUrl);
+
+            var outputs = taskOutputs
+                ? nodeTask.TaskOutputs ??= []
+                : nodeTask.Outputs ??= [];
+
+            outputs.Add(new FileOutput()
+            {
+                Path = path,
+                TargetUrl = targetUrl,
+                TransformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions(),
+                FileType = fileType ?? FileType.File
+            });
+
             return this;
         }
 
         /// <summary>
-        /// Sets the commands to the NodeTask
+        /// Creates a start-task script for the NodeTask using a combined transformation strategy.
         /// </summary>
-        /// <param name="commands"></param>
+        /// <param name="path"></param>
+        /// <param name="sourceUrl"></param>
+        /// <param name="run"></param>
+        /// <param name="setExecute"></param>
         /// <returns></returns>
-        /// <exception cref="InvalidOperationException"></exception>
-        public NodeTaskBuilder WithContainerCommands(List<string> commands)
+        public NodeTaskBuilder WithScriptUsingCombinedTransformationStrategy(string path, string sourceUrl, bool run = false, bool setExecute = false)
         {
-            ArgumentNullException.ThrowIfNull(commands);
+            ArgumentException.ThrowIfNullOrEmpty(path);
+            ArgumentException.ThrowIfNullOrEmpty(sourceUrl);
 
-            if (commands.Count == 0)
+            nodeTask.StartTask ??= new();
+            nodeTask.StartTask.StartTaskScripts ??= [];
+
+            nodeTask.StartTask.StartTaskScripts.Add(new()
+            {
+                Path = path,
+                SourceUrl = sourceUrl,
+                TransformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions(),
+                SetExecute = setExecute || run,
+                Run = run,
+            });
+
+            return this;
+        }
+
+        /// <summary>
+        /// Set the host path for the container root
+        /// </summary>
+        /// <param name="mountParentDirectory"></param>
+        /// <returns></returns>
+        public NodeTaskBuilder WithMountParentDirectory(string mountParentDirectory)
+        {
+            nodeTask.RuntimeOptions.MountParentDirectoryPath = mountParentDirectory;
+            return this;
+        }
+
+        /// <summary>
+        /// Parses an Executor from a TesExecutor
+        /// </summary>
+        /// <param name="executor"></param>
+        /// <returns></returns>
+        internal static Executor ConvertExecutor(Tes.Models.TesExecutor executor)
+        {
+            ArgumentNullException.ThrowIfNull(executor);
+
+            if (executor.Command.Count == 0)
             {
                 throw new InvalidOperationException("The list commands can't be empty");
             }
 
-            nodeTask.CommandsToExecute = commands;
+            ArgumentException.ThrowIfNullOrWhiteSpace(executor.Image, nameof(executor));
 
-            return this;
-        }
-
-        /// <summary>
-        ///
-        /// </summary>
-        /// <param name="image"></param>
-        /// <returns></returns>
-        public NodeTaskBuilder WithContainerImage(string image)
-        {
-            ArgumentException.ThrowIfNullOrEmpty(image);
+            Executor nodeExecutor = new();
 
             //check if the image name is a digest
-            if (image.Contains('@'))
+            if (executor.Image.Contains('@'))
             {
-                var splitByDigest = image.Split('@', 2);
-                nodeTask.ImageName = splitByDigest[0];
-                nodeTask.ImageTag = splitByDigest[1];
-                return this;
+                var splitByDigest = executor.Image.Split('@', 2);
+                nodeExecutor.ImageName = splitByDigest[0];
+                nodeExecutor.ImageTag = splitByDigest[1];
+            }
+            else
+            {
+                var splitByTag = executor.Image.Split(':', 2);
+                nodeExecutor.ImageName = splitByTag[0];
+                nodeExecutor.ImageTag = splitByTag.Length == 2 ? splitByTag[1] : DefaultDockerImageTag;
             }
 
-            var splitByTag = image.Split(':', 2);
+            nodeExecutor.CommandsToExecute = executor.Command;
+            nodeExecutor.ContainerWorkDir = executor.Workdir;
+            nodeExecutor.ContainerStdInPath = executor.Stdin;
+            nodeExecutor.ContainerStdOutPath = executor.Stdout;
+            nodeExecutor.ContainerStdErrPath = executor.Stderr;
+            nodeExecutor.ContainerEnv = executor.Env;
+            nodeExecutor.IgnoreError = executor.IgnoreError ?? false;
 
-            nodeTask.ImageName = splitByTag[0];
-            nodeTask.ImageTag = splitByTag.Length == 2 ? splitByTag[1] : DefaultDockerImageTag;
-
-            return this;
+            return nodeExecutor;
         }
 
         /// <summary>
@@ -407,9 +466,10 @@ namespace TesApi.Web.Runner
             {
                 return false;
             }
+
             //Ignore the case because constant segments could be lower case, pascal case or camel case.
             // e.g. /resourcegroup/ or /resourceGroup/
-            return Regex.IsMatch(resourceId, ManagedIdentityResourceIdPattern, RegexOptions.IgnoreCase);
+            return ManagedIdentityResourceIdPattern.IsMatch(resourceId);
         }
 
         /// <summary>

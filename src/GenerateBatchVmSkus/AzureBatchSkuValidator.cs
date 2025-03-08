@@ -8,12 +8,12 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using Azure.Core;
+using CommonUtilities;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Primitives;
-using Polly;
-using Polly.Retry;
 using Tes.Models;
+using static CommonUtilities.RetryHandler;
 using static GenerateBatchVmSkus.Program;
 
 /*
@@ -121,9 +121,11 @@ namespace GenerateBatchVmSkus
             }
         }
 
-        private static readonly AsyncRetryPolicy asyncRetryPolicy = Policy
-            .Handle<IOException>()
-            .WaitAndRetryForeverAsync(i => TimeSpan.FromSeconds(0.05));
+        private static readonly AsyncRetryHandlerPolicy asyncRetryPolicy = new RetryPolicyBuilder(Microsoft.Extensions.Options.Options.Create(new CommonUtilities.Options.RetryPolicyOptions()))
+            .PolicyBuilder.OpinionatedRetryPolicy()
+            .WithCustomizedRetryPolicyOptionsWait(int.MaxValue, (_, _) => TimeSpan.FromSeconds(0.05))
+            .SetOnRetryBehavior()
+            .AsyncBuild();
 
         private static IDictionary<string, BatchSkuInfo>? batchSkus;
 
@@ -162,12 +164,12 @@ namespace GenerateBatchVmSkus
                     if (CanBatchAccountValidateSku(vm, context))
                     {
                         result = result.Append(vm);
-                        await asyncRetryPolicy.ExecuteAsync(WriteLog("sort", "process", vm), cancellationToken);
+                        await asyncRetryPolicy.ExecuteWithRetryAsync(WriteLog("sort", "process", vm), cancellationToken);
                     }
                     else
                     {
                         await resultSkus.Writer.WriteAsync(vm, cancellationToken);
-                        await asyncRetryPolicy.ExecuteAsync(WriteLog("sort", "forward", vm), cancellationToken);
+                        await asyncRetryPolicy.ExecuteWithRetryAsync(WriteLog("sort", "forward", vm), cancellationToken);
                     }
                 }
 
@@ -255,7 +257,7 @@ namespace GenerateBatchVmSkus
                     var StartLoadedTest = new Func<WrappedVmSku, Task<(WrappedVmSku vmSize, VerifyVMIResult result)>>(async vmSize =>
                     {
                         _ = Interlocked.Increment(ref started);
-                        await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "post", vmSize), cancellationToken);
+                        await asyncRetryPolicy.ExecuteWithRetryAsync(WriteLog("process", "post", vmSize), cancellationToken);
                         return (vmSize, result: await TestVMSizeInBatchAsync(vmSize, cancellationToken));
                     });
 
@@ -274,7 +276,7 @@ namespace GenerateBatchVmSkus
                         {
                             List<WrappedVmSku> skusToTest = [.. await GetVmSkusAsync(context, cancellationToken)];
                             await skusToTest.ToAsyncEnumerable()
-                                .ForEachAwaitWithCancellationAsync(async (sku, token) => await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "queue", sku), token), cancellationToken);
+                                .ForEachAwaitWithCancellationAsync(async (sku, token) => await asyncRetryPolicy.ExecuteWithRetryAsync(WriteLog("process", "queue", sku), token), cancellationToken);
                             var loadedTests = skusToTest.Where(CanTestNow).ToList();
 
                             for (tests = [.. loadedTests.Select(StartLoadedTest)];
@@ -306,20 +308,20 @@ namespace GenerateBatchVmSkus
                                                         _ = retries.Remove(vmSize.VmSku.Name);
                                                         vmSize.Validated = true;
                                                         await resultSkus.Writer.WriteAsync(vmSize, cancellationToken);
-                                                        await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "use", vmSize), cancellationToken);
+                                                        await asyncRetryPolicy.ExecuteWithRetryAsync(WriteLog("process", "use", vmSize), cancellationToken);
                                                         break;
 
                                                     case VerifyVMIResult.Skip:
                                                         ++processed;
                                                         _ = retries.Remove(vmSize.VmSku.Name);
-                                                        await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "skip", vmSize), cancellationToken);
+                                                        await asyncRetryPolicy.ExecuteWithRetryAsync(WriteLog("process", "skip", vmSize), cancellationToken);
                                                         break;
 
                                                     case VerifyVMIResult.NextRegion:
                                                         ++processedDeferred;
                                                         _ = retries.Remove(vmSize.VmSku.Name);
                                                         await resultSkus.Writer.WriteAsync(vmSize, cancellationToken);
-                                                        await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "forward", vmSize), cancellationToken);
+                                                        await asyncRetryPolicy.ExecuteWithRetryAsync(WriteLog("process", "forward", vmSize), cancellationToken);
                                                         break;
 
                                                     case VerifyVMIResult.Retry:
@@ -329,7 +331,7 @@ namespace GenerateBatchVmSkus
                                                             retries[vmSize.VmSku.Name] = (false, lastRetry.RetryCount + 1, DateTime.UtcNow + AzureBatchSkuValidator.RetryWaitTime, vmSize);
                                                             _ = Interlocked.Decrement(ref started);
                                                             _ = Interlocked.Decrement(ref completed);
-                                                            await asyncRetryPolicy.ExecuteAsync(WriteLog("process", $"wait{lastRetry.RetryCount}", vmSize), cancellationToken);
+                                                            await asyncRetryPolicy.ExecuteWithRetryAsync(WriteLog("process", $"wait{lastRetry.RetryCount}", vmSize), cancellationToken);
                                                         }
                                                         else
                                                         {
@@ -337,7 +339,7 @@ namespace GenerateBatchVmSkus
                                                             ++processed;
                                                             _ = retries.Remove(vmSize.VmSku.Name);
                                                             await resultSkus.Writer.WriteAsync(vmSize, cancellationToken);
-                                                            await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "forwardRT", vmSize), cancellationToken);
+                                                            await asyncRetryPolicy.ExecuteWithRetryAsync(WriteLog("process", "forwardRT", vmSize), cancellationToken);
                                                         }
 
                                                         break;
@@ -359,7 +361,7 @@ namespace GenerateBatchVmSkus
                                                 skusToTest.AddRange(await (await GetVmSkusAsync(context, cancellationToken)).ToAsyncEnumerable()
                                                     .WhereAwaitWithCancellation(async (vmSize, token) =>
                                                     {
-                                                        await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "queue", vmSize), cancellationToken);
+                                                        await asyncRetryPolicy.ExecuteWithRetryAsync(WriteLog("process", "queue", vmSize), cancellationToken);
                                                         return true;
                                                     })
                                                     .ToListAsync(cancellationToken));
@@ -386,7 +388,7 @@ namespace GenerateBatchVmSkus
                                                 .ToAsyncEnumerable()
                                                 .WhereAwaitWithCancellation(async (vmSize, token) =>
                                                 {
-                                                    await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "queueRT", vmSize), cancellationToken);
+                                                    await asyncRetryPolicy.ExecuteWithRetryAsync(WriteLog("process", "queueRT", vmSize), cancellationToken);
                                                     return true;
                                                 })
                                                 .ToListAsync(cancellationToken));
@@ -427,7 +429,7 @@ namespace GenerateBatchVmSkus
                             await skusToTest.ToAsyncEnumerable().ForEachAwaitWithCancellationAsync(async (vmSize, token) =>
                             {
                                 await resultSkus.Writer.WriteAsync(vmSize, token);
-                                await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "dump", vmSize), cancellationToken);
+                                await asyncRetryPolicy.ExecuteWithRetryAsync(WriteLog("process", "dump", vmSize), cancellationToken);
                                 ConsoleHelper.WriteLine(accountInfo.Name, ForegroundColorSpan.LightYellow(), $"Deferring '{vmSize.VmSku.Name}' due to quota (end of processing).");
                             },
                             cancellationToken);

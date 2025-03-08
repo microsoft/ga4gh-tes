@@ -13,6 +13,7 @@ static async Task<int> StartUpAsync(string[] args)
     CommandFactory.CreateUploadCommand(rootCommand);
     CommandFactory.CreateExecutorCommand(rootCommand);
     CommandFactory.CreateDownloadCommand(rootCommand);
+    CommandFactory.CreateStartTaskCommand(rootCommand);
 
     try
     {

@@ -11,6 +11,7 @@ using Tes.ApiClients;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Quotas;
 using TesApi.Web.Management.Models.Terra;
+using static TesApi.Web.Management.IBatchQuotaProvider;
 
 namespace TesApi.Web.Management
 {
@@ -83,6 +84,13 @@ namespace TesApi.Web.Management
                     batchQuota.QuotaValues.PoolQuota,
                     batchQuota.QuotaValues.DedicatedCoreQuota,
                     batchQuota.QuotaValues.LowPriorityCoreQuota));
+        }
+
+        /// <inheritdoc />
+        public async Task<PoolAndJobQuota> GetPoolAndJobQuotaAsync(CancellationToken cancellationToken)
+        {
+            var quotas = await GetBatchAccountQuotaFromTerraAsync(cancellationToken);
+            return new(quotas.QuotaValues.PoolQuota, quotas.QuotaValues.ActiveJobAndJobScheduleQuota);
         }
 
         private async Task<QuotaApiResponse> GetBatchAccountQuotaFromTerraAsync(CancellationToken cancellationToken)

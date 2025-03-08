@@ -5,6 +5,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PreserveCompilationContext>true</PreserveCompilationContext>
+    <InvariantGlobalization>true</InvariantGlobalization>
     <AssemblyName>tesapi</AssemblyName>
     <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
     <Title>GA4GH Task Execution Service</Title>
@@ -80,10 +81,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\CommonUtilities\CommonUtilities.csproj" />
     <ProjectReference Include="..\Tes.ApiClients\Tes.ApiClients.csproj" />
+    <ProjectReference Include="..\Tes.Runner\Tes.Runner.csproj" />
     <ProjectReference Include="..\Tes.SDK\Tes.SDK.csproj" />
-    <ProjectReference Include="..\Tes\Tes.csproj" />
+    <ProjectReference Include="..\Tes.Repository\Tes.Repository.csproj" />
   </ItemGroup>
 
 </Project>
