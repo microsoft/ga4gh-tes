@@ -190,7 +190,14 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryHandlerPolicy ret
             return true;
 
         }
-        catch (HttpRequestException e) when (e.StatusCode switch
+        catch (HttpRequestException e) when (IsExceptionPossiblyPublicAccessNotPermitted(e))
+        {
+            return false;
+        }
+    }
+
+    private static bool IsExceptionPossiblyPublicAccessNotPermitted(HttpRequestException e)
+        => e.StatusCode switch
         {
             HttpStatusCode.Unauthorized => true,
             // Because some servers confuse the difference between 401 & 403
@@ -198,11 +205,7 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryHandlerPolicy ret
             // Azure Blob Storage returns 409 instead of 401
             HttpStatusCode.Conflict => true,
             _ => false,
-        })
-        {
-            return false;
-        }
-    }
+        };
 
     private async Task<HttpResponseMessage> ExecuteHttpRequestImplAsync(Func<HttpRequestMessage> request, CancellationToken cancellationToken)
     {
@@ -231,6 +234,11 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryHandlerPolicy ret
 
                 throw;
             }
+        }
+        catch (HttpRequestException e) when (HttpMethod.Head == response?.RequestMessage?.Method && IsExceptionPossiblyPublicAccessNotPermitted(e))
+        {
+            // Don't log here. Ultimate caller should log if this is really an error.
+            throw;
         }
         catch (Exception e)
         {

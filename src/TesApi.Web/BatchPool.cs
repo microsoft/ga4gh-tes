@@ -376,7 +376,7 @@ namespace TesApi.Web
                                     {
                                         var file = await nodeAndLog.Node.GetNodeFileAsync($"startup/{nodeAndLog.Log}", cancellationToken: token);
                                         var content = await file.ReadAsStringAsync(cancellationToken: token);
-                                        var blobUri = await _storageAccessProvider.GetInternalTesBlobUrlAsync($"/pools/{PoolId}/nodes/{nodeAndLog.Node.Id}/{nodeAndLog.Log}", Azure.Storage.Sas.BlobSasPermissions.Create, token);
+                                        var blobUri = await _storageAccessProvider.GetInternalTesBlobUrlAsync($"/pools/{PoolId}/nodes/{nodeAndLog.Node.Id}/{nodeAndLog.Log}", Azure.Storage.Sas.BlobSasPermissions.Write, token);
                                         await _azureProxy.UploadBlobAsync(blobUri, content, token);
                                     }, cancellationToken);
                                 await RemoveNodesAsync(nodesToRemove, cancellationToken);
@@ -440,7 +440,7 @@ namespace TesApi.Web
 
         private async ValueTask ServicePoolRefreshStartTaskAsync(CancellationToken token)
         {
-            _logger.LogTrace("Refreshing the start task for pool {Pool}", PoolId);
+            _logger.LogInformation("Refreshing the start task for pool {Pool}", PoolId);
             await _batchPools.PatchBatchPoolStartTaskCommandline(PoolId, _startTaskNode, token);
         }
     }

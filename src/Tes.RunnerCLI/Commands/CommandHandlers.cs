@@ -142,7 +142,7 @@ namespace Tes.RunnerCLI.Commands
                 var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: false);
                 file ??= new(CommandFactory.DefaultTaskDefinitionFile);
 
-                nodeTask.Id = Environment.GetEnvironmentVariable("AZ_BATCH_NODE_ID") ?? new Guid().ToString();
+                nodeTask.Id = Environment.GetEnvironmentVariable("AZ_BATCH_NODE_ID") ?? Guid.NewGuid().ToString("D");
 
                 nodeTask.RuntimeOptions.StorageEventSink = PersonalizeStorageTargetLocation(nodeTask.RuntimeOptions.StorageEventSink);
                 nodeTask.RuntimeOptions.StreamingLogPublisher = PersonalizeStorageTargetLocation(nodeTask.RuntimeOptions.StreamingLogPublisher);
@@ -162,11 +162,18 @@ namespace Tes.RunnerCLI.Commands
                     {
                         if (nodeTask.StartTask?.StartTaskScripts is not null)
                         {
+                            nodeTask.StartTask.StartTaskScripts?.ForEach(script => script.Path = Environment.ExpandEnvironmentVariables(script.Path!));
+
                             Runner.Models.NodeTask download = new()
                             {
                                 Id = nodeTask.Id,
                                 Inputs = nodeTask.StartTask.StartTaskScripts?
-                                    .Select(script => new Runner.Models.FileInput() { SourceUrl = script.SourceUrl, Path = script.Path, TransformationStrategy = script.TransformationStrategy })
+                                    .Select(script => new Runner.Models.FileInput()
+                                    {
+                                        SourceUrl = script.SourceUrl,
+                                        Path = script.Path,
+                                        TransformationStrategy = script.TransformationStrategy
+                                    })
                                     .ToList(),
                                 RuntimeOptions = nodeTask.RuntimeOptions,
                             };

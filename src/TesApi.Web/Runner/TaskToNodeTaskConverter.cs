@@ -643,8 +643,14 @@ namespace TesApi.Web.Runner
         {
             scripts?.ForEach(script =>
             {
+                // BatchStartTaskScript.FileName is expected to be a relative path from the working directory unless prefixed with an environment variable.
+                // PrependParentDirectoryIfSet requires inputPath to be prefixed with a '/' if pathParentDirectory is set.
+                var isRelative = !script.FileName.StartsWith('%');
                 builder.WithScriptUsingCombinedTransformationStrategy(
-                    PrependParentDirectoryIfSet(script.FileName, pathParentDirectory), script.ScriptUrl.AbsoluteUri, script.Run, script.SetExecute);
+                    PrependParentDirectoryIfSet(isRelative ? "/" + script.FileName : script.FileName, isRelative ? pathParentDirectory : null),
+                    script.ScriptUrl.AbsoluteUri,
+                    script.Run,
+                    script.SetExecute);
             });
         }
 

@@ -66,7 +66,11 @@ namespace TesApi.Web
         /// <inheritdoc />
         protected override async ValueTask ExecuteCoreAsync(CancellationToken cancellationToken)
         {
-            Func<CancellationToken, ValueTask> UpdateStartTasks = new(token => ExecuteActionOnPoolsAsync((pool, token) => (pool as BatchPool)?.ServicePoolAsync(BatchPool.ServiceKind.RefreshStartTask, token) ?? ValueTask.CompletedTask, token));
+            Func<CancellationToken, ValueTask> UpdateStartTasks = new(token =>
+            {
+                Logger.LogInformation("Refreshing start tasks in all pools.");
+                return ExecuteActionOnPoolsAsync((pool, token) => (pool as BatchPool)?.ServicePoolAsync(BatchPool.ServiceKind.RefreshStartTask, token) ?? ValueTask.CompletedTask, token);
+            });
 
             // Ensure start tasks are good when the service restarts.
             await UpdateStartTasks(cancellationToken);
