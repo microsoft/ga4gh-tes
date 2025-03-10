@@ -40,7 +40,7 @@ namespace TesApi.Web
 
         private static readonly TimeSpan StateTransitionTimeForDeletionTimeSpan = 0.75 * Web.BatchScheduler.BatchDeleteNewTaskWorkaroundTimeSpan;
         private static readonly TimeSpan CompletedTaskListTimeSpan = 0.5 * Web.BatchScheduler.BatchDeleteNewTaskWorkaroundTimeSpan;
-        private static readonly TimeSpan PatchSasTokensTimeSpan = TimeSpan.FromMinutes(30);
+        private static readonly TimeSpan PatchSasTokensTimeSpan = TimeSpan.FromMinutes(20);
 
         /// <summary>
         /// Predicate to obtain <see cref="CloudTask"/>s (recently) running on <see cref="ComputeNode"/>s. Used to connect tasks and nodes together.
