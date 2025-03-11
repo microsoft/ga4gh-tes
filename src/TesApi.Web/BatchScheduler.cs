@@ -230,66 +230,85 @@ namespace TesApi.Web
                     if (!tesTask.IsActiveState() || tesTask.State == TesState.QUEUED)
                     {
                         var pool = GetPools().SingleOrDefault(pool => pool.PoolId.Equals(tesTask.PoolId, StringComparison.InvariantCultureIgnoreCase));
-                        if (!pool.OrphanedTesTasks.TryRemove(tesTask.Id, out _))
+
+                        if (!pool?.OrphanedTesTasks.TryRemove(tesTask.Id, out _) ?? false)
                         {
                             pool.AssociatedTesTasks.Where(pair => tesTask.Id.Equals(pair.Value, StringComparison.InvariantCultureIgnoreCase)).ForEach(pair => _ = pool.AssociatedTesTasks.TryRemove(pair));
                         }
                     }
 
-                    var tesTaskLog = tesTask.GetOrAddTesTaskLog();
-                    tesTaskLog.BatchNodeMetrics ??= batchNodeMetrics;
-                    tesTaskLog.CromwellResultCode ??= cromwellRcCode;
-                    tesTaskLog.EndTime ??= batchInfo.BatchTaskEndTime ?? taskEndTime;
-                    tesTaskLog.StartTime ??= batchInfo.BatchTaskStartTime ?? taskStartTime;
-
-                    if (batchInfo.ExecutorIndex is not null && (batchInfo.ExecutorEndTime is not null || batchInfo.ExecutorStartTime is not null || batchInfo.ExecutorExitCode is not null))
+                    if (batchNodeMetrics is not null ||
+                        taskStartTime is not null ||
+                        taskEndTime is not null ||
+                        cromwellRcCode is not null ||
+                        batchInfo.BatchTaskEndTime is not null ||
+                        batchInfo.BatchTaskStartTime is not null ||
+                        batchInfo.ExecutorIndex is not null ||
+                        batchInfo.ExecutorEndTime is not null ||
+                        batchInfo.ExecutorStartTime is not null ||
+                        batchInfo.ExecutorExitCode is not null ||
+                        batchInfo.ExecutorEndTime is not null ||
+                        batchInfo.OutputFileLogs is not null ||
+                        batchInfo.Warning is not null ||
+                        batchInfo.Failure is not null ||
+                        !string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem))
                     {
-                        var tesTaskExecutorLog = tesTaskLog.GetOrAddExecutorLog(batchInfo.ExecutorIndex.Value);
-                        tesTaskExecutorLog.StartTime ??= batchInfo.ExecutorStartTime;
-                        tesTaskExecutorLog.EndTime ??= batchInfo.ExecutorEndTime;
-                        tesTaskExecutorLog.ExitCode ??= batchInfo.ExecutorExitCode;
 
-                        if ((tesTaskExecutorLog?.ExitCode > 1 || tesTaskExecutorLog?.ExitCode < 0) && (tesTaskExecutorLog.Stderr is not null || tesTaskExecutorLog.Stdout is not null))
+                        var tesTaskLog = tesTask.GetOrAddTesTaskLog();
+                        tesTaskLog.BatchNodeMetrics ??= batchNodeMetrics;
+                        tesTaskLog.CromwellResultCode ??= cromwellRcCode;
+                        tesTaskLog.EndTime ??= batchInfo.BatchTaskEndTime ?? taskEndTime;
+                        tesTaskLog.StartTime ??= batchInfo.BatchTaskStartTime ?? taskStartTime;
+
+                        if (batchInfo.ExecutorIndex is not null && (batchInfo.ExecutorEndTime is not null || batchInfo.ExecutorStartTime is not null || batchInfo.ExecutorExitCode is not null))
                         {
-                            tesTask.AddToSystemLog(Enumerable.Repeat("Check the following logs:", 1)
-                                .Concat(DeserializeJsonStringArray(tesTaskExecutorLog.Stderr) ?? [])
-                                .Concat(DeserializeJsonStringArray(tesTaskExecutorLog.Stdout) ?? []));
+                            var tesTaskExecutorLog = tesTaskLog.GetOrAddExecutorLog(batchInfo.ExecutorIndex.Value);
+                            tesTaskExecutorLog.StartTime ??= batchInfo.ExecutorStartTime;
+                            tesTaskExecutorLog.EndTime ??= batchInfo.ExecutorEndTime;
+                            tesTaskExecutorLog.ExitCode ??= batchInfo.ExecutorExitCode;
+
+                            if ((tesTaskExecutorLog?.ExitCode > 1 || tesTaskExecutorLog?.ExitCode < 0) && (tesTaskExecutorLog.Stderr is not null || tesTaskExecutorLog.Stdout is not null))
+                            {
+                                tesTask.AddToSystemLog(Enumerable.Repeat("Check the following logs:", 1)
+                                    .Concat(DeserializeJsonStringArray(tesTaskExecutorLog.Stderr) ?? [])
+                                    .Concat(DeserializeJsonStringArray(tesTaskExecutorLog.Stdout) ?? []));
+                            }
                         }
-                    }
 
-                    if (batchInfo.OutputFileLogs is not null)
-                    {
-                        tesTaskLog.Outputs ??= [];
-                        tesTaskLog.Outputs.AddRange(batchInfo.OutputFileLogs.Select(ConvertOutputFileLogToTesOutputFileLog));
-                    }
-
-                    if (batchInfo.Warning is not null)
-                    {
-                        var warningInfo = batchInfo.Warning.ToList();
-                        switch (warningInfo.Count)
+                        if (batchInfo.OutputFileLogs is not null)
                         {
-                            case 0:
-                                break;
-                            case 1:
-                                tesTask.SetWarning(warningInfo[0]);
-                                break;
-                            default:
-                                tesTask.SetWarning(warningInfo[0], [.. warningInfo.Skip(1)]);
-                                break;
+                            tesTaskLog.Outputs ??= [];
+                            tesTaskLog.Outputs.AddRange(batchInfo.OutputFileLogs.Select(ConvertOutputFileLogToTesOutputFileLog));
                         }
-                    }
 
-                    if (batchInfo.Failure.HasValue)
-                    {
-                        tesTask.SetFailureReason(
-                            batchInfo.Failure.Value.Reason,
-                            [.. (batchInfo.Failure.Value.SystemLogs ?? (string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem)
+                        if (batchInfo.Warning is not null)
+                        {
+                            var warningInfo = batchInfo.Warning.ToList();
+                            switch (warningInfo.Count)
+                            {
+                                case 0:
+                                    break;
+                                case 1:
+                                    tesTask.SetWarning(warningInfo[0]);
+                                    break;
+                                default:
+                                    tesTask.SetWarning(warningInfo[0], [.. warningInfo.Skip(1)]);
+                                    break;
+                            }
+                        }
+
+                        if (batchInfo.Failure.HasValue)
+                        {
+                            tesTask.SetFailureReason(
+                                batchInfo.Failure.Value.Reason,
+                                [.. (batchInfo.Failure.Value.SystemLogs ?? (string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem)
                                     ? []
                                     : Enumerable.Empty<string>().Append(batchInfo.AlternateSystemLogItem)))]);
-                    }
-                    else if (!(string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem) || tesTask.IsActiveState() || new[] { TesState.COMPLETE, TesState.CANCELED }.Contains(tesTask.State)))
-                    {
-                        tesTask.SetFailureReason(batchInfo.AlternateSystemLogItem);
+                        }
+                        else if (!(string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem) || tesTask.IsActiveState() || new[] { TesState.COMPLETE, TesState.CANCELED }.Contains(tesTask.State)))
+                        {
+                            tesTask.SetFailureReason(batchInfo.AlternateSystemLogItem);
+                        }
                     }
                 }
 
