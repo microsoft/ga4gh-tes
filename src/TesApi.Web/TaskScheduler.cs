@@ -57,6 +57,7 @@ namespace TesApi.Web
     {
         private static readonly TimeSpan blobRunInterval = TimeSpan.FromSeconds(15);
         private static readonly TimeSpan queuedRunInterval = TimeSpan.FromMilliseconds(100);
+        private static readonly TimeSpan queuedRepositoryInterval = TimeSpan.FromMinutes(1);
         internal static readonly TimeSpan BatchRunInterval = TimeSpan.FromSeconds(30); // The very fastest processes inside of Azure Batch accessing anything within pools or jobs appears to use a 30 second polling interval
         private static readonly TimeSpan shortBackgroundRunInterval = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan longBackgroundRunInterval = TimeSpan.FromSeconds(2.5);
@@ -72,6 +73,7 @@ namespace TesApi.Web
         private CancellationToken? stoppingToken = null;
         private readonly ConcurrentQueue<TesTask> queuedTesTasks = []; // Used during entire lifetime.
         private readonly ConcurrentQueue<(TesTask[] TesTasks, AzureBatchTaskState[] TaskStates, ChannelWriter<RelatedTask<TesTask, bool>> Channel)> tesTaskBatchStates = []; // Used only during standup.
+        private DateTimeOffset nextQueuedRepository = DateTimeOffset.UtcNow;
 
         /// <inheritdoc />
         protected override async ValueTask ExecuteSetupAsync(CancellationToken cancellationToken)
@@ -200,7 +202,14 @@ namespace TesApi.Web
         /// <returns></returns>
         private async ValueTask ProcessQueuedTesTasksAsync(CancellationToken cancellationToken)
         {
-            while (!cancellationToken.IsCancellationRequested && queuedTesTasks.TryDequeue(out var tesTask))
+            Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>> query = new(
+                async token => (await Repository.GetItemsAsync(
+                    predicate: t => t.State == TesState.CANCELING,
+                    cancellationToken: token))
+                .OrderByDescending(t => t.CreationTime)
+                .ToAsyncEnumerable());
+
+            while (!cancellationToken.IsCancellationRequested && (queuedTesTasks.TryDequeue(out var tesTask) || (DateTimeOffset.UtcNow >= nextQueuedRepository && await RefillFromRepository() && queuedTesTasks.TryDequeue(out tesTask))))
             {
                 await ProcessOrchestratedTesTaskAsync("Queued", new(BatchScheduler.ProcessQueuedTesTaskAsync(tesTask, cancellationToken), tesTask), Requeue, cancellationToken);
             }
@@ -213,6 +222,14 @@ namespace TesApi.Web
                 {
                     queuedTesTasks.Enqueue(tesTask);
                 }
+            }
+
+            // Catch any tasks reset back to Queued
+            async ValueTask<bool> RefillFromRepository()
+            {
+                nextQueuedRepository = DateTimeOffset.UtcNow + queuedRepositoryInterval;
+                await (await query(cancellationToken)).ForEachAsync(queuedTesTasks.Enqueue, cancellationToken);
+                return !queuedTesTasks.IsEmpty;
             }
         }
 
