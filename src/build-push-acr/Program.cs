@@ -13,10 +13,12 @@ using BuildPushAcr;
 using CommonUtilities.AzureCloud;
 
 Option<Version> tagOption = new(["--tag", "-v"], parseArgument: result => new(result.Tokens.Single().Value), description: "The tag to fetch from the repository.") { IsRequired = true, Arity = ArgumentArity.ExactlyOne };
+Option<string> prereleaseOption = new(["--pre", "-p"], description: "Prerelease label.") { IsRequired = false, Arity = ArgumentArity.ExactlyOne };
 
 Command githubCommand = new("github", "Builds image(s) from the GitHub repository.")
 {
-    tagOption
+    tagOption,
+    prereleaseOption,
 };
 
 var directoryOption = new Option<DirectoryInfo>(["--directory", "-d"], "The directory containing the solution. Usually is the root of the respository.") { IsRequired = true, Arity = ArgumentArity.ExactlyOne }
@@ -100,9 +102,18 @@ IArchive GetLocalGitArchive(System.CommandLine.Invocation.InvocationContext cont
     => LocalGitArchive.Create(context.ParseResult.GetValueForOption(directoryOption)!);
 
 IArchive GetGitHubArchive(System.CommandLine.Invocation.InvocationContext context)
-    => GitHubArchive.Create(context.ParseResult.GetValueForOption(buildTypeOption),
-        context.ParseResult.GetValueForOption(tagOption)!.ToString(3),
+{
+    var tag = context.ParseResult.GetValueForOption(tagOption)!.ToString(3);
+
+    if (context.ParseResult.HasOption(prereleaseOption))
+    {
+        tag += "-" + context.ParseResult.GetValueForOption(prereleaseOption);
+    }
+
+    return GitHubArchive.Create(context.ParseResult.GetValueForOption(buildTypeOption),
+        tag,
         GitHubArchive.GetAccessTokenProvider());
+}
 
 githubCommand.SetHandler(context => Handler(context, GetGitHubArchive));
 localCommand.SetHandler(context => Handler(context, GetLocalGitArchive));

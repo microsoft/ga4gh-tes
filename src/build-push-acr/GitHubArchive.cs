@@ -123,7 +123,7 @@ namespace BuildPushAcr
             }
         }
 
-        async ValueTask<Version> IArchive.GetTagAsync(CancellationToken cancellationToken)
+        async ValueTask<(Version Version, string? Prerelease)> IArchive.GetTagAsync(CancellationToken cancellationToken)
         {
             List<GitHub.Models.Tag> tags = [];
 
@@ -142,13 +142,13 @@ namespace BuildPushAcr
             // Check if the ref is a tag or a commit with a tag
             var result = tags
                 .Where(tag => @ref.Equals(tag.Name) || (tag.Commit?.Sha?.StartsWith(@ref) ?? false))
-                .Select(tag => Version.TryParse(tag.Name, out var version) ? version : default)
+                .Select(tag => IArchive.ParseTag(tag.Name))
                 .Where(version => version is not null)
-                .Max();
+                .MaxBy(version => version!.Value.Version);
 
             if (result is not null)
             {
-                return result;
+                return result.Value;
             }
 
             string sha;
@@ -170,7 +170,7 @@ namespace BuildPushAcr
             {
                 await channel.Writer.WriteAsync(sha, cancellationToken);
 
-                List<Version> candidates = [];
+                List<(Version Version, string? TagName)?> candidates = [];
 
                 await foreach (var commit in channel.Reader.ReadAllAsync(cancellationToken))
                 {
@@ -184,9 +184,9 @@ namespace BuildPushAcr
                     {
                         candidates.Add(tags
                             .Where(tag => tag.Commit?.Sha?.Equals(commit) ?? false)
-                            .Select(tag => Version.TryParse(tag.Name, out var version) ? version : default)
+                            .Select(tag => IArchive.ParseTag(tag.Name))
                             .Where(version => version is not null)
-                            .Max() ?? throw new InvalidOperationException());
+                            .MaxBy(version => version!.Value.Version) ?? throw new InvalidOperationException());
                     }
                     catch (InvalidOperationException)
                     {
@@ -203,7 +203,7 @@ namespace BuildPushAcr
                     }
                 }
 
-                return candidates.Max() ?? throw new InvalidOperationException("Tag not found.");
+                return candidates.MaxBy(version => version!.Value.Version) ?? throw new InvalidOperationException("Tag not found.");
             }
             catch (GitHub.Models.BasicError ex) when (ex.ResponseStatusCode == (int)HttpStatusCode.NotFound)
             {

@@ -10,6 +10,7 @@ using Azure.ResourceManager;
 using Azure.ResourceManager.ContainerRegistry;
 using Azure.ResourceManager.ContainerRegistry.Models;
 using Azure.Storage.Blobs;
+using CommonUtilities;
 
 namespace BuildPushAcr
 {
@@ -27,10 +28,10 @@ namespace BuildPushAcr
         CoA
     }
 
-    public partial class AcrBuild(BuildType buildType, Version tag, ResourceIdentifier acrId, TokenCredential credential, ContainerRegistryAudience audience)
+    public partial class AcrBuild(BuildType buildType, (Version Version, string? Prerelease) tag, ResourceIdentifier acrId, TokenCredential credential, ContainerRegistryAudience audience)
     {
         private readonly BuildType buildType = buildType;
-        private readonly Version tag = tag ?? throw new ArgumentNullException(nameof(tag));
+        private readonly (Version Version, string? Prerelease) tag = tag;
         private readonly ResourceIdentifier acrId = acrId ?? throw new ArgumentNullException(nameof(acrId));
         private readonly TokenCredential credential = credential ?? throw new ArgumentNullException(nameof(credential));
         private readonly ContainerRegistryAudience audience = audience;
@@ -41,11 +42,14 @@ namespace BuildPushAcr
 
         private ContainerRegistryResource? acr;
         List<TarEntry>? entries = default;
-        private Version? build;
+        private (Version Version, string? Prerelease)? build;
 
         private const string Root = "root";
 
-        public Version Tag => build ?? new();
+        private static string BuildToTag((Version Version, string? Prerelease) build)
+            => build.Version.ToString() + (string.IsNullOrEmpty(build.Prerelease) ? string.Empty : "-" + build.Prerelease);
+
+        public string Tag => build.HasValue ? BuildToTag(build.Value) : string.Empty;
 
         public async ValueTask LoadAsync(IArchive archive, ArmEnvironment environment, CancellationToken cancellationToken)
         {
@@ -88,7 +92,7 @@ namespace BuildPushAcr
             {
                 maxTag = await repository.GetAllManifestPropertiesAsync(cancellationToken: cancellationToken)
                     .SelectMany(props => props.Tags.ToAsyncEnumerable())
-                    .Where(tag => tag.StartsWith(this.tag.ToString(3)) && Version.TryParse(tag, out _))
+                    .Where(tag => tag.StartsWith(this.tag.Version.ToString(3)) && Version.TryParse(tag, out _))
                     .Select(tag => new Version(tag))
                     .MaxAsync(cancellationToken);
             }
@@ -97,7 +101,7 @@ namespace BuildPushAcr
                 maxTag = default;
             }
 
-            build = new(tag.ToString(3) + "." + (NextValue(maxTag?.Revision) ?? "0"));
+            build = new(new(tag.Version.Major, tag.Version.Minor, tag.Version.Build, NextValue(maxTag?.Revision)), tag.Prerelease);
 
             Console.WriteLine("Preparing source code");
             entries = await archive.Get(cancellationToken, Root)
@@ -105,7 +109,7 @@ namespace BuildPushAcr
                 .Select(ProcessEntry)
                 .ToListAsync(cancellationToken);
 
-            static string? NextValue(int? i) => i is null ? default : (i + 1).ToString();
+            static int NextValue(int? i) => i.HasValue ? i.Value + 1 : 0;
         }
 
         public async ValueTask<(bool Success, string? Log)> BuildAsync(LogType logType, CancellationToken cancellationToken)
@@ -147,7 +151,17 @@ namespace BuildPushAcr
                     Console.WriteLine();
                 }
 
-                (var succeeded, captured) = await BuildAsync(logType, acr, tesTar, "Dockerfile-Tes", [$"ga4gh/tes:{build}", $"cromwellonazure/tes:{build}"], cancellationToken);
+                var tesImage = buildType == BuildType.Tes ? "ga4gh/tes" : "cromwellonazure/tes";
+                (var succeeded, captured) = await BuildAsync(
+                    logType,
+                    acr,
+                    tesTar,
+                    "Dockerfile-Tes",
+                    [
+                        $"{tesImage}:{BuildToTag(build.Value)}", $"{tesImage}:{BuildToTag((build.Value.Version, build.Value.Prerelease))}",
+                        $"{tesImage}:{BuildToTag((new(build.Value.Version.Major, build.Value.Version.Minor, build.Value.Version.Build), build.Value.Prerelease))}"
+                    ],
+                    cancellationToken);
 
                 if (succeeded && coaTar is not null)
                 {
@@ -156,7 +170,16 @@ namespace BuildPushAcr
                         Console.WriteLine();
                     }
 
-                    (succeeded, var moreLog) = await BuildAsync(logType, acr, coaTar, "Dockerfile-TriggerService", [$"cromwellonazure/triggerservice:{build}"], cancellationToken);
+                    (succeeded, var moreLog) = await BuildAsync(
+                        logType,
+                        acr,
+                        coaTar,
+                        "Dockerfile-TriggerService",
+                        [
+                            $"cromwellonazure/triggerservice:{BuildToTag(build.Value)}",
+                            $"cromwellonazure/triggerservice:{BuildToTag((new(build.Value.Version.Major, build.Value.Version.Minor, build.Value.Version.Build), build.Value.Prerelease))}",
+                        ],
+                        cancellationToken);
                     captured += Environment.NewLine + moreLog;
                 }
 
@@ -230,12 +253,9 @@ namespace BuildPushAcr
 
             ConsoleWriteLine($"Building {dockerFilePath} in '{sourceUpload.Value.RelativePath}'");
             ConsoleWriteLine(string.Empty);
-            ContainerRegistryDockerBuildContent content = new(dockerFilePath, new(ContainerRegistryOS.Linux)) { SourceLocation = sourceUpload.Value.RelativePath };
 
-            foreach (var name in imageNames.SelectMany(name => (string[])[name, name[..name.LastIndexOf('.')]]))
-            {
-                content.ImageNames.Add(name);
-            }
+            ContainerRegistryDockerBuildContent content = new(dockerFilePath, new(ContainerRegistryOS.Linux)) { SourceLocation = sourceUpload.Value.RelativePath };
+            imageNames.ForEach(content.ImageNames.Add);
 
             var taskEndFound = false;
             var task = (await acr.ScheduleRunAsync(Azure.WaitUntil.Completed, content, cancellationToken)).Value;

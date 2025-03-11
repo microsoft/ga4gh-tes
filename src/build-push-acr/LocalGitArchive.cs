@@ -32,7 +32,7 @@ namespace BuildPushAcr
             UnixFileMode.OtherRead |
             UnixFileMode.OtherWrite;
 
-        async ValueTask<Version> IArchive.GetTagAsync(CancellationToken cancellationToken)
+        async ValueTask<(Version Version, string? Prerelease)> IArchive.GetTagAsync(CancellationToken cancellationToken)
         {
             var gitBinary = FindExecutable.FindExecutable.FullPath("git");
 
@@ -65,9 +65,9 @@ namespace BuildPushAcr
                 .ReadToEnd()
                 .ReplaceLineEndings(Environment.NewLine)
                 .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(line => Version.TryParse(line, out var version) ? version : default)
+                .Select(IArchive.ParseTag)
                 .Where(version => version is not null)
-                .Max() ?? throw new InvalidOperationException("No version-like tags found");
+                .MaxBy(version => version!.Value.Version) ?? throw new InvalidOperationException("No version-like tags found");
         }
 
         IAsyncEnumerable<TarEntry> IArchive.Get(CancellationToken _1, string? root)

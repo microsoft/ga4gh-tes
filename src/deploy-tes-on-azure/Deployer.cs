@@ -1433,8 +1433,8 @@ namespace TesDeployer
                     return build;
                 }));
 
-            var tesDigest = (await acrGetDigestRetryPolicy.ExecuteWithRetryAsync(token => (client ??= GetClient()).GetArtifact("cromwellonazure/tes", build.Tag.ToString()).GetManifestPropertiesAsync(token), cts.Token)).Value.Digest;
-            settings["ActualTesImageName"] = $"{acr.Data.LoginServer}/cromwellonazure/tes@{tesDigest}";
+            var tesDigest = (await acrGetDigestRetryPolicy.ExecuteWithRetryAsync(token => (client ??= GetClient()).GetArtifact("ga4gh/tes", build.Tag).GetManifestPropertiesAsync(token), cts.Token)).Value.Digest;
+            settings["ActualTesImageName"] = $"{acr.Data.LoginServer}/ga4gh/tes@{tesDigest}";
 
             Azure.Containers.ContainerRegistry.ContainerRegistryClient GetClient()
                 => new(new UriBuilder() { Scheme = Uri.UriSchemeHttps, Host = acr.Data.LoginServer }.Uri, tokenCredential, new() { Audience = cloudEnvironment.ArmEnvironment.Audience, RetryPolicy = GetRetryPolicy(new()) });
