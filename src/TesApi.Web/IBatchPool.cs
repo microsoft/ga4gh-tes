@@ -91,9 +91,16 @@ namespace TesApi.Web
         ValueTask<DateTime> GetAllocationStateTransitionTimeAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// TesTasks associated with pool by CloudTask.
+        /// </summary>
+        /// <remarks>Key is <see cref="CloudTask.Id"/>, Value is <see cref="Tes.Models.TesTask.Id"/>.</remarks>
+        ConcurrentDictionary<string, string> AssociatedTesTasks { get; }
+
+        /// <summary>
         /// TesTasks associated with pool.
         /// </summary>
-        ConcurrentDictionary<string, string> AssociatedTesTasks { get; }
+        /// <remarks>Key is <see cref="Tes.Models.TesTask.Id"/>, Value is <c>null</c>.</remarks>
+        ConcurrentDictionary<string, object> OrphanedTesTasks { get; }
 
         /// <summary>
         /// A <see cref="CloudTask"/> with a compute node id.

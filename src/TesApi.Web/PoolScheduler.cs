@@ -38,7 +38,7 @@ namespace TesApi.Web
         /// </summary>
         public static readonly TimeSpan RunInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs uses a 30 second polling interval
 
-        private static readonly TimeSpan StateTransitionTimeForDeletionTimeSpan = 0.75 * Web.BatchScheduler.BatchDeleteNewTaskWorkaroundTimeSpan;
+        private static readonly TimeSpan StateTransitionTimeForDeletionTimeSpan = 1.25 * Web.BatchScheduler.BatchDeleteNewTaskWorkaroundTimeSpan;
         private static readonly TimeSpan CompletedTaskListTimeSpan = 0.5 * Web.BatchScheduler.BatchDeleteNewTaskWorkaroundTimeSpan;
         private static readonly TimeSpan PatchSasTokensTimeSpan = TimeSpan.FromMinutes(20);
 
@@ -300,6 +300,7 @@ namespace TesApi.Web
                     {
                         Logger.LogTrace("{TaskId} connected to node {NodeId} in state {NodeState}.", task.Id, node.Id, node.State);
 
+                        _ = pool.AssociatedTesTasks.TryRemove(task.Id, out _);
                         yield return new(task.Id, node.State switch
                         {
                             ComputeNodeState.Preempted => new(AzureBatchTaskState.TaskState.NodePreempted),
@@ -315,11 +316,13 @@ namespace TesApi.Web
 
             foreach (var state in activeTaskList.Zip(GetFailures(), (cloud, state) => new CloudTaskBatchTaskState(cloud.Id, state)))
             {
+                _ = pool.AssociatedTesTasks.TryRemove(state.CloudTaskId, out _);
                 yield return state;
             }
 
             foreach (var task in completedTaskList)
             {
+                _ = pool.AssociatedTesTasks.TryRemove(task.Id, out _);
                 yield return new(task.Id, GetCompletedBatchState(task));
             }
 

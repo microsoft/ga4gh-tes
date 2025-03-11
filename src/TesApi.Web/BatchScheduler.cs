@@ -227,6 +227,15 @@ namespace TesApi.Web
                 {
                     tesTask.State = newTaskState;
 
+                    if (!tesTask.IsActiveState() || tesTask.State == TesState.QUEUED)
+                    {
+                        var pool = GetPools().SingleOrDefault(pool => pool.PoolId.Equals(tesTask.PoolId, StringComparison.InvariantCultureIgnoreCase));
+                        if (!pool.OrphanedTesTasks.TryRemove(tesTask.Id, out _))
+                        {
+                            pool.AssociatedTesTasks.Where(pair => tesTask.Id.Equals(pair.Value, StringComparison.InvariantCultureIgnoreCase)).ForEach(pair => _ = pool.AssociatedTesTasks.TryRemove(pair));
+                        }
+                    }
+
                     var tesTaskLog = tesTask.GetOrAddTesTaskLog();
                     tesTaskLog.BatchNodeMetrics ??= batchNodeMetrics;
                     tesTaskLog.CromwellResultCode ??= cromwellRcCode;
@@ -340,7 +349,7 @@ namespace TesApi.Web
                             if (!tesTask.IsActiveState())
                             {
                                 skipLogInFinally = true;
-                                return await SetTaskStateAndLogAsync(tesTask, newTaskState, batchInfo, cancellationToken);
+                                return await SetTaskStateAndLogAsync(tesTask, TesState.CANCELED, batchInfo, cancellationToken);
                             }
 
                             if (tesTask.Logs?.Any() ?? false)
@@ -348,17 +357,18 @@ namespace TesApi.Web
                                 goto default;
                             }
 
-                            return true; // It was never scheduled
+                            return await SetTaskStateAndLogAsync(tesTask, TesState.CANCELED, batchInfo, cancellationToken); // It was never scheduled
 
                         default:
                             if (!GetPools().Select(pool => pool.PoolId).Contains(tesTask.PoolId, StringComparer.OrdinalIgnoreCase))
                             {
                                 // Task was orphaned
-                                return true;
+                                tesTask.PoolId = null;
+                                return await SetTaskStateAndLogAsync(tesTask, newTaskState, batchInfo, cancellationToken);
                             }
 
                             await azureProxy.TerminateBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
-                            return true;
+                            return await SetTaskStateAndLogAsync(tesTask, newTaskState, batchInfo, cancellationToken);
                     }
                 }
                 catch (BatchException exc) when (BatchErrorCodeStrings.TaskNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
@@ -697,7 +707,7 @@ namespace TesApi.Web
                 var cloudTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
                 tesTask.PoolId = pool.PoolId;
                 var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(cloudTaskId, tesTask, virtualMachineInfo.Identities.Last(), virtualMachineInfo.VM.VmFamily, cancellationToken);
-                _ = pool.AssociatedTesTasks.AddOrUpdate(tesTask.Id, key => cloudTask.Id, (key, value) => cloudTask.Id);
+                _ = pool.AssociatedTesTasks.AddOrUpdate(cloudTask.Id, key => tesTask.Id, (key, value) => tesTask.Id);
 
                 logger.LogDebug(@"Creating batch task for TES task {TesTaskId}. Using VM size {VmSize}.", tesTask.Id, virtualMachineInfo.VM.VmSize);
 

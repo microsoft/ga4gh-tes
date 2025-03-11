@@ -389,7 +389,7 @@ namespace TesApi.Web
                     case ScalingMode.RemovingFailedNodes:
                         _scalingMode = ScalingMode.RemovingFailedNodes;
                         _logger.LogInformation(@"Switching pool {PoolId} back to autoscale.", PoolId);
-                        await _azureProxy.EnableBatchPoolAutoScaleAsync(PoolId, !IsDedicated, AutoScaleEvaluationInterval, AutoPoolFormula, _ => ValueTask.FromResult(GetTasks(includeCompleted: false).Count()), cancellationToken);
+                        await _azureProxy.EnableBatchPoolAutoScaleAsync(PoolId, !IsDedicated, AutoScaleEvaluationInterval, AutoPoolFormula, _ => ValueTask.FromResult(AssociatedTesTasks.Count), cancellationToken);
                         _autoScaleWaitTime = DateTime.UtcNow + (3 * AutoScaleEvaluationInterval) + (PoolScheduler.RunInterval / 2);
                         _scalingMode = _resetAutoScalingRequired ? ScalingMode.WaitingForAutoScale : ScalingMode.SettingAutoScale;
                         _resetAutoScalingRequired = false;
@@ -501,6 +501,9 @@ namespace TesApi.Web
         public ConcurrentDictionary<string, string> AssociatedTesTasks { get; } = [];
 
         /// <inheritdoc/>
+        public ConcurrentDictionary<string, object> OrphanedTesTasks { get; } = [];
+
+        /// <inheritdoc/>
         public async ValueTask<bool> CanBeDeletedAsync(CancellationToken cancellationToken = default)
         {
             if (_removedFromService)
@@ -584,6 +587,16 @@ namespace TesApi.Web
                 }
 
                 _logger.LogTrace("{PoolId}: {TaskCount} tasks discovered.", PoolId, _foundTasks.Count);
+
+                _foundTasks.Where(task => task.State != TaskState.Completed).ForEach(task =>
+                {
+                    var tesTaskId = _batchPools.GetTesTaskIdFromCloudTaskId(task.Id);
+
+                    if (OrphanedTesTasks.TryRemove(tesTaskId, out _) || !AssociatedTesTasks.ContainsKey(task.Id))
+                    {
+                        AssociatedTesTasks.AddOrUpdate(task.Id, tesTaskId, (_, _) => tesTaskId);
+                    }
+                });
 
                 // List nodes from Batch at most one time each time we service the pool
                 _lazyComputeNodes = _taskPreviousComputeNodeIds.Count == 0

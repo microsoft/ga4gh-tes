@@ -11,6 +11,7 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using CommonUtilities;
 using Microsoft.Extensions.Logging;
+using Tes.Extensions;
 using Tes.Models;
 using Tes.Repository;
 using TesApi.Web.Events;
@@ -66,11 +67,11 @@ namespace TesApi.Web
         /// Checks to see if the hosted service is running.
         /// </summary>
         /// <value>False if the service hasn't started up yet, True if it has started, throws TaskCanceledException if service is/has shutdown.</value>
-        private bool IsRunning => stoppingToken is not null && (stoppingToken.Value.IsCancellationRequested ? throw new TaskCanceledException() : true);
+        private bool IsRunning => stoppingToken is not null && (stoppingToken.Value.IsCancellationRequested ? throw new TaskCanceledException(new TaskCanceledException().Message, null, stoppingToken.Value) : true);
 
         private CancellationToken? stoppingToken = null;
-        private readonly ConcurrentQueue<TesTask> queuedTesTasks = [];
-        private readonly ConcurrentQueue<(TesTask[] TesTasks, AzureBatchTaskState[] TaskStates, ChannelWriter<RelatedTask<TesTask, bool>> Channel)> tesTaskBatchStates = [];
+        private readonly ConcurrentQueue<TesTask> queuedTesTasks = []; // Used during entire lifetime.
+        private readonly ConcurrentQueue<(TesTask[] TesTasks, AzureBatchTaskState[] TaskStates, ChannelWriter<RelatedTask<TesTask, bool>> Channel)> tesTaskBatchStates = []; // Used only during standup.
 
         /// <inheritdoc />
         protected override async ValueTask ExecuteSetupAsync(CancellationToken cancellationToken)
@@ -79,10 +80,8 @@ namespace TesApi.Web
             {
                 // Delay "starting" TaskScheduler until this completes to finish initializing BatchScheduler.
                 await BatchScheduler.UploadTaskRunnerIfNeededAsync(cancellationToken);
-                // Ensure BatchScheduler has loaded existing pools before "starting".
-                //await BatchScheduler.LoadExistingPoolsAsync(cancellationToken);
             }
-            catch (Exception exc)
+            catch (Exception exc) when (exc is not OperationCanceledException)
             {
                 Logger.LogError(exc, @"Checking/storing the node task runner binary failed with {Message}", exc.Message);
                 throw;
@@ -115,12 +114,14 @@ namespace TesApi.Web
                         if (pool is null)
                         {
                             Logger.LogDebug(@"Adding task w/o pool id from repository");
-                            queuedTesTasks.Enqueue(tesTask); // TODO: is there a better way to treat tasks that are not "queued" that are also not associated with any known pool?
+                            // TODO: is there a better way to treat tasks that are not "queued" that are also not associated with any known pool?
+                            tesTask.GetOrAddTesTaskLog().SystemLogs.Add($"Pool {tesTask.PoolId} not found. Requeuing this task.");
+                            queuedTesTasks.Enqueue(tesTask);
                         }
                         else
                         {
                             Logger.LogTrace(@"Adding task to pool w/o cloudtask");
-                            _ = pool.AssociatedTesTasks.AddOrUpdate(tesTask.Id, key => null, (key, value) => value);
+                            _ = pool.OrphanedTesTasks.TryAdd(tesTask.Id, null);
                         }
                     }
                 }
@@ -169,7 +170,7 @@ namespace TesApi.Web
         {
             try
             {
-                await foreach (var relatedTask in ((ITaskScheduler)this).ProcessTesTaskBatchStatesAsync(tesTasks, taskStates, cancellationToken))
+                await foreach (var relatedTask in ProcessTesTaskBatchStatesAsync(tesTasks, taskStates, cancellationToken))
                 {
                     await channel.WriteAsync(relatedTask, cancellationToken);
                 }
@@ -208,7 +209,7 @@ namespace TesApi.Web
             {
                 TesTask tesTask = default;
 
-                if (await Repository.TryGetItemAsync(exception.RepositoryItem.Id, cancellationToken, task => tesTask = task) && (tesTask?.IsActiveState() ?? false) && tesTask?.State != TesState.CANCELING)
+                if (await Repository.TryGetItemAsync(exception.RepositoryItem.Id, cancellationToken, task => tesTask = task) && tesTask?.State == TesState.QUEUED)
                 {
                     queuedTesTasks.Enqueue(tesTask);
                 }
@@ -268,7 +269,7 @@ namespace TesApi.Web
                         await OrchestrateTesTasksOnBatchAsync(
                             "Cancelled",
                             _ => ValueTask.FromResult(tasks.ToAsyncEnumerable()),
-                            (tasks, ct) => ((ITaskScheduler)this).ProcessTesTaskBatchStatesAsync(
+                            (tasks, ct) => ProcessTesTaskBatchStatesAsync(
                                 tasks,
                                 Enumerable.Repeat<AzureBatchTaskState>(new(AzureBatchTaskState.TaskState.CancellationRequested), tasks.Length).ToArray(),
                                 ct),
@@ -441,7 +442,7 @@ namespace TesApi.Web
                 await OrchestrateTesTasksOnBatchAsync(
                     "NodeEvent",
                     _ => ValueTask.FromResult(tasks.ToAsyncEnumerable()),
-                    (tesTasks, token) => ((ITaskScheduler)this).ProcessTesTaskBatchStatesAsync(tesTasks, tesTasks.Select(task => statesByTask[task.Id][0].State).ToArray(), token),
+                    (tesTasks, token) => ProcessTesTaskBatchStatesAsync(tesTasks, [.. tesTasks.Select(task => statesByTask[task.Id][0].State)], token),
                     ex => { requeues.Add(ex.RepositoryItem.Id); return ValueTask.CompletedTask; },
                     cancellationToken,
                     "events");
@@ -497,12 +498,6 @@ namespace TesApi.Web
             });
         }
 
-        /// <inheritdoc/>
-        void ITaskScheduler.QueueTesTask(TesTask tesTask)
-        {
-            queuedTesTasks.Enqueue(tesTask);
-        }
-
         private async Task ExecuteProcessOrphanedTasksAsync(CancellationToken cancellationToken)
         {
             List<TesState> statesToSkip = [TesState.QUEUED, TesState.CANCELING];
@@ -519,7 +514,7 @@ namespace TesApi.Web
                         async cancellation => (await Repository.GetItemsAsync(task => !statesToSkip.Contains(task.State), cancellation))
                             .Where(task => !pools.Contains(task.PoolId, StringComparer.OrdinalIgnoreCase))
                             .ToAsyncEnumerable(),
-                        (tesTasks, cancellation) => ((ITaskScheduler)this).ProcessTesTaskBatchStatesAsync(tesTasks, tesTasks.Select(_ => new AzureBatchTaskState(AzureBatchTaskState.TaskState.CompletedWithErrors, BatchTaskEndTime: now, Failure: new(AzureBatchTaskState.SystemError, ["RemovedPoolOrJob", "Batch pool or job was removed."]))).ToArray(), cancellation),
+                        (tesTasks, cancellation) => ProcessTesTaskBatchStatesAsync(tesTasks, tesTasks.Select(_ => new AzureBatchTaskState(AzureBatchTaskState.TaskState.CompletedWithErrors, BatchTaskEndTime: now, Failure: new(AzureBatchTaskState.SystemError, ["RemovedPoolOrJob", "Batch pool or job was removed."]))).ToArray(), cancellation),
                         ex => { Logger.LogError(ex, "Repository collision while failing task ('{TesTask}') due to pool or job removal.", ex.RepositoryItem?.Id ?? "<unknown>"); return ValueTask.CompletedTask; },
                         token);
                 },
@@ -527,7 +522,13 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        IAsyncEnumerable<RelatedTask<TesTask, bool>> ITaskScheduler.ProcessTesTaskBatchStatesAsync(IEnumerable<TesTask> tesTasks, AzureBatchTaskState[] taskStates, CancellationToken cancellationToken)
+        void ITaskScheduler.QueueTesTask(TesTask tesTask)
+        {
+            queuedTesTasks.Enqueue(tesTask);
+        }
+
+        /// <inheritdoc/>
+        public IAsyncEnumerable<RelatedTask<TesTask, bool>> ProcessTesTaskBatchStatesAsync(IEnumerable<TesTask> tesTasks, AzureBatchTaskState[] taskStates, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(tesTasks);
             ArgumentNullException.ThrowIfNull(taskStates);
