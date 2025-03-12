@@ -1,1 +1,1 @@
-TesImageName=mcr.microsoft.com/ga4gh/tes:6.0.0
+TesImageName=mcr.microsoft.com/ga4gh/tes:6.1.0

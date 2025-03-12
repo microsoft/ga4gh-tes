@@ -1,1 +1,1 @@
-TesOnAzureVersion=6.0.0
+TesOnAzureVersion=6.1.0
