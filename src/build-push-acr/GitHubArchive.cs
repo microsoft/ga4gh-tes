@@ -123,7 +123,8 @@ namespace BuildPushAcr
             }
         }
 
-        async ValueTask<(Version Version, string? Prerelease)> IArchive.GetTagAsync(CancellationToken cancellationToken)
+        /// <inheritdoc/>
+        async ValueTask<(Version Version, string? Prerelease)> IArchive.GetTagAsync(CancellationToken cancellationToken, bool allowAnyPrerelease)
         {
             List<GitHub.Models.Tag> tags = [];
 
@@ -141,7 +142,7 @@ namespace BuildPushAcr
 
             // Check if the ref is a tag or a commit with a tag
             var result = tags
-                .Where(tag => @ref.Equals(tag.Name) || (tag.Commit?.Sha?.StartsWith(@ref) ?? false))
+                .Where(tag => (allowAnyPrerelease ? tag.Name?.StartsWith(@ref) ?? false : @ref.Equals(tag.Name)) || (tag.Commit?.Sha?.StartsWith(@ref) ?? false))
                 .Select(tag => IArchive.ParseTag(tag.Name))
                 .Where(version => version is not null)
                 .MaxBy(version => version!.Value.Version);
@@ -211,6 +212,7 @@ namespace BuildPushAcr
             }
         }
 
+        /// <inheritdoc/>
         async IAsyncEnumerable<System.Formats.Tar.TarEntry> IArchive.Get([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken, string? root)
         {
             if (reader is not null)
