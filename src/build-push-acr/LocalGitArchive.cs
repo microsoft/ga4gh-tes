@@ -32,7 +32,8 @@ namespace BuildPushAcr
             UnixFileMode.OtherRead |
             UnixFileMode.OtherWrite;
 
-        async ValueTask<(Version Version, string? Prerelease)> IArchive.GetTagAsync(CancellationToken cancellationToken, bool allowAnyPrerelease)
+        /// <inheritdoc/>
+        async ValueTask<(Version Version, string? Prerelease)> IArchive.GetTagAsync(CancellationToken cancellationToken, bool _1/*allowAnyPrerelease*/)
         {
             var gitBinary = FindExecutable.FindExecutable.FullPath("git");
 
@@ -70,6 +71,7 @@ namespace BuildPushAcr
                 .MaxBy(version => version!.Value.Version) ?? throw new InvalidOperationException("No version-like tags found");
         }
 
+        /// <inheritdoc/>
         IAsyncEnumerable<TarEntry> IArchive.Get(CancellationToken _1, string? root)
         {
             string[] subFoldersToIgnore = ["bin", "obj", "TestResults"];
