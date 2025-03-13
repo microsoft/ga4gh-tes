@@ -56,11 +56,11 @@ namespace TesApi.Web
         , ITaskScheduler
     {
         private static readonly TimeSpan blobRunInterval = TimeSpan.FromSeconds(15);
-        private static readonly TimeSpan queuedRunInterval = TimeSpan.FromMilliseconds(100);
+        private static readonly TimeSpan queuedRunInterval = TimeSpan.FromSeconds(15);
         private static readonly TimeSpan queuedRepositoryInterval = TimeSpan.FromMinutes(1);
         internal static readonly TimeSpan BatchRunInterval = TimeSpan.FromSeconds(30); // The very fastest processes inside of Azure Batch accessing anything within pools or jobs appears to use a 30 second polling interval
-        private static readonly TimeSpan shortBackgroundRunInterval = TimeSpan.FromSeconds(1);
-        private static readonly TimeSpan longBackgroundRunInterval = TimeSpan.FromSeconds(2.5);
+        private static readonly TimeSpan shortBackgroundRunInterval = TimeSpan.FromMilliseconds(75);
+        private static readonly TimeSpan longBackgroundRunInterval = TimeSpan.FromSeconds(15);
         private static readonly TimeSpan orphanedTaskInterval = TimeSpan.FromMinutes(10);
         private readonly RunnerEventsProcessor nodeEventProcessor = nodeEventProcessor;
 
@@ -209,9 +209,31 @@ namespace TesApi.Web
                 .OrderByDescending(t => t.CreationTime)
                 .ToAsyncEnumerable());
 
-            while (!cancellationToken.IsCancellationRequested && (queuedTesTasks.TryDequeue(out var tesTask) || (DateTimeOffset.UtcNow >= nextQueuedRepository && await RefillFromRepository() && queuedTesTasks.TryDequeue(out tesTask))))
+            cancellationToken.ThrowIfCancellationRequested();
+            var now = DateTimeOffset.UtcNow;
+
+            HashSet<TesTask> tasks = new(new TesTasByIdComparer());
+
+            while (queuedTesTasks.TryDequeue(out var tesTask))
             {
-                await ProcessOrchestratedTesTaskAsync("Queued", new(BatchScheduler.ProcessQueuedTesTaskAsync(tesTask, cancellationToken), tesTask), Requeue, cancellationToken);
+                _ = tasks.Add(tesTask);
+            }
+
+            // Catch any tasks reset back to Queued
+            if (nextQueuedRepository <= now)
+            {
+                nextQueuedRepository = now + queuedRepositoryInterval;
+                await (await query(cancellationToken)).ForEachAsync(task => _ = tasks.Add(task), cancellationToken);
+            }
+
+            tasks.ForEach(QueueTesTask);
+
+            void QueueTesTask(TesTask tesTask)
+            {
+                _ = BatchScheduler.ProcessQueuedTesTaskAsync(tesTask, cancellationToken)
+                    .ContinueWith(task => ProcessOrchestratedTesTaskAsync("Queued", new(task, tesTask), Requeue, cancellationToken).AsTask())
+                    .Unwrap()
+                    .ContinueWith(task => Logger.LogError(task.Exception, "Failure to queue TesTask {TesTask}", tesTask.Id), TaskContinuationOptions.OnlyOnFaulted);
             }
 
             async ValueTask Requeue(RepositoryCollisionException<TesTask> exception)
@@ -222,14 +244,6 @@ namespace TesApi.Web
                 {
                     queuedTesTasks.Enqueue(tesTask);
                 }
-            }
-
-            // Catch any tasks reset back to Queued
-            async ValueTask<bool> RefillFromRepository()
-            {
-                nextQueuedRepository = DateTimeOffset.UtcNow + queuedRepositoryInterval;
-                await (await query(cancellationToken)).ForEachAsync(queuedTesTasks.Enqueue, cancellationToken);
-                return !queuedTesTasks.IsEmpty;
             }
         }
 
@@ -536,6 +550,12 @@ namespace TesApi.Web
                         token);
                 },
                 cancellationToken);
+        }
+
+        private sealed class TesTasByIdComparer : IEqualityComparer<TesTask>
+        {
+            bool IEqualityComparer<TesTask>.Equals(TesTask x, TesTask y) => x?.Id.Equals(y.Id) ?? false;
+            int IEqualityComparer<TesTask>.GetHashCode(TesTask obj) => obj.Id?.GetHashCode() ?? 0;
         }
 
         /// <inheritdoc/>

@@ -92,8 +92,8 @@ namespace BuildPushAcr
             {
                 maxTag = await repository.GetAllManifestPropertiesAsync(cancellationToken: cancellationToken)
                     .SelectMany(props => props.Tags.ToAsyncEnumerable())
-                    .Where(tag => tag.StartsWith(this.tag.Version.ToString(3)) && Version.TryParse(tag, out _))
-                    .Select(tag => new Version(tag))
+                    .Where(tag => tag.StartsWith(this.tag.Version.ToString(3)) && Version.TryParse(tag.Contains('-') ? tag[..tag.IndexOf('-')] : tag, out _))
+                    .Select(tag => new Version(tag.Contains('-') ? tag[..tag.IndexOf('-')] : tag))
                     .MaxAsync(cancellationToken);
             }
             catch (Azure.RequestFailedException ex) when (ex.Status == 404)

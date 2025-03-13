@@ -64,7 +64,7 @@ namespace TesApi.Web
 
         internal const string NodeTaskRunnerFilename = "tes-runner";
 
-        internal static TimeSpan QueuedTesTaskTaskGroupGatherWindow = TimeSpan.FromSeconds(10);
+        internal static TimeSpan QueuedTesTaskTaskGroupGatherWindow = TimeSpan.FromSeconds(2);
         internal static TimeSpan QueuedTesTaskPoolGroupGatherWindow = TaskScheduler.BatchRunInterval;
 
         private const string AzureSupportUrl = "https://portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/newsupportrequest";
@@ -233,7 +233,7 @@ namespace TesApi.Web
 
                         if (!pool?.OrphanedTesTasks.TryRemove(tesTask.Id, out _) ?? false)
                         {
-                            pool.AssociatedTesTasks.Where(pair => tesTask.Id.Equals(pair.Value, StringComparison.InvariantCultureIgnoreCase)).ForEach(pair => _ = pool.AssociatedTesTasks.TryRemove(pair));
+                            pool.AssociatedTesTasks.Where(pair => tesTask.Id.Equals(pair.Value, StringComparison.Ordinal)).ForEach(pair => _ = pool.AssociatedTesTasks.TryRemove(pair));
                         }
                     }
 
