@@ -430,7 +430,7 @@ namespace BuildPushAcr
                                 if (match.Success)
                                 {
                                     var group = match.Groups["version"];
-                                    content = content[..group.Index] + build!.ToString() + content[(group.Index + group.Length)..];
+                                    content = content[..group.Index] + build!.Value.Version.ToString() + content[(group.Index + group.Length)..];
                                     stream = new(content.Length);
 
                                     {
