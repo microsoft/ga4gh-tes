@@ -6,7 +6,7 @@ namespace BuildPushAcr
     public interface IArchive
     {
         public IAsyncEnumerable<System.Formats.Tar.TarEntry> Get(CancellationToken cancellationToken, string? root = default);
-        public ValueTask<(Version Version, string? Prerelease)> GetTagAsync(CancellationToken cancellationToken, bool allowAnyPrerelease = false);
+        public ValueTask<(Version Version, string? Prerelease)> GetTagAsync(CancellationToken cancellationToken);
 
         static (Version Version, string? Prerelease)? ParseTag(string? tagName)
         {
