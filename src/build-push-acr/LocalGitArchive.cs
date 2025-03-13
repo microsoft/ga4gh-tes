@@ -32,7 +32,7 @@ namespace BuildPushAcr
             UnixFileMode.OtherRead |
             UnixFileMode.OtherWrite;
 
-        async ValueTask<(Version Version, string? Prerelease)> IArchive.GetTagAsync(CancellationToken cancellationToken)
+        async ValueTask<(Version Version, string? Prerelease)> IArchive.GetTagAsync(CancellationToken cancellationToken, bool allowAnyPrerelease)
         {
             var gitBinary = FindExecutable.FindExecutable.FullPath("git");
 
