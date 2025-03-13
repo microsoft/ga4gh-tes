@@ -158,7 +158,7 @@ namespace BuildPushAcr
                     tesTar,
                     "Dockerfile-Tes",
                     [
-                        $"{tesImage}:{BuildToTag(build.Value)}", $"{tesImage}:{BuildToTag((build.Value.Version, build.Value.Prerelease))}",
+                        $"{tesImage}:{BuildToTag(build.Value)}",
                         $"{tesImage}:{BuildToTag((new(build.Value.Version.Major, build.Value.Version.Minor, build.Value.Version.Build), build.Value.Prerelease))}"
                     ],
                     cancellationToken);
