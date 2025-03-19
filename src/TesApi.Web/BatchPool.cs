@@ -34,6 +34,8 @@ namespace TesApi.Web
 
         private const int MaxComputeNodesToRemoveAtOnce = 100; // https://learn.microsoft.com/en-us/rest/api/batchservice/pool/remove-nodes?tabs=HTTP#request-body nodeList description
 
+        private const int RoundUpOvershoot = 10;
+
         private readonly ILogger _logger;
         private readonly IAzureProxy _azureProxy;
         private readonly Management.Batch.IBatchPoolManager _batchPoolManager;
@@ -312,7 +314,9 @@ namespace TesApi.Web
                 "span = TimeInterval_Second * 90;",
                 "startup = TimeInterval_Minute * 2;",
                 "ratio = 10;",
-                $"${targetVariable} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {initialTarget});"
+                $"target = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {initialTarget});",
+                $"adjusted = target + {Math.Round(RoundUpOvershoot / 2.0)};",
+                $"${targetVariable} = target == 0 ? 0 : round(adjusted / {RoundUpOvershoot}) * {RoundUpOvershoot};"
             });
         }
 
