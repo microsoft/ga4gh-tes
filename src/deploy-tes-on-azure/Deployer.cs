@@ -172,6 +172,14 @@ namespace TesDeployer
             return result;
         }
 
+        private async ValueTask EnsureResourceGroup()
+        {
+            if (resourceGroup is null && !string.IsNullOrWhiteSpace(configuration.ResourceGroupName))
+            {
+                resourceGroup = (await armSubscription.GetResourceGroupAsync(configuration.ResourceGroupName, cts.Token)).Value;
+            }
+        }
+
         private BlobClient GetBlobClient(StorageAccountData storageAccount, string containerName, string blobName)
         {
             return new(new BlobUriBuilder(storageAccount.PrimaryEndpoints.BlobUri) { BlobContainerName = containerName, BlobName = blobName }.ToUri(),
@@ -231,7 +239,7 @@ namespace TesDeployer
 
                 if (configuration.Update)
                 {
-                    resourceGroup = (await armSubscription.GetResourceGroupAsync(configuration.ResourceGroupName, cts.Token)).Value;
+                    await EnsureResourceGroup();
                     configuration.RegionName = resourceGroup.Id.Location ??
                         ((await EnsureResourceDataAsync(resourceGroup, g => g.HasData, g => g.GetAsync, cts.Token, g => resourceGroup = g)).Data.Location.Name);
 
@@ -593,7 +601,7 @@ namespace TesDeployer
 
                     var vnetAndSubnet = await ValidateAndGetExistingVirtualNetworkAsync();
 
-                    if (string.IsNullOrWhiteSpace(configuration.ResourceGroupName))
+                    if (resourceGroup is null)
                     {
                         configuration.ResourceGroupName = Utility.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
                         resourceGroup = await CreateResourceGroupAsync();
@@ -601,7 +609,7 @@ namespace TesDeployer
                     }
                     else
                     {
-                        resourceGroup = (await armSubscription.GetResourceGroupAsync(configuration.ResourceGroupName, cts.Token)).Value;
+                        await EnsureResourceGroup();
                     }
 
                     // Derive TES ingress URL from resource group name
@@ -1791,8 +1799,8 @@ namespace TesDeployer
                 $"Assigning '{RoleDefinitions.GetDisplayName(RoleDefinitions.Storage.StorageBlobDataOwner)}' role for user-managed identity to Storage Account resource scope...");
 
         private Task AssignVmAsContributorToStorageAccountAsync(UserAssignedIdentityResource managedIdentity, StorageAccountResource storageAccount)
-            => AssignRoleToResourceAsync(managedIdentity, storageAccount, GetSubscriptionRoleDefinition(RoleDefinitions.General.Contributor),
-                $"Assigning '{RoleDefinitions.GetDisplayName(RoleDefinitions.General.Contributor)}' role for user-managed identity to Storage Account resource scope...");
+            => AssignRoleToResourceAsync(managedIdentity, storageAccount, GetSubscriptionRoleDefinition(RoleDefinitions.Privileged.Contributor),
+                $"Assigning '{RoleDefinitions.GetDisplayName(RoleDefinitions.Privileged.Contributor)}' role for user-managed identity to Storage Account resource scope...");
 
         private async Task AssignMeAsRbacClusterAdminToManagedClusterAsync(ContainerServiceManagedClusterResource managedCluster)
         {
@@ -1923,8 +1931,8 @@ namespace TesDeployer
                 });
 
         private Task AssignVmAsContributorToBatchAccountAsync(UserAssignedIdentityResource managedIdentity, BatchAccountResource batchAccount)
-            => AssignRoleToResourceAsync(managedIdentity, batchAccount, GetSubscriptionRoleDefinition(RoleDefinitions.General.Contributor),
-                $"Assigning '{RoleDefinitions.GetDisplayName(RoleDefinitions.General.Contributor)}' role for user-managed identity to Batch Account resource scope...");
+            => AssignRoleToResourceAsync(managedIdentity, batchAccount, GetSubscriptionRoleDefinition(RoleDefinitions.Privileged.Contributor),
+                $"Assigning '{RoleDefinitions.GetDisplayName(RoleDefinitions.Privileged.Contributor)}' role for user-managed identity to Batch Account resource scope...");
 
         private async Task<PostgreSqlFlexibleServerResource> CreatePostgreSqlServerAndDatabaseAsync(SubnetResource subnet, PrivateDnsZoneResource postgreSqlDnsZone)
         {
@@ -1992,8 +2000,8 @@ namespace TesDeployer
                 });
 
         private Task AssignVmAsContributorToAppInsightsAsync(UserAssignedIdentityResource managedIdentity, ArmResource appInsights)
-            => AssignRoleToResourceAsync(managedIdentity, appInsights, GetSubscriptionRoleDefinition(RoleDefinitions.General.Contributor),
-                $"Assigning '{RoleDefinitions.GetDisplayName(RoleDefinitions.General.Contributor)}' role for user-managed identity to App Insights resource scope...");
+            => AssignRoleToResourceAsync(managedIdentity, appInsights, GetSubscriptionRoleDefinition(RoleDefinitions.Privileged.Contributor),
+                $"Assigning '{RoleDefinitions.GetDisplayName(RoleDefinitions.Privileged.Contributor)}' role for user-managed identity to App Insights resource scope...");
 
         private ResourceIdentifier GetSubscriptionRoleDefinition(Guid roleDefinition)
             => AuthorizationRoleDefinitionResource.CreateResourceIdentifier(SubscriptionResource.CreateResourceIdentifier(configuration.SubscriptionId), new(roleDefinition.ToString("D")));
@@ -2422,8 +2430,9 @@ namespace TesDeployer
 
         private async Task ValidateSubscriptionAndResourceGroupAsync(Configuration configuration)
         {
-            var ownerRoleId = RoleDefinitions.General.Owner.ToString("D");
-            var contributorRoleId = RoleDefinitions.General.Contributor.ToString("D");
+            var ownerRoleId = RoleDefinitions.Privileged.Owner.ToString("D");
+            var contributorRoleId = RoleDefinitions.Privileged.Contributor.ToString("D");
+            var userAccessAdministrator = RoleDefinitions.Privileged.UserAccessAdministrator.ToString("D");
 
             bool rgExists;
 
@@ -2445,15 +2454,37 @@ namespace TesDeployer
             var currentPrincipalObjectId = new JwtSecurityTokenHandler().ReadJwtToken(token.Token).Claims.FirstOrDefault(c => c.Type == "oid").Value;
 
             var currentPrincipalSubscriptionRoleIds = armSubscription.GetRoleAssignments().GetAllAsync($"atScope() and assignedTo('{currentPrincipalObjectId}')", cancellationToken: cts.Token)
-                .SelectAwaitWithCancellation(async (b, c) => await FetchResourceDataAsync(t => b.GetAsync(cancellationToken: t), c)).Select(b => b.Data.RoleDefinitionId.Name);
+                .SelectAwaitWithCancellation(async (b, c) => b.HasData ? b : await FetchResourceDataAsync(t => b.GetAsync(cancellationToken: t), c)).Select(b => b.Data.RoleDefinitionId.Name);
 
-            if (!await currentPrincipalSubscriptionRoleIds.AnyAsync(role => ownerRoleId.Equals(role, StringComparison.OrdinalIgnoreCase) || contributorRoleId.Equals(role, StringComparison.OrdinalIgnoreCase), cts.Token))
+            var isSubOwner = false;
+            var isSubContributor = false;
+            var isSubUAA = false;
+            bool HasSubscriptionAccess(string role)
+            {
+                if (ownerRoleId.Equals(role, StringComparison.OrdinalIgnoreCase))
+                {
+                    isSubOwner = true;
+                }
+                else if (contributorRoleId.Equals(role, StringComparison.OrdinalIgnoreCase))
+                {
+                    isSubContributor = true;
+                }
+                else if (userAccessAdministrator.Equals(role, StringComparison.OrdinalIgnoreCase))
+                {
+                    isSubUAA = true;
+                }
+
+                return isSubOwner || (isSubContributor && isSubUAA);
+            }
+
+            if (!await currentPrincipalSubscriptionRoleIds.AnyAsync(HasSubscriptionAccess, cts.Token))
             {
                 if (!rgExists)
                 {
                     throw new ValidationException($"Insufficient access to deploy. You must be: 1) Owner of the subscription, or 2) Contributor and User Access Administrator of the subscription, or 3) Owner of the resource group", displayExample: false);
                 }
 
+                await EnsureResourceGroup();
                 var currentPrincipalRgRoleIds = resourceGroup.GetRoleAssignments().GetAllAsync($"atScope() and assignedTo('{currentPrincipalObjectId}')", cancellationToken: cts.Token)
                     .SelectAwaitWithCancellation(async (b, c) => await FetchResourceDataAsync(t => b.GetAsync(cancellationToken: t), c)).Select(b => b.Data.RoleDefinitionId.Name);
 
