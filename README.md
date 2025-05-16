@@ -1,3 +1,22 @@
+Dear Community,
+
+After careful consideration, we have decided to shift our focus to new and innovative initiatives that will better serve our community and align with our long-term goals.
+
+**Effective Date**: August 4, 2025
+
+**Impact on Users**:
+- The project repository will be archived and set to read-only mode, ensuring that it remains accessible for reference.
+- While no further updates, bug fixes, or support will be provided, we encourage you to explore the wealth of knowledge and resources available in the repository.
+- Existing issues and pull requests will be closed, but we invite you to engage with other projects and contribute your expertise.
+  
+**Licensing**: The project will remain under its current open-source license, allowing others to fork and continue development if they choose.
+
+
+We understand that this change may come as a surprise, but we are incredibly grateful for your support and contributions over the years. Your dedication has been instrumental in the success of this project, and we look forward to your continued involvement in our future endeavors.
+
+Thank you for your understanding and support.
+
+
 ### Announcement: Deployment [changes](https://github.com/microsoft/ga4gh-tes/wiki/6.0.0-Migration-Guide) in v6.0.0
 
 # GA4GH TES on Azure
