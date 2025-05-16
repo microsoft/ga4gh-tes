@@ -12,11 +12,11 @@ reqwest-middleware = "0.3.3"
 reqwest-retry = "0.6.1"
 serde = { version = "1.0.209", features = ["derive"], optional = true }
 serde_json = { version = "1.0.128", optional = true }
-tokio = { version = "1.40.0", features = ["full", "time"] }
+tokio = { version = "1.43.1", features = ["full", "time"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 base64 = "0.21"
-openssl = "0.10.71"
-ring = "0.17.13"
+openssl = "0.10.72"
+ring = "0.17.14"
 tes = { version = "0.3.0", features = ["client", "serde"] }
 
